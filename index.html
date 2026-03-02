@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ephrata Weather</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .hero-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 80px 20px 60px;
+        }
+
+        .hero-section h1 {
+            font-size: 3rem;
+            font-weight: 200;
+            letter-spacing: -0.04em;
+            margin-bottom: 8px;
+        }
+
+        .hero-section .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 48px;
+        }
+
+        .nav-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 960px;
+        }
+
+        .nav-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 28px;
+            text-decoration: none;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .nav-card .nav-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 20px;
+            opacity: 0.85;
+        }
+
+        .nav-card h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .nav-card p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 768px) {
+            .hero-section h1 {
+                font-size: 2rem;
+            }
+
+            .hero-section {
+                padding: 40px 16px 40px;
+            }
+
+            .nav-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    <div class="app-container">
+        <div class="hero-section fade-in">
+            <h1>Ephrata Weather</h1>
+            <p class="subtitle">Real-time weather data for Ephrata, WA</p>
+
+            <div class="nav-cards">
+                <a href="currentconditions.html" class="nav-card glass">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 64 64" fill="none">
+                            <circle cx="32" cy="20" r="10" fill="rgba(255,220,100,0.8)"/>
+                            <path d="M16 38 Q32 28 48 38 Q52 42 48 46 L16 46 Q12 42 16 38Z" fill="rgba(255,255,255,0.6)"/>
+                            <line x1="28" y1="50" x2="26" y2="58" stroke="rgba(100,180,255,0.6)" stroke-width="2" stroke-linecap="round"/>
+                            <line x1="36" y1="50" x2="34" y2="58" stroke="rgba(100,180,255,0.6)" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h2>Current Conditions</h2>
+                    <p>Live weather, hourly forecast, air quality, and pollen data</p>
+                </a>
+
+                <a href="10dayforecast.html" class="nav-card glass">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 64 64" fill="none">
+                            <rect x="10" y="10" width="44" height="44" rx="8" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+                            <line x1="10" y1="24" x2="54" y2="24" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                            <circle cx="22" cy="34" r="3" fill="rgba(255,220,100,0.7)"/>
+                            <circle cx="32" cy="34" r="3" fill="rgba(200,210,225,0.7)"/>
+                            <circle cx="42" cy="34" r="3" fill="rgba(100,180,255,0.7)"/>
+                            <circle cx="22" cy="46" r="3" fill="rgba(200,210,225,0.7)"/>
+                            <circle cx="32" cy="46" r="3" fill="rgba(255,220,100,0.7)"/>
+                            <circle cx="42" cy="46" r="3" fill="rgba(200,210,225,0.7)"/>
+                        </svg>
+                    </div>
+                    <h2>10-Day Forecast</h2>
+                    <p>Extended forecast with highs, lows, and precipitation chances</p>
+                </a>
+
+                <a href="mrmsviewer.html" class="nav-card glass">
+                    <div class="nav-icon">
+                        <svg viewBox="0 0 64 64" fill="none">
+                            <circle cx="32" cy="32" r="22" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+                            <circle cx="32" cy="32" r="14" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                            <circle cx="32" cy="32" r="6" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+                            <circle cx="26" cy="28" r="5" fill="rgba(50,180,80,0.5)"/>
+                            <circle cx="36" cy="24" r="4" fill="rgba(255,255,0,0.4)"/>
+                            <circle cx="38" cy="34" r="6" fill="rgba(255,80,80,0.3)"/>
+                            <line x1="32" y1="10" x2="32" y2="54" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
+                            <line x1="10" y1="32" x2="54" y2="32" stroke="rgba(255,255,255,0.08)" stroke-width="0.5"/>
+                        </svg>
+                    </div>
+                    <h2>MRMS Radar</h2>
+                    <p>Multi-Radar Multi-Sensor precipitation data on an interactive map</p>
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
