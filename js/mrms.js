@@ -225,35 +225,55 @@ function getProductPath(product) {
 
 // --- Find latest MRMS file from S3 listing ---
 async function findLatestMRMSFile(productPath) {
-    // S3 list objects API - get latest files
-    const listUrl = `${CONFIG.MRMS_S3_BASE}/?list-type=2&prefix=${productPath}/&delimiter=/`;
-    const response = await fetch(listUrl);
-    const text = await response.text();
+    // Try S3 listing first
+    const prefixes = [productPath + '/', productPath];
 
-    // Parse XML response
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(text, 'text/xml');
-    const contents = xml.querySelectorAll('Contents');
+    for (const prefix of prefixes) {
+        try {
+            const listUrl = `${CONFIG.MRMS_S3_BASE}/?list-type=2&prefix=${prefix}`;
+            const response = await fetch(listUrl);
+            if (!response.ok) continue;
+            const text = await response.text();
 
-    if (contents.length === 0) {
-        // Try without trailing slash
-        const listUrl2 = `${CONFIG.MRMS_S3_BASE}/?list-type=2&prefix=${productPath}&delimiter=/`;
-        const response2 = await fetch(listUrl2);
-        const text2 = await response2.text();
-        const xml2 = parser.parseFromString(text2, 'text/xml');
-        const contents2 = xml2.querySelectorAll('Contents');
+            // Use regex to parse S3 XML (avoids namespace issues with querySelectorAll)
+            const keys = [];
+            const keyRegex = /<Key>([^<]+)<\/Key>/g;
+            let match;
+            while ((match = keyRegex.exec(text)) !== null) {
+                keys.push(match[1]);
+            }
 
-        if (contents2.length === 0) return null;
-
-        // Get the most recent file (last in list, sorted by key)
-        const keys = Array.from(contents2).map(c => c.querySelector('Key')?.textContent).filter(Boolean);
-        const gribFiles = keys.filter(k => k.endsWith('.grib2.gz') || k.endsWith('.grib2'));
-        return gribFiles.length > 0 ? gribFiles[gribFiles.length - 1] : null;
+            const gribFiles = keys.filter(k => k.endsWith('.grib2.gz') || k.endsWith('.grib2'));
+            if (gribFiles.length > 0) {
+                return gribFiles[gribFiles.length - 1];
+            }
+        } catch (e) {
+            console.warn('S3 listing failed for prefix:', prefix, e);
+        }
     }
 
-    const keys = Array.from(contents).map(c => c.querySelector('Key')?.textContent).filter(Boolean);
-    const gribFiles = keys.filter(k => k.endsWith('.grib2.gz') || k.endsWith('.grib2'));
-    return gribFiles.length > 0 ? gribFiles[gribFiles.length - 1] : null;
+    // Fallback: construct URL based on current UTC time and try direct access
+    const productName = productPath.split('/').pop();
+    const now = new Date();
+
+    for (let minutesBack = 0; minutesBack <= 30; minutesBack += 2) {
+        const t = new Date(now.getTime() - minutesBack * 60000);
+        const y = t.getUTCFullYear();
+        const mo = String(t.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(t.getUTCDate()).padStart(2, '0');
+        const h = String(t.getUTCHours()).padStart(2, '0');
+        const mi = String(Math.floor(t.getUTCMinutes() / 2) * 2).padStart(2, '0');
+
+        const filename = `${productPath}/MRMS_${productName}_${y}${mo}${d}-${h}${mi}00.grib2.gz`;
+        try {
+            const resp = await fetch(`${CONFIG.MRMS_S3_BASE}/${filename}`, { method: 'HEAD' });
+            if (resp.ok) return filename;
+        } catch (e) {
+            // Network error, continue
+        }
+    }
+
+    return null;
 }
 
 // --- GRIB2 Parser (targeted for MRMS products) ---

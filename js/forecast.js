@@ -83,7 +83,14 @@ function showDayDetail(index) {
 
     const dateStr = day.displayDate || day.interval?.startTime;
     const dayName = WeatherAPI.formatDayName(dateStr, false);
-    const date = new Date(dateStr);
+    // Parse date-only strings as local time to avoid timezone issues
+    let date;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        date = new Date(y, m - 1, d);
+    } else {
+        date = new Date(dateStr);
+    }
 
     document.getElementById('detail-day-name').textContent = dayName;
     document.getElementById('detail-date').textContent =
