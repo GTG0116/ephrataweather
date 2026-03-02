@@ -44,32 +44,33 @@ const WeatherIcons = {
         'default': (s) => WeatherIcons._partlyCloudy(s)
     },
 
-    // Resolve text-based conditions from Google Weather API
+    // Resolve text-based conditions - uses 100% sizing so SVGs fill their containers
     fromText(text, isNight = false) {
-        if (!text) return this.get('default');
+        const sz = '100%';
+        if (!text) return this.get('default', sz);
         const t = text.toUpperCase().replace(/\s+/g, '_');
         // Try direct match first
-        if (this._iconMap[t]) return this.get(t);
+        if (this._iconMap[t]) return this.get(t, sz);
         // Keyword matching
-        if (t.includes('THUNDER')) return this.get(t.includes('HEAVY') ? 'HEAVY_THUNDERSTORM' : 'THUNDERSTORM');
-        if (t.includes('FREEZING') && t.includes('RAIN')) return this.get('FREEZING_RAIN');
-        if (t.includes('SLEET') || t.includes('ICE')) return this.get('SLEET');
-        if (t.includes('HAIL')) return this.get('HAIL');
-        if (t.includes('HEAVY') && t.includes('SNOW')) return this.get('HEAVY_SNOW');
-        if (t.includes('SNOW') || t.includes('FLURR')) return this.get('SNOW');
-        if (t.includes('HEAVY') && t.includes('RAIN')) return this.get('HEAVY_RAIN');
-        if (t.includes('RAIN') || t.includes('SHOWER')) return this.get('RAIN');
-        if (t.includes('DRIZZLE')) return this.get('DRIZZLE');
-        if (t.includes('FOG') || t.includes('MIST') || t.includes('HAZE')) return this.get('FOG');
-        if (t.includes('OVERCAST')) return this.get('OVERCAST');
-        if (t.includes('CLOUDY') && t.includes('MOST')) return this.get('MOSTLY_CLOUDY');
-        if (t.includes('CLOUDY') && t.includes('PART')) return this.get('PARTLY_CLOUDY');
-        if (t.includes('CLOUD')) return this.get('CLOUDY');
-        if (t.includes('WIND')) return this.get('WIND');
+        if (t.includes('THUNDER')) return this.get(t.includes('HEAVY') ? 'HEAVY_THUNDERSTORM' : 'THUNDERSTORM', sz);
+        if (t.includes('FREEZING') && t.includes('RAIN')) return this.get('FREEZING_RAIN', sz);
+        if (t.includes('SLEET') || t.includes('ICE')) return this.get('SLEET', sz);
+        if (t.includes('HAIL')) return this.get('HAIL', sz);
+        if (t.includes('HEAVY') && t.includes('SNOW')) return this.get('HEAVY_SNOW', sz);
+        if (t.includes('SNOW') || t.includes('FLURR')) return this.get('SNOW', sz);
+        if (t.includes('HEAVY') && t.includes('RAIN')) return this.get('HEAVY_RAIN', sz);
+        if (t.includes('RAIN') || t.includes('SHOWER')) return this.get('RAIN', sz);
+        if (t.includes('DRIZZLE')) return this.get('DRIZZLE', sz);
+        if (t.includes('FOG') || t.includes('MIST') || t.includes('HAZE')) return this.get('FOG', sz);
+        if (t.includes('OVERCAST')) return this.get('OVERCAST', sz);
+        if (t.includes('CLOUDY') && t.includes('MOST')) return this.get('MOSTLY_CLOUDY', sz);
+        if (t.includes('CLOUDY') && t.includes('PART')) return this.get('PARTLY_CLOUDY', sz);
+        if (t.includes('CLOUD')) return this.get('CLOUDY', sz);
+        if (t.includes('WIND')) return this.get('WIND', sz);
         if (t.includes('CLEAR') || t.includes('SUNNY') || t.includes('FAIR')) {
-            return isNight ? this._clearNight(64) : this.get('CLEAR');
+            return isNight ? this._clearNight(sz) : this.get('CLEAR', sz);
         }
-        return this.get('default');
+        return this.get('default', sz);
     },
 
     // ---- Individual icon SVG generators ----
@@ -128,16 +129,26 @@ const WeatherIcons = {
                     <stop offset="100%" stop-color="rgba(220,225,230,0.9)"/>
                 </linearGradient>
             </defs>
-            <g transform="translate(30,28)">
+            <!-- Sun behind cloud, upper-right -->
+            <g transform="translate(58,30)">
+                <g>
+                    <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="30s" repeatCount="indefinite"/>
+                    ${[0,60,120,180,240,300].map(a =>
+                        `<line x1="0" y1="-22" x2="0" y2="-28" stroke="#FFD54F" stroke-width="2.5" stroke-linecap="round" transform="rotate(${a})">
+                            <animate attributeName="opacity" values="0.4;0.9;0.4" dur="3s" begin="${a/360*3}s" repeatCount="indefinite"/>
+                        </line>`
+                    ).join('')}
+                </g>
                 <circle r="16" fill="url(#pcSunGrad)">
                     <animate attributeName="r" values="16;17;16" dur="4s" repeatCount="indefinite"/>
                 </circle>
             </g>
+            <!-- Cloud in front, overlapping lower part of sun -->
             <g>
-                <animateTransform attributeName="transform" type="translate" values="0,0;3,0;0,0" dur="6s" repeatCount="indefinite"/>
-                <ellipse cx="58" cy="60" rx="28" ry="14" fill="url(#pcCloudGrad)"/>
-                <ellipse cx="48" cy="54" rx="16" ry="13" fill="rgba(255,255,255,0.95)"/>
-                <ellipse cx="66" cy="55" rx="14" ry="11" fill="rgba(245,245,245,0.95)"/>
+                <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="6s" repeatCount="indefinite"/>
+                <ellipse cx="42" cy="62" rx="30" ry="14" fill="url(#pcCloudGrad)"/>
+                <ellipse cx="30" cy="55" rx="18" ry="14" fill="rgba(255,255,255,0.95)"/>
+                <ellipse cx="52" cy="55" rx="16" ry="12" fill="rgba(245,245,245,0.95)"/>
             </g>
         </svg>`;
     },

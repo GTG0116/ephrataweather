@@ -126,14 +126,14 @@
 
             <!-- Product Selector -->
             <div class="product-selector">
-                <button class="product-btn active" data-product="reflectivity" onclick="switchProduct('reflectivity', this)">Reflectivity</button>
+                <button class="product-btn" data-product="reflectivity" onclick="switchProduct('reflectivity', this)">Reflectivity</button>
                 <button class="product-btn" data-product="precipRate" onclick="switchProduct('precipRate', this)">Precip Rate</button>
-                <button class="product-btn" data-product="precipType" onclick="switchProduct('precipType', this)">Precip Type</button>
+                <button class="product-btn active" data-product="precipType" onclick="switchProduct('precipType', this)">Precip Type</button>
             </div>
 
             <!-- Info Overlay -->
             <div class="map-info-overlay glass-subtle" id="map-info">
-                <div class="product-name" id="product-name">MRMS Reflectivity</div>
+                <div class="product-name" id="product-name">MRMS Precip Type</div>
                 <div class="timestamp" id="data-timestamp">Loading...</div>
             </div>
 

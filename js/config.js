@@ -1,14 +1,13 @@
 // ============================================
 // WEATHER DATA VIEWER - CONFIGURATION
 // ============================================
-// Insert your API keys below
 
 const CONFIG = {
-    // Weather data powered by Open-Meteo (free, no API key required)
-    // https://open-meteo.com/
+    // Google Weather API Key (primary)
+    GOOGLE_WEATHER_API_KEY: 'AIzaSyBAjoVkrRrLPzv9MSrlWaWTFELT8KpJ41E',
+    GOOGLE_WEATHER_BASE: 'https://weather.googleapis.com/v1',
 
     // Mapbox Access Token
-    // Get yours at: https://account.mapbox.com/
     MAPBOX_ACCESS_TOKEN: 'pk.eyJ1IjoiZ3RnMDExNiIsImEiOiJjbWxsODV6NXAwNThmM2ZwdWlkYm0xNjFlIn0.vI186twXYzY45nnuV5FucQ',
 
     // Default location (Ephrata, WA)
@@ -19,7 +18,7 @@ const CONFIG = {
     // MRMS AWS S3 base URL
     MRMS_S3_BASE: 'https://noaa-mrms-pds.s3.amazonaws.com',
 
-    // MRMS products to use (avoiding PrecipFlag per user preference)
+    // MRMS products
     MRMS_PRODUCTS: {
         PRECIP_RATE: 'CONUS/PrecipRate_00.00',
         PRECIP_TYPE: 'CONUS/PrecipType_00.00',
