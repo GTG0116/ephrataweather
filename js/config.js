@@ -6,11 +6,11 @@
 const CONFIG = {
     // Google Weather API Key
     // Get yours at: https://console.cloud.google.com/
-    GOOGLE_WEATHER_API_KEY: 'YOUR_GOOGLE_WEATHER_API_KEY_HERE',
+    GOOGLE_WEATHER_API_KEY: 'AIzaSyBAjoVkrRrLPzv9MSrlWaWTFELT8KpJ41E',
 
     // Mapbox Access Token
     // Get yours at: https://account.mapbox.com/
-    MAPBOX_ACCESS_TOKEN: 'YOUR_MAPBOX_ACCESS_TOKEN_HERE',
+    MAPBOX_ACCESS_TOKEN: 'pk.eyJ1IjoiZ3RnMDExNiIsImEiOiJjbWxsODV6NXAwNThmM2ZwdWlkYm0xNjFlIn0.vI186twXYzY45nnuV5FucQ',
 
     // Default location (Ephrata, WA)
     DEFAULT_LAT: 47.3176,
