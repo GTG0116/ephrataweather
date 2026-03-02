@@ -1,6 +1,6 @@
 // ============================================
 // WEATHER API HELPER
-// Primary: Google Weather API
+// Primary: Google Weather API (GET with query params)
 // Fallback: Open-Meteo (free, CORS-enabled)
 // ============================================
 
@@ -40,27 +40,57 @@ function _wmoCondition(code) {
     return WMO_CODES[code] || { type: 'PARTLY_CLOUDY', description: 'Unknown' };
 }
 
-// --- Google Weather API helpers ---
-async function _googlePost(endpoint, body) {
-    const url = `${CONFIG.GOOGLE_WEATHER_BASE}/${endpoint}?key=${CONFIG.GOOGLE_WEATHER_API_KEY}`;
-    const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    });
+// --- Google Weather API helper (GET with query params) ---
+async function _googleGet(endpoint, params) {
+    const qp = new URLSearchParams(params);
+    qp.set('key', CONFIG.GOOGLE_WEATHER_API_KEY);
+    const url = `${CONFIG.GOOGLE_WEATHER_BASE}/${endpoint}?${qp}`;
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`Google API ${resp.status}`);
     return resp.json();
+}
+
+// Convert Google displayDate {year, month, day} to "YYYY-MM-DD" string
+function _googleDateToString(dd) {
+    if (!dd) return null;
+    if (typeof dd === 'string') return dd;
+    return `${dd.year}-${String(dd.month).padStart(2, '0')}-${String(dd.day).padStart(2, '0')}`;
+}
+
+// Convert Google displayDateTime {year, month, day, hours, utcOffset} to ISO string
+function _googleDateTimeToISO(dt) {
+    if (!dt) return null;
+    if (typeof dt === 'string') return dt;
+    const d = new Date(dt.year, dt.month - 1, dt.day, dt.hours || 0);
+    return d.toISOString();
 }
 
 const WeatherAPI = {
     // === Current Conditions ===
     async getCurrentConditions(lat, lng) {
-        // Try Google first
         try {
-            return await _googlePost('currentConditions:lookup', {
-                location: { latitude: lat, longitude: lng },
-                unitsSystem: 'IMPERIAL'
+            const raw = await _googleGet('currentConditions:lookup', {
+                'location.latitude': lat,
+                'location.longitude': lng,
+                'unitsSystem': 'IMPERIAL'
             });
+            // Transform Google response to normalized format
+            return {
+                temperature: raw.temperature,
+                feelsLikeTemperature: raw.feelsLikeTemperature,
+                weatherCondition: raw.weatherCondition,
+                wind: {
+                    speed: raw.wind?.speed,
+                    gust: raw.wind?.gust,
+                    direction: raw.wind?.direction?.degrees
+                },
+                relativeHumidity: raw.relativeHumidity,
+                dewPoint: raw.dewPoint,
+                uvIndex: raw.uvIndex,
+                visibility: raw.visibility ? { distance: raw.visibility.distance } : { distance: null },
+                pressure: { meanSeaLevelMillibars: raw.airPressure?.meanSeaLevelMillibars },
+                cloudCover: raw.cloudCover
+            };
         } catch (e) {
             console.warn('Google Weather API failed, using Open-Meteo:', e.message);
         }
@@ -96,11 +126,24 @@ const WeatherAPI = {
     // === Hourly Forecast ===
     async getHourlyForecast(lat, lng, hours = 24) {
         try {
-            return await _googlePost('forecast/hours:lookup', {
-                location: { latitude: lat, longitude: lng },
-                unitsSystem: 'IMPERIAL',
-                hours: hours
+            const raw = await _googleGet('forecast/hours:lookup', {
+                'location.latitude': lat,
+                'location.longitude': lng,
+                'unitsSystem': 'IMPERIAL',
+                'hours': hours,
+                'pageSize': hours
             });
+            // Transform Google hourly response
+            const forecastHours = (raw.forecastHours || []).map(h => ({
+                interval: h.interval,
+                displayDateTime: _googleDateTimeToISO(h.displayDateTime) || h.interval?.startTime,
+                temperature: h.temperature,
+                weatherCondition: h.weatherCondition,
+                precipitation: {
+                    probability: h.precipitation?.probability?.percent
+                }
+            }));
+            return { forecastHours };
         } catch (e) {
             console.warn('Google hourly failed, using Open-Meteo:', e.message);
         }
@@ -137,11 +180,39 @@ const WeatherAPI = {
     // === Daily Forecast ===
     async getDailyForecast(lat, lng, days = 10) {
         try {
-            return await _googlePost('forecast/days:lookup', {
-                location: { latitude: lat, longitude: lng },
-                unitsSystem: 'IMPERIAL',
-                days: days
+            const raw = await _googleGet('forecast/days:lookup', {
+                'location.latitude': lat,
+                'location.longitude': lng,
+                'unitsSystem': 'IMPERIAL',
+                'days': days,
+                'pageSize': days
             });
+            // Transform Google daily response
+            const forecastDays = (raw.forecastDays || []).map(day => {
+                const dt = day.daytimeForecast || {};
+                return {
+                    displayDate: _googleDateToString(day.displayDate) || day.interval?.startTime,
+                    interval: day.interval,
+                    maxTemperature: day.maxTemperature,
+                    minTemperature: day.minTemperature,
+                    weatherCondition: dt.weatherCondition,
+                    precipitation: {
+                        probability: dt.precipitation?.probability?.percent,
+                        qpf: { millimeters: dt.precipitation?.qpf?.quantity || 0 }
+                    },
+                    maxWind: {
+                        speed: dt.wind?.speed,
+                        direction: dt.wind?.direction?.degrees
+                    },
+                    relativeHumidity: dt.relativeHumidity,
+                    avgHumidity: dt.relativeHumidity,
+                    uvIndex: dt.uvIndex,
+                    maxUvIndex: dt.uvIndex,
+                    sunrise: day.sunEvents?.sunriseTime,
+                    sunset: day.sunEvents?.sunsetTime
+                };
+            });
+            return { forecastDays };
         } catch (e) {
             console.warn('Google daily failed, using Open-Meteo:', e.message);
         }
@@ -187,8 +258,9 @@ const WeatherAPI = {
     // === Air Quality ===
     async getAirQuality(lat, lng) {
         try {
-            return await _googlePost('airQuality:lookup', {
-                location: { latitude: lat, longitude: lng }
+            return await _googleGet('airQuality:lookup', {
+                'location.latitude': lat,
+                'location.longitude': lng
             });
         } catch (e) {
             console.warn('Google AQI failed, using Open-Meteo:', e.message);
@@ -209,9 +281,10 @@ const WeatherAPI = {
 
     // === Pollen ===
     async getPollen(lat, lng) {
-        return await _googlePost('pollen:lookup', {
-            location: { latitude: lat, longitude: lng },
-            days: 1
+        return await _googleGet('pollen:lookup', {
+            'location.latitude': lat,
+            'location.longitude': lng,
+            'days': 1
         });
     },
 
@@ -222,11 +295,14 @@ const WeatherAPI = {
     },
 
     formatTime(isoString) {
+        if (!isoString) return '';
         const date = new Date(isoString);
+        if (isNaN(date)) return '';
         return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: undefined, hour12: true });
     },
 
     formatDayName(isoString, short = false) {
+        if (!isoString) return '';
         let date;
         if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) {
             const [y, m, d] = isoString.split('-').map(Number);
@@ -234,6 +310,7 @@ const WeatherAPI = {
         } else {
             date = new Date(isoString);
         }
+        if (isNaN(date)) return '';
         const today = new Date();
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -243,6 +320,7 @@ const WeatherAPI = {
     },
 
     windDirection(degrees) {
+        if (degrees == null || isNaN(degrees)) return '';
         const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
                       'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
         return dirs[Math.round(degrees / 22.5) % 16];
