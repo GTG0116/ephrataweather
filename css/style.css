@@ -278,6 +278,8 @@ body {
 
 .current-hero .icon-wrapper {
     flex-shrink: 0;
+    width: 96px;
+    height: 96px;
 }
 
 .current-hero .hi-lo {
