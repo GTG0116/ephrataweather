@@ -3,88 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MRMS Radar - Ephrata Weather</title>
+    <title>Radar - Ephrata Weather</title>
     <link rel="stylesheet" href="css/style.css">
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
     <style>
-        .product-selector {
+        .radar-controls {
             position: absolute;
-            top: 16px;
-            left: 50%;
-            transform: translateX(-50%);
+            bottom: 24px;
+            left: 16px;
+            right: 16px;
             z-index: 10;
             display: flex;
-            gap: 4px;
-            padding: 4px;
-            background: rgba(15, 23, 42, 0.8);
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: var(--radius-md);
         }
 
-        .product-btn {
-            padding: 8px 16px;
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
+        .radar-controls button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            padding: 6px 14px;
+            border-radius: var(--radius-sm);
             font-size: 0.8rem;
             font-weight: 500;
             cursor: pointer;
-            border-radius: var(--radius-sm);
-            transition: all var(--transition-smooth);
             font-family: inherit;
+            transition: all var(--transition-smooth);
             white-space: nowrap;
         }
 
-        .product-btn:hover {
-            color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        .product-btn.active {
-            color: var(--text-primary);
+        .radar-controls button:hover {
             background: rgba(100, 180, 255, 0.2);
+            border-color: rgba(100, 180, 255, 0.4);
         }
 
-        .opacity-slider {
+        .radar-controls input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent-blue);
+            min-width: 100px;
+        }
+
+        .opacity-control {
             position: absolute;
-            bottom: 24px;
+            top: 16px;
             right: 16px;
             z-index: 10;
-            padding: 12px 16px;
-            background: rgba(15, 23, 42, 0.8);
+            padding: 10px 14px;
+            background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: var(--radius-sm);
         }
 
-        .opacity-slider label {
-            font-size: 0.75rem;
+        .opacity-control label {
+            font-size: 0.7rem;
             color: var(--text-secondary);
             display: block;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
         }
 
-        .opacity-slider input[type="range"] {
-            width: 120px;
+        .opacity-control input[type="range"] {
+            width: 100px;
             accent-color: var(--accent-blue);
         }
 
+        .radar-attribution {
+            position: absolute;
+            bottom: 80px;
+            right: 16px;
+            z-index: 10;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .radar-attribution a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .radar-attribution a:hover {
+            text-decoration: underline;
+        }
+
         @media (max-width: 768px) {
-            .product-selector {
-                top: auto;
-                bottom: 80px;
-                left: 12px;
-                right: 12px;
-                transform: none;
-                overflow-x: auto;
-                scrollbar-width: none;
+            .radar-controls {
+                bottom: 12px;
+                left: 8px;
+                right: 8px;
+                padding: 10px 12px;
+                gap: 8px;
             }
-            .product-selector::-webkit-scrollbar { display: none; }
         }
     </style>
 </head>
@@ -97,7 +113,7 @@
                 <h1>Ephrata Weather</h1>
                 <span class="location">Ephrata, WA</span>
             </div>
-            <span class="badge" id="last-updated">Loading MRMS...</span>
+            <span class="badge" id="last-updated">Loading radar...</span>
         </header>
 
         <!-- Navigation -->
@@ -116,7 +132,7 @@
             </a>
             <a href="mrmsviewer.html" class="nav-link active">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                MRMS
+                Radar
             </a>
         </nav>
 
@@ -124,34 +140,34 @@
         <div class="map-container glass-static">
             <div id="map"></div>
 
-            <!-- Product Selector -->
-            <div class="product-selector">
-                <button class="product-btn" data-product="reflectivity" onclick="switchProduct('reflectivity', this)">Reflectivity</button>
-                <button class="product-btn" data-product="precipRate" onclick="switchProduct('precipRate', this)">Precip Rate</button>
-                <button class="product-btn active" data-product="precipType" onclick="switchProduct('precipType', this)">Precip Type</button>
-            </div>
-
             <!-- Info Overlay -->
             <div class="map-info-overlay glass-subtle" id="map-info">
-                <div class="product-name" id="product-name">MRMS Precip Type</div>
+                <div class="product-name" id="product-name">Radar</div>
                 <div class="timestamp" id="data-timestamp">Loading...</div>
             </div>
 
-            <!-- Legend -->
-            <div class="map-legend glass-subtle" id="map-legend">
-                <!-- Populated by JS based on active product -->
+            <!-- Opacity Control -->
+            <div class="opacity-control">
+                <label>Opacity</label>
+                <input type="range" min="0" max="100" value="70" oninput="setOverlayOpacity(this.value)">
             </div>
 
-            <!-- Opacity Slider -->
-            <div class="opacity-slider">
-                <label>Overlay Opacity</label>
-                <input type="range" min="0" max="100" value="70" id="opacity-slider" oninput="setOverlayOpacity(this.value)">
+            <!-- Timeline Controls -->
+            <div class="radar-controls">
+                <button id="play-btn" onclick="playAnimation()">Play</button>
+                <input type="range" id="timeline-slider" min="0" max="0" value="0" oninput="onTimelineChange(this.value)">
+                <button onclick="refreshRadar()">Refresh</button>
+            </div>
+
+            <!-- RainViewer Attribution -->
+            <div class="radar-attribution">
+                Radar data by <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>
             </div>
 
             <!-- Loading Overlay -->
             <div class="loading-overlay" id="loading-overlay">
                 <div class="spinner"></div>
-                <p>Loading MRMS data...</p>
+                <p>Loading radar data...</p>
             </div>
         </div>
     </div>

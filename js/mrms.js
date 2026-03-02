@@ -1,63 +1,14 @@
 // ============================================
-// MRMS VIEWER - Uses live tile layers from
-// NOAA GeoServer (WMS) and IEM (TMS)
+// RADAR VIEWER - RainViewer API
+// https://www.rainviewer.com/api.html
 // ============================================
 
-// --- Product definitions with tile sources ---
-const MRMS_PRODUCTS = {
-    precipType: {
-        name: 'MRMS Precip Type',
-        // NOAA GeoServer WMS - official MRMS precipitation type
-        tileUrl: 'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_pcpn_typ/ows?service=WMS&version=1.1.1&request=GetMap&layers=conus_pcpn_typ&bbox={bbox-epsg-3857}&width=256&height=256&srs=EPSG:3857&format=image/png&transparent=true',
-        tileType: 'wms',
-        legend: [
-            { label: 'Warm Rain', color: 'rgb(0,200,0)' },
-            { label: 'Stratiform Rain', color: 'rgb(80,200,80)' },
-            { label: 'Snow', color: 'rgb(0,160,255)' },
-            { label: 'Ice Pellets', color: 'rgb(255,140,200)' },
-            { label: 'Freezing Rain', color: 'rgb(255,80,80)' },
-            { label: 'Hail', color: 'rgb(255,255,255)' },
-            { label: 'Graupel', color: 'rgb(200,180,255)' }
-        ],
-        legendTitle: 'Precip Type'
-    },
-    reflectivity: {
-        name: 'MRMS Reflectivity',
-        // NOAA GeoServer WMS - base reflectivity QC'd
-        tileUrl: 'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows?service=WMS&version=1.1.1&request=GetMap&layers=conus_bref_qcd&bbox={bbox-epsg-3857}&width=256&height=256&srs=EPSG:3857&format=image/png&transparent=true',
-        tileType: 'wms',
-        legend: [
-            { label: '5 dBZ', color: 'rgb(64,128,64)' },
-            { label: '20 dBZ', color: 'rgb(20,230,20)' },
-            { label: '30 dBZ', color: 'rgb(255,240,0)' },
-            { label: '40 dBZ', color: 'rgb(255,140,0)' },
-            { label: '50 dBZ', color: 'rgb(255,0,0)' },
-            { label: '60 dBZ', color: 'rgb(180,0,180)' },
-            { label: '70+ dBZ', color: 'rgb(255,255,255)' }
-        ],
-        legendTitle: 'dBZ'
-    },
-    precipRate: {
-        name: 'MRMS Precip Rate',
-        // IEM tile cache - MRMS precip rate
-        tileUrl: 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/q2_n1p/{z}/{x}/{y}.png',
-        tileType: 'tms',
-        legend: [
-            { label: '0.1 mm/hr', color: 'rgb(0,180,0)' },
-            { label: '1 mm/hr', color: 'rgb(100,240,0)' },
-            { label: '5 mm/hr', color: 'rgb(255,180,0)' },
-            { label: '10 mm/hr', color: 'rgb(255,100,0)' },
-            { label: '20 mm/hr', color: 'rgb(255,0,0)' },
-            { label: '50+ mm/hr', color: 'rgb(200,0,150)' }
-        ],
-        legendTitle: 'mm/hr'
-    }
-};
-
-// --- State ---
 let map = null;
-let currentProduct = 'precipType';
 let overlayOpacity = 0.7;
+let radarFrames = [];
+let currentFrameIndex = -1;
+let animationTimer = null;
+let rainviewerHost = '';
 
 // --- Initialize Map ---
 function initMap() {
@@ -75,94 +26,137 @@ function initMap() {
     map.addControl(new mapboxgl.ScaleControl({ unit: 'imperial' }), 'bottom-left');
 
     map.on('load', () => {
-        loadProduct(currentProduct);
+        loadRadarData();
     });
 }
 
-// --- Load a product's tile layer ---
-function loadProduct(product) {
+// --- Load radar data from RainViewer ---
+async function loadRadarData() {
     showLoading(true);
 
-    const productDef = MRMS_PRODUCTS[product];
-    if (!productDef) {
-        showLoading(false);
-        return;
-    }
+    try {
+        const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+        if (!resp.ok) throw new Error(`RainViewer API error: ${resp.status}`);
+        const data = await resp.json();
 
-    // Remove existing layer/source
-    if (map.getLayer('mrms-layer')) map.removeLayer('mrms-layer');
-    if (map.getSource('mrms-overlay')) map.removeSource('mrms-overlay');
+        rainviewerHost = data.host;
+        radarFrames = (data.radar?.past || []).concat(data.radar?.nowcast || []);
 
-    // Add tile source
-    if (productDef.tileType === 'wms') {
-        map.addSource('mrms-overlay', {
-            type: 'raster',
-            tiles: [productDef.tileUrl],
-            tileSize: 256
-        });
-    } else {
-        map.addSource('mrms-overlay', {
-            type: 'raster',
-            tiles: [productDef.tileUrl],
-            tileSize: 256,
-            attribution: 'MRMS via Iowa Environmental Mesonet'
-        });
-    }
-
-    map.addLayer({
-        id: 'mrms-layer',
-        type: 'raster',
-        source: 'mrms-overlay',
-        paint: {
-            'raster-opacity': overlayOpacity,
-            'raster-fade-duration': 300
+        if (radarFrames.length === 0) {
+            throw new Error('No radar frames available');
         }
-    });
 
-    // Update UI
-    document.getElementById('product-name').textContent = productDef.name;
-    document.getElementById('data-timestamp').textContent = 'Live';
-    document.getElementById('last-updated').textContent =
-        'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-    updateLegend(product);
+        // Show the latest frame
+        showFrame(radarFrames.length - 1);
+
+        document.getElementById('last-updated').textContent =
+            'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+    } catch (err) {
+        console.error('Radar load error:', err);
+        document.getElementById('data-timestamp').textContent = 'Error loading radar data';
+        document.getElementById('last-updated').textContent = 'Load failed';
+    }
 
     showLoading(false);
 }
 
-// --- Update legend ---
-function updateLegend(product) {
-    const legend = document.getElementById('map-legend');
-    const productDef = MRMS_PRODUCTS[product];
-    if (!productDef) return;
+// --- Show a specific radar frame ---
+function showFrame(index) {
+    if (index < 0 || index >= radarFrames.length) return;
+    currentFrameIndex = index;
 
-    legend.innerHTML = `
-        <h4>${productDef.legendTitle}</h4>
-        ${productDef.legend.map(item => `
-            <div class="legend-item">
-                <div class="legend-color" style="background:${item.color};"></div>
-                <span>${item.label}</span>
-            </div>
-        `).join('')}
-    `;
+    const frame = radarFrames[index];
+    // Color scheme 2 = Universal Blue, options: smooth=1, snow=1
+    const tileUrl = `${rainviewerHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+
+    // Remove existing layer/source
+    if (map.getLayer('radar-layer')) map.removeLayer('radar-layer');
+    if (map.getSource('radar-overlay')) map.removeSource('radar-overlay');
+
+    map.addSource('radar-overlay', {
+        type: 'raster',
+        tiles: [tileUrl],
+        tileSize: 256,
+        maxzoom: 7
+    });
+
+    map.addLayer({
+        id: 'radar-layer',
+        type: 'raster',
+        source: 'radar-overlay',
+        paint: {
+            'raster-opacity': overlayOpacity,
+            'raster-fade-duration': 0
+        }
+    });
+
+    // Update timestamp display
+    const ts = new Date(frame.time * 1000);
+    document.getElementById('data-timestamp').textContent =
+        ts.toLocaleString('en-US', {
+            month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit',
+            timeZoneName: 'short'
+        });
+
+    // Update timeline slider
+    const slider = document.getElementById('timeline-slider');
+    if (slider) {
+        slider.max = radarFrames.length - 1;
+        slider.value = index;
+    }
+}
+
+// --- Animation controls ---
+function playAnimation() {
+    if (animationTimer) {
+        stopAnimation();
+        return;
+    }
+
+    const playBtn = document.getElementById('play-btn');
+    if (playBtn) playBtn.textContent = 'Pause';
+
+    let i = 0; // Start from the beginning
+    animationTimer = setInterval(() => {
+        showFrame(i);
+        i++;
+        if (i >= radarFrames.length) {
+            i = 0; // Loop
+        }
+    }, 500);
+}
+
+function stopAnimation() {
+    if (animationTimer) {
+        clearInterval(animationTimer);
+        animationTimer = null;
+    }
+    const playBtn = document.getElementById('play-btn');
+    if (playBtn) playBtn.textContent = 'Play';
+}
+
+function onTimelineChange(value) {
+    stopAnimation();
+    showFrame(parseInt(value));
 }
 
 // --- UI Controls ---
-function switchProduct(product, btn) {
-    currentProduct = product;
-    document.querySelectorAll('.product-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    loadProduct(product);
-}
-
 function setOverlayOpacity(value) {
     overlayOpacity = value / 100;
-    if (map && map.getLayer('mrms-layer')) {
-        map.setPaintProperty('mrms-layer', 'raster-opacity', overlayOpacity);
+    if (map && map.getLayer('radar-layer')) {
+        map.setPaintProperty('radar-layer', 'raster-opacity', overlayOpacity);
     }
 }
 
 function showLoading(show) {
     document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
+}
+
+function refreshRadar() {
+    stopAnimation();
+    loadRadarData();
 }
 
 // --- Initialize ---
