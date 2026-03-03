@@ -230,12 +230,13 @@ const WeatherIcons = {
                 <ellipse cx="40" cy="28" rx="16" ry="12" fill="rgba(185,195,210,0.9)"/>
                 <ellipse cx="60" cy="30" rx="14" ry="11" fill="rgba(175,185,200,0.9)"/>
             </g>
-            ${[{x:40,d:0},{x:55,d:0.8}].map(drop =>
-                `<line x1="${drop.x}" y1="55" x2="${drop.x - 2}" y2="65" stroke="rgba(100,160,255,0.6)" stroke-width="2" stroke-linecap="round">
-                    <animate attributeName="y1" values="52;80;52" dur="1.5s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="y2" values="60;88;60" dur="1.5s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.7;0" dur="1.5s" begin="${drop.d}s" repeatCount="indefinite"/>
-                </line>`
+            ${[{x:40,d:0},{x:56,d:0.8}].map(drop =>
+                `<g>
+                    <path d="M${drop.x},55 Q${drop.x - 3},58 ${drop.x},62 Q${drop.x + 3},58 ${drop.x},55 Z" fill="rgba(80,160,255,0.7)">
+                        <animate attributeName="d" values="M${drop.x},52 Q${drop.x - 3},55 ${drop.x},59 Q${drop.x + 3},55 ${drop.x},52 Z;M${drop.x},80 Q${drop.x - 3},83 ${drop.x},87 Q${drop.x + 3},83 ${drop.x},80 Z;M${drop.x},52 Q${drop.x - 3},55 ${drop.x},59 Q${drop.x + 3},55 ${drop.x},52 Z" dur="1.5s" begin="${drop.d}s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0;0.8;0" dur="1.5s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    </path>
+                </g>`
             ).join('')}
         </svg>`;
     },
@@ -247,6 +248,10 @@ const WeatherIcons = {
                     <stop offset="0%" stop-color="rgba(160,170,190,0.9)"/>
                     <stop offset="100%" stop-color="rgba(130,140,165,0.85)"/>
                 </linearGradient>
+                <linearGradient id="rainDropGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(60,150,255,0.9)"/>
+                    <stop offset="100%" stop-color="rgba(30,100,220,0.7)"/>
+                </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
@@ -254,12 +259,17 @@ const WeatherIcons = {
                 <ellipse cx="38" cy="25" rx="17" ry="13" fill="rgba(165,175,195,0.9)"/>
                 <ellipse cx="62" cy="27" rx="15" ry="12" fill="rgba(155,165,185,0.9)"/>
             </g>
-            ${[{x:35,d:0},{x:48,d:0.4},{x:60,d:0.8},{x:42,d:1.2}].map(drop =>
-                `<line x1="${drop.x}" y1="52" x2="${drop.x - 3}" y2="64" stroke="rgba(80,150,255,0.7)" stroke-width="2" stroke-linecap="round">
-                    <animate attributeName="y1" values="50;82;50" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="y2" values="58;90;58" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.8;0" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                </line>`
+            ${[{x:34,d:0},{x:46,d:0.3},{x:58,d:0.6},{x:40,d:0.9}].map(drop =>
+                `<g>
+                    <path d="M${drop.x},52 Q${drop.x - 4},56 ${drop.x},61 Q${drop.x + 4},56 ${drop.x},52 Z" fill="url(#rainDropGrad)">
+                        <animate attributeName="d" values="M${drop.x},50 Q${drop.x - 4},54 ${drop.x},59 Q${drop.x + 4},54 ${drop.x},50 Z;M${drop.x},80 Q${drop.x - 4},84 ${drop.x},89 Q${drop.x + 4},84 ${drop.x},80 Z;M${drop.x},50 Q${drop.x - 4},54 ${drop.x},59 Q${drop.x + 4},54 ${drop.x},50 Z" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0;0.9;0" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    </path>
+                    <ellipse cx="${drop.x}" cy="90" rx="4" ry="1.5" fill="rgba(80,160,255,0.3)">
+                        <animate attributeName="rx" values="0;5;0" dur="1.2s" begin="${drop.d + 0.6}s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0;0.4;0" dur="1.2s" begin="${drop.d + 0.6}s" repeatCount="indefinite"/>
+                    </ellipse>
+                </g>`
             ).join('')}
         </svg>`;
     },
@@ -271,6 +281,10 @@ const WeatherIcons = {
                     <stop offset="0%" stop-color="rgba(130,140,165,0.95)"/>
                     <stop offset="100%" stop-color="rgba(100,110,140,0.9)"/>
                 </linearGradient>
+                <linearGradient id="heavyRainDropGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(40,120,255,0.95)"/>
+                    <stop offset="100%" stop-color="rgba(20,80,200,0.8)"/>
+                </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="6s" repeatCount="indefinite"/>
@@ -278,12 +292,17 @@ const WeatherIcons = {
                 <ellipse cx="36" cy="20" rx="18" ry="14" fill="rgba(140,150,175,0.95)"/>
                 <ellipse cx="64" cy="22" rx="16" ry="13" fill="rgba(125,135,160,0.95)"/>
             </g>
-            ${[{x:30,d:0},{x:40,d:0.2},{x:50,d:0.5},{x:60,d:0.3},{x:70,d:0.7},{x:45,d:0.9}].map(drop =>
-                `<line x1="${drop.x}" y1="48" x2="${drop.x - 4}" y2="62" stroke="rgba(60,130,255,0.8)" stroke-width="2.5" stroke-linecap="round">
-                    <animate attributeName="y1" values="46;84;46" dur="0.9s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="y2" values="56;94;56" dur="0.9s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.85;0" dur="0.9s" begin="${drop.d}s" repeatCount="indefinite"/>
-                </line>`
+            ${[{x:30,d:0},{x:42,d:0.15},{x:54,d:0.35},{x:66,d:0.2},{x:36,d:0.5},{x:48,d:0.65}].map(drop =>
+                `<g>
+                    <path d="M${drop.x},46 Q${drop.x - 4.5},51 ${drop.x},57 Q${drop.x + 4.5},51 ${drop.x},46 Z" fill="url(#heavyRainDropGrad)">
+                        <animate attributeName="d" values="M${drop.x},44 Q${drop.x - 4.5},49 ${drop.x},55 Q${drop.x + 4.5},49 ${drop.x},44 Z;M${drop.x},80 Q${drop.x - 4.5},85 ${drop.x},91 Q${drop.x + 4.5},85 ${drop.x},80 Z;M${drop.x},44 Q${drop.x - 4.5},49 ${drop.x},55 Q${drop.x + 4.5},49 ${drop.x},44 Z" dur="0.9s" begin="${drop.d}s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0;0.95;0" dur="0.9s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    </path>
+                    <ellipse cx="${drop.x}" cy="92" rx="5" ry="1.5" fill="rgba(60,140,255,0.3)">
+                        <animate attributeName="rx" values="0;6;0" dur="0.9s" begin="${drop.d + 0.5}s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="0;0.5;0" dur="0.9s" begin="${drop.d + 0.5}s" repeatCount="indefinite"/>
+                    </ellipse>
+                </g>`
             ).join('')}
         </svg>`;
     },

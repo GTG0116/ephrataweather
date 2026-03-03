@@ -485,6 +485,155 @@ body {
 .pollen-high { color: #FF9800; }
 .pollen-very-high { color: #F44336; }
 
+/* --- Weather Alerts --- */
+.alert-banner {
+    padding: 16px 20px;
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all var(--transition-smooth);
+    position: relative;
+    overflow: hidden;
+}
+
+.alert-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+}
+
+.alert-banner:hover {
+    transform: translateY(-1px);
+}
+
+.alert-warning {
+    background: rgba(255, 152, 0, 0.15);
+    border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.alert-warning::before {
+    background: #FF9800;
+}
+
+.alert-watch {
+    background: rgba(255, 235, 59, 0.12);
+    border: 1px solid rgba(255, 235, 59, 0.25);
+}
+
+.alert-watch::before {
+    background: #FFEB3B;
+}
+
+.alert-advisory {
+    background: rgba(100, 180, 255, 0.12);
+    border: 1px solid rgba(100, 180, 255, 0.25);
+}
+
+.alert-advisory::before {
+    background: var(--accent-blue);
+}
+
+.alert-extreme {
+    background: rgba(244, 67, 54, 0.18);
+    border: 1px solid rgba(244, 67, 54, 0.35);
+}
+
+.alert-extreme::before {
+    background: #F44336;
+}
+
+.alert-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.alert-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.alert-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.alert-warning .alert-title { color: #FFB74D; }
+.alert-watch .alert-title { color: #FFF176; }
+.alert-advisory .alert-title { color: var(--accent-blue); }
+.alert-extreme .alert-title { color: #EF5350; }
+
+.alert-detail {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    padding-left: 32px;
+}
+
+.alert-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    padding-left: 32px;
+    margin-top: 4px;
+}
+
+.alert-expanded {
+    display: none;
+    padding: 12px 0 0 32px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.alert-banner.expanded .alert-expanded {
+    display: block;
+}
+
+/* --- SPC Outlooks --- */
+.spc-outlook-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.spc-outlook-item {
+    text-align: center;
+    padding: 16px 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.spc-outlook-item .spc-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.spc-outlook-item .spc-level {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.spc-outlook-item .spc-sublabel {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.spc-general { color: #88E0A0; background: rgba(136, 224, 160, 0.08); }
+.spc-tstm { color: #C0E8C0; background: rgba(192, 232, 192, 0.08); }
+.spc-mrgl { color: #66CC66; background: rgba(102, 204, 102, 0.1); }
+.spc-slgt { color: #FFE066; background: rgba(255, 224, 102, 0.1); }
+.spc-enh { color: #FFA040; background: rgba(255, 160, 64, 0.12); }
+.spc-mod { color: #FF6060; background: rgba(255, 96, 96, 0.12); }
+.spc-high { color: #FF40FF; background: rgba(255, 64, 255, 0.12); }
+
 /* --- MRMS Map --- */
 .map-container {
     position: relative;

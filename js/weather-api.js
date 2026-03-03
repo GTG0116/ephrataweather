@@ -258,10 +258,17 @@ const WeatherAPI = {
     // === Air Quality ===
     async getAirQuality(lat, lng) {
         try {
-            return await _googleGet('airQuality:lookup', {
-                'location.latitude': lat,
-                'location.longitude': lng
+            // AQI uses airquality.googleapis.com with POST request
+            const url = `https://airquality.googleapis.com/v1/currentConditions:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}`;
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    location: { latitude: lat, longitude: lng }
+                })
             });
+            if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
+            return await resp.json();
         } catch (e) {
             console.warn('Google AQI failed, using Open-Meteo:', e.message);
         }
@@ -281,11 +288,19 @@ const WeatherAPI = {
 
     // === Pollen ===
     async getPollen(lat, lng) {
-        return await _googleGet('pollen:lookup', {
-            'location.latitude': lat,
-            'location.longitude': lng,
-            'days': 1
-        });
+        // Pollen uses pollen.googleapis.com, not weather.googleapis.com
+        const url = `https://pollen.googleapis.com/v1/forecast:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}&location.latitude=${lat}&location.longitude=${lng}&days=1`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Google Pollen API ${resp.status}`);
+        return await resp.json();
+    },
+
+    // === Weather Alerts ===
+    async getAlerts(lat, lng) {
+        const url = `${CONFIG.GOOGLE_WEATHER_BASE}/publicAlerts:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}&location.latitude=${lat}&location.longitude=${lng}&languageCode=en`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Google Alerts API ${resp.status}`);
+        return await resp.json();
     },
 
     // === Helpers ===
