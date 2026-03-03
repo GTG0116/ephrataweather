@@ -13,7 +13,7 @@
         <header class="app-header glass-static">
             <div>
                 <h1>Ephrata Weather</h1>
-                <span class="location" id="location-name">Ephrata, WA</span>
+                <span class="location" id="location-name">Ephrata, PA</span>
             </div>
             <span class="badge" id="last-updated">Loading...</span>
         </header>
@@ -37,6 +37,9 @@
                 MRMS
             </a>
         </nav>
+
+        <!-- Weather Alerts Banner -->
+        <div id="alerts-container" style="display:none;"></div>
 
         <!-- Current Conditions Hero -->
         <div class="current-hero glass-static fade-in" id="current-hero">
@@ -159,6 +162,18 @@
                     <div class="label">Weed</div>
                     <div class="level" id="pollen-weed">--</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- SPC Outlooks -->
+        <h3 class="section-title">SPC Outlooks</h3>
+        <div class="card glass-static" style="margin-bottom:24px;" id="spc-card">
+            <div class="card-header">
+                <span class="card-title">Storm Prediction Center</span>
+                <span class="badge" id="spc-badge">Day 1</span>
+            </div>
+            <div id="spc-content">
+                <div class="loading-shimmer loading-placeholder" style="width:100%;height:80px;"></div>
             </div>
         </div>
     </div>

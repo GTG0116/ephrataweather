@@ -6,14 +6,28 @@
     const lat = CONFIG.DEFAULT_LAT;
     const lng = CONFIG.DEFAULT_LNG;
 
+    // Request notification permission early
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+
     // Fetch all data in parallel
-    const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult] = await Promise.allSettled([
+    const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult, alertsResult, spcResult] = await Promise.allSettled([
         WeatherAPI.getCurrentConditions(lat, lng),
         WeatherAPI.getHourlyForecast(lat, lng, 24),
         WeatherAPI.getDailyForecast(lat, lng, 1),
         WeatherAPI.getAirQuality(lat, lng),
-        WeatherAPI.getPollen(lat, lng)
+        WeatherAPI.getPollen(lat, lng),
+        WeatherAPI.getAlerts(lat, lng),
+        fetchSPCOutlook(lat, lng)
     ]);
+
+    // --- Weather Alerts ---
+    if (alertsResult.status === 'fulfilled') {
+        renderAlerts(alertsResult.value);
+    } else {
+        console.warn('Alerts error:', alertsResult.reason);
+    }
 
     // --- Current Conditions ---
     if (currentResult.status === 'fulfilled') {
@@ -48,10 +62,227 @@
         console.error('Pollen error:', pollenResult.reason);
     }
 
+    // --- SPC Outlooks ---
+    if (spcResult.status === 'fulfilled') {
+        renderSPCOutlook(spcResult.value);
+    } else {
+        document.getElementById('spc-content').innerHTML =
+            '<div style="padding:12px;color:var(--text-muted);font-size:0.85rem;">Unable to load SPC data</div>';
+        console.error('SPC error:', spcResult.reason);
+    }
+
     // Update timestamp
     document.getElementById('last-updated').textContent =
         'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 })();
+
+// ---- Alerts ----
+function renderAlerts(data) {
+    const container = document.getElementById('alerts-container');
+    const alerts = data.alerts || [];
+
+    if (alerts.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    container.innerHTML = alerts.map((alert, i) => {
+        const event = alert.event || alert.alertInfo?.[0]?.event || 'Weather Alert';
+        const headline = alert.headline || alert.alertInfo?.[0]?.headline || event;
+        const description = alert.description || alert.alertInfo?.[0]?.description || '';
+        const severity = (alert.severity || alert.alertInfo?.[0]?.severity || '').toLowerCase();
+        const urgency = (alert.urgency || '').toLowerCase();
+        const onset = alert.onset || alert.effective || alert.alertInfo?.[0]?.onset;
+        const expires = alert.expires || alert.alertInfo?.[0]?.expires;
+
+        // Determine alert class
+        let alertClass = 'alert-advisory';
+        if (severity === 'extreme' || severity === 'severe') alertClass = 'alert-extreme';
+        else if (event.toLowerCase().includes('warning')) alertClass = 'alert-warning';
+        else if (event.toLowerCase().includes('watch')) alertClass = 'alert-watch';
+
+        // Format times
+        let timeStr = '';
+        if (onset) {
+            const start = new Date(onset).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            timeStr = `Effective: ${start}`;
+        }
+        if (expires) {
+            const end = new Date(expires).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+            timeStr += timeStr ? ` - Expires: ${end}` : `Expires: ${end}`;
+        }
+
+        // Alert icon SVG
+        const iconSvg = `<svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>`;
+
+        return `
+            <div class="alert-banner ${alertClass} fade-in" style="animation-delay:${i * 100}ms" onclick="this.classList.toggle('expanded')">
+                <div class="alert-header">
+                    ${iconSvg}
+                    <span class="alert-title">${headline}</span>
+                </div>
+                ${description ? `<div class="alert-detail">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</div>` : ''}
+                ${timeStr ? `<div class="alert-time">${timeStr}</div>` : ''}
+                ${description.length > 150 ? `<div class="alert-expanded">${description}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+
+    // Send browser notifications for alerts
+    sendAlertNotifications(alerts);
+}
+
+function sendAlertNotifications(alerts) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    // Track which alerts we've already notified about
+    const notifiedKey = 'ephrata_notified_alerts';
+    const notified = JSON.parse(localStorage.getItem(notifiedKey) || '[]');
+
+    alerts.forEach(alert => {
+        const event = alert.event || alert.alertInfo?.[0]?.event || 'Weather Alert';
+        const headline = alert.headline || alert.alertInfo?.[0]?.headline || event;
+        const id = alert.id || headline;
+
+        if (!notified.includes(id)) {
+            new Notification('Ephrata Weather Alert', {
+                body: headline,
+                icon: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF9800"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'),
+                tag: id,
+                requireInteraction: true
+            });
+            notified.push(id);
+        }
+    });
+
+    // Keep only recent notifications (last 50)
+    localStorage.setItem(notifiedKey, JSON.stringify(notified.slice(-50)));
+}
+
+// ---- SPC Outlooks ----
+async function fetchSPCOutlook(lat, lng) {
+    // Fetch SPC Day 1 Categorical Outlook using their GIS endpoint
+    const url = `https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`SPC API ${resp.status}`);
+    const geojson = await resp.json();
+
+    // Find which polygon (if any) contains our point
+    let maxRisk = null;
+    const riskLevels = {
+        'TSTM': { rank: 1, label: 'Thunderstorm', color: 'tstm' },
+        'MRGL': { rank: 2, label: 'Marginal', color: 'mrgl' },
+        'SLGT': { rank: 3, label: 'Slight', color: 'slgt' },
+        'ENH':  { rank: 4, label: 'Enhanced', color: 'enh' },
+        'MDT':  { rank: 5, label: 'Moderate', color: 'mod' },
+        'HIGH': { rank: 6, label: 'High', color: 'high' }
+    };
+
+    if (geojson.features) {
+        for (const feature of geojson.features) {
+            const label = (feature.properties?.LABEL || feature.properties?.LABEL2 || '').toUpperCase();
+            const risk = riskLevels[label];
+            if (risk && feature.geometry) {
+                if (pointInGeoJSON(lng, lat, feature.geometry)) {
+                    if (!maxRisk || risk.rank > maxRisk.rank) {
+                        maxRisk = { ...risk, raw: label };
+                    }
+                }
+            }
+        }
+    }
+
+    // Also fetch Day 1 tornado, wind, hail probabilities
+    const [torResp, windResp, hailResp] = await Promise.allSettled([
+        fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_torn.nolyr.geojson').then(r => r.ok ? r.json() : null),
+        fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_wind.nolyr.geojson').then(r => r.ok ? r.json() : null),
+        fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_hail.nolyr.geojson').then(r => r.ok ? r.json() : null)
+    ]);
+
+    const probabilities = {};
+    [['tornado', torResp], ['wind', windResp], ['hail', hailResp]].forEach(([type, result]) => {
+        if (result.status !== 'fulfilled' || !result.value?.features) return;
+        let maxProb = 0;
+        for (const feature of result.value.features) {
+            const label = feature.properties?.LABEL || feature.properties?.LABEL2 || '0';
+            const prob = parseInt(label) || 0;
+            if (prob > 0 && feature.geometry && pointInGeoJSON(lng, lat, feature.geometry)) {
+                maxProb = Math.max(maxProb, prob);
+            }
+        }
+        if (maxProb > 0) probabilities[type] = maxProb;
+    });
+
+    return { categorical: maxRisk, probabilities };
+}
+
+// Point-in-polygon for GeoJSON geometries
+function pointInGeoJSON(x, y, geometry) {
+    if (geometry.type === 'Polygon') {
+        return pointInPolygon(x, y, geometry.coordinates[0]);
+    } else if (geometry.type === 'MultiPolygon') {
+        return geometry.coordinates.some(poly => pointInPolygon(x, y, poly[0]));
+    }
+    return false;
+}
+
+function pointInPolygon(x, y, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+function renderSPCOutlook(data) {
+    const content = document.getElementById('spc-content');
+    const cat = data.categorical;
+    const probs = data.probabilities || {};
+
+    let html = '<div class="spc-outlook-grid">';
+
+    // Categorical risk
+    html += `<div class="spc-outlook-item ${cat ? 'spc-' + cat.color : 'spc-general'}">
+        <div class="spc-label">Categorical</div>
+        <div class="spc-level">${cat ? cat.label : 'General'}</div>
+        <div class="spc-sublabel">${cat ? 'Risk Level ' + cat.rank + '/6' : 'No severe risk'}</div>
+    </div>`;
+
+    // Tornado probability
+    html += `<div class="spc-outlook-item ${probs.tornado ? (probs.tornado >= 10 ? 'spc-mod' : 'spc-slgt') : 'spc-general'}">
+        <div class="spc-label">Tornado</div>
+        <div class="spc-level">${probs.tornado ? probs.tornado + '%' : '--'}</div>
+        <div class="spc-sublabel">Probability</div>
+    </div>`;
+
+    // Wind probability
+    html += `<div class="spc-outlook-item ${probs.wind ? (probs.wind >= 30 ? 'spc-enh' : 'spc-slgt') : 'spc-general'}">
+        <div class="spc-label">Wind</div>
+        <div class="spc-level">${probs.wind ? probs.wind + '%' : '--'}</div>
+        <div class="spc-sublabel">Probability</div>
+    </div>`;
+
+    // Hail probability
+    html += `<div class="spc-outlook-item ${probs.hail ? (probs.hail >= 30 ? 'spc-enh' : 'spc-slgt') : 'spc-general'}">
+        <div class="spc-label">Hail</div>
+        <div class="spc-level">${probs.hail ? probs.hail + '%' : '--'}</div>
+        <div class="spc-sublabel">Probability</div>
+    </div>`;
+
+    html += '</div>';
+    content.innerHTML = html;
+}
+
+// ---- Existing render functions ----
 
 function renderCurrentConditions(data, dailyData) {
     // Temperature

@@ -10,10 +10,10 @@ const CONFIG = {
     // Mapbox Access Token
     MAPBOX_ACCESS_TOKEN: 'pk.eyJ1IjoiZ3RnMDExNiIsImEiOiJjbWxsODV6NXAwNThmM2ZwdWlkYm0xNjFlIn0.vI186twXYzY45nnuV5FucQ',
 
-    // Default location (Ephrata, WA)
-    DEFAULT_LAT: 47.3176,
-    DEFAULT_LNG: -119.5536,
-    DEFAULT_LOCATION_NAME: 'Ephrata, WA',
+    // Default location (Ephrata, PA)
+    DEFAULT_LAT: 40.1798,
+    DEFAULT_LNG: -76.1789,
+    DEFAULT_LOCATION_NAME: 'Ephrata, PA',
 
     // MRMS AWS S3 base URL
     MRMS_S3_BASE: 'https://noaa-mrms-pds.s3.amazonaws.com',
