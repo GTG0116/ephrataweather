@@ -225,6 +225,8 @@ const WeatherIcons = {
         </svg>`;
     },
 
+    // --- Rain icons: cloud with vertical drops falling DOWN only ---
+
     _lightRain(s) {
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
@@ -235,9 +237,9 @@ const WeatherIcons = {
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="35" rx="28" ry="14" fill="url(#lrCloudGrad)"/>
-                <ellipse cx="40" cy="28" rx="16" ry="12" fill="rgba(185,195,210,0.9)"/>
-                <ellipse cx="60" cy="30" rx="14" ry="11" fill="rgba(175,185,200,0.9)"/>
+                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#lrCloudGrad)"/>
+                <ellipse cx="40" cy="24" rx="16" ry="12" fill="rgba(185,195,210,0.9)"/>
+                <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(175,185,200,0.9)"/>
             </g>
             ${[{x:40,d:0},{x:56,d:0.8}].map(drop =>
                 `<line x1="${drop.x}" y1="55" x2="${drop.x}" y2="70" stroke="rgba(80,160,255,0.7)" stroke-width="2" stroke-linecap="round">
@@ -297,6 +299,8 @@ const WeatherIcons = {
         </svg>`;
     },
 
+    // --- Snow icons: SVG-drawn snowflakes ---
+
     _snow(s) {
         const flakes = [{x:38,y:48,r:6,d:0},{x:54,y:50,r:5,d:0.7},{x:64,y:46,r:5.5,d:1.4},{x:46,y:52,r:4.5,d:2.1}];
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
@@ -308,9 +312,9 @@ const WeatherIcons = {
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="8s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#sCloudGrad)"/>
-                <ellipse cx="40" cy="24" rx="16" ry="12" fill="rgba(195,205,220,0.9)"/>
-                <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(185,195,210,0.9)"/>
+                <ellipse cx="50" cy="26" rx="28" ry="14" fill="url(#sCloudGrad)"/>
+                <ellipse cx="40" cy="20" rx="16" ry="12" fill="rgba(195,205,220,0.9)"/>
+                <ellipse cx="60" cy="22" rx="14" ry="11" fill="rgba(185,195,210,0.9)"/>
             </g>
             ${flakes.map(f => `
                 <g>
@@ -334,9 +338,9 @@ const WeatherIcons = {
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="8s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="34" rx="26" ry="13" fill="url(#lsCloudGrad)"/>
-                <ellipse cx="42" cy="28" rx="14" ry="11" fill="rgba(205,212,225,0.9)"/>
-                <ellipse cx="58" cy="30" rx="13" ry="10" fill="rgba(195,205,218,0.9)"/>
+                <ellipse cx="50" cy="30" rx="26" ry="13" fill="url(#lsCloudGrad)"/>
+                <ellipse cx="42" cy="24" rx="14" ry="11" fill="rgba(205,212,225,0.9)"/>
+                <ellipse cx="58" cy="26" rx="13" ry="10" fill="rgba(195,205,218,0.9)"/>
             </g>
             ${flakes.map(f => `
                 <g>
@@ -456,10 +460,10 @@ const WeatherIcons = {
                 <animate attributeName="opacity" values="0;1;1;0;0;0;0;1;0" dur="3s" repeatCount="indefinite"/>
             </polygon>
             ${[{x:35,d:0.2},{x:62,d:0.7}].map(drop =>
-                `<line x1="${drop.x}" y1="50" x2="${drop.x - 3}" y2="62" stroke="rgba(80,150,255,0.7)" stroke-width="2" stroke-linecap="round">
-                    <animate attributeName="y1" values="48;82;48" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="y2" values="56;90;56" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.7;0" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
+                `<line x1="${drop.x}" y1="46" x2="${drop.x}" y2="56" stroke="rgba(80,150,255,0.7)" stroke-width="2" stroke-linecap="round">
+                    <animate attributeName="y1" values="46;80" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="y2" values="56;90" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.7;0" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
                 </line>`
             ).join('')}
         </svg>`;
@@ -533,9 +537,9 @@ const WeatherIcons = {
                 <ellipse cx="62" cy="22" rx="15" ry="12" fill="rgba(130,140,170,0.95)"/>
             </g>
             ${[{x:36,d:0},{x:50,d:0.4},{x:64,d:0.8},{x:42,d:1.2},{x:56,d:0.6}].map(stone =>
-                `<circle cx="${stone.x}" cy="55" r="3.5" fill="url(#hailStone)" stroke="rgba(180,200,230,0.5)" stroke-width="0.5">
-                    <animate attributeName="cy" values="48;85;48" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.9;0" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
+                `<circle cx="${stone.x}" cy="48" r="3.5" fill="url(#hailStone)" stroke="rgba(180,200,230,0.5)" stroke-width="0.5">
+                    <animate attributeName="cy" values="48;88" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.9;0" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
                 </circle>`
             ).join('')}
         </svg>`;

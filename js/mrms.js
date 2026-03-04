@@ -12,12 +12,17 @@ let rainviewerHost = '';
 
 // --- Initialize Map ---
 function initMap() {
+    const loc = LocationManager.getCurrent();
+
+    const nameEl = document.getElementById('location-name');
+    if (nameEl) nameEl.textContent = loc.name;
+
     mapboxgl.accessToken = CONFIG.MAPBOX_ACCESS_TOKEN;
 
     map = new mapboxgl.Map({
         container: 'map',
         style: 'mapbox://styles/mapbox/dark-v11',
-        center: [CONFIG.DEFAULT_LNG, CONFIG.DEFAULT_LAT],
+        center: [loc.lng, loc.lat],
         zoom: 6,
         attributionControl: true
     });

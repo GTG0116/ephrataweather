@@ -98,17 +98,14 @@ function renderAlerts(data) {
         const headline = alert.headline || alert.alertInfo?.[0]?.headline || event;
         const description = alert.description || alert.alertInfo?.[0]?.description || '';
         const severity = (alert.severity || alert.alertInfo?.[0]?.severity || '').toLowerCase();
-        const urgency = (alert.urgency || '').toLowerCase();
         const onset = alert.onset || alert.effective || alert.alertInfo?.[0]?.onset;
         const expires = alert.expires || alert.alertInfo?.[0]?.expires;
 
-        // Determine alert class
         let alertClass = 'alert-advisory';
         if (severity === 'extreme' || severity === 'severe') alertClass = 'alert-extreme';
         else if (event.toLowerCase().includes('warning')) alertClass = 'alert-warning';
         else if (event.toLowerCase().includes('watch')) alertClass = 'alert-watch';
 
-        // Format times
         let timeStr = '';
         if (onset) {
             const start = new Date(onset).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -119,7 +116,6 @@ function renderAlerts(data) {
             timeStr += timeStr ? ` - Expires: ${end}` : `Expires: ${end}`;
         }
 
-        // Alert icon SVG
         const iconSvg = `<svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
             <line x1="12" y1="9" x2="12" y2="13"/>
@@ -139,14 +135,12 @@ function renderAlerts(data) {
         `;
     }).join('');
 
-    // Send browser notifications for alerts
     sendAlertNotifications(alerts);
 }
 
 function sendAlertNotifications(alerts) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    // Track which alerts we've already notified about
     const notifiedKey = 'ephrata_notified_alerts';
     const notified = JSON.parse(localStorage.getItem(notifiedKey) || '[]');
 
@@ -166,19 +160,16 @@ function sendAlertNotifications(alerts) {
         }
     });
 
-    // Keep only recent notifications (last 50)
     localStorage.setItem(notifiedKey, JSON.stringify(notified.slice(-50)));
 }
 
 // ---- SPC Outlooks ----
 async function fetchSPCOutlook(lat, lng) {
-    // Fetch SPC Day 1 Categorical Outlook using their GIS endpoint
     const url = `https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`SPC API ${resp.status}`);
     const geojson = await resp.json();
 
-    // Find which polygon (if any) contains our point
     let maxRisk = null;
     const riskLevels = {
         'TSTM': { rank: 1, label: 'Thunderstorm', color: 'tstm' },
@@ -203,7 +194,6 @@ async function fetchSPCOutlook(lat, lng) {
         }
     }
 
-    // Also fetch Day 1 tornado, wind, hail probabilities
     const [torResp, windResp, hailResp] = await Promise.allSettled([
         fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_torn.nolyr.geojson').then(r => r.ok ? r.json() : null),
         fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_wind.nolyr.geojson').then(r => r.ok ? r.json() : null),
@@ -227,7 +217,6 @@ async function fetchSPCOutlook(lat, lng) {
     return { categorical: maxRisk, probabilities };
 }
 
-// Point-in-polygon for GeoJSON geometries
 function pointInGeoJSON(x, y, geometry) {
     if (geometry.type === 'Polygon') {
         return pointInPolygon(x, y, geometry.coordinates[0]);
@@ -256,28 +245,24 @@ function renderSPCOutlook(data) {
 
     let html = '<div class="spc-outlook-grid">';
 
-    // Categorical risk
     html += `<div class="spc-outlook-item ${cat ? 'spc-' + cat.color : 'spc-general'}">
         <div class="spc-label">Categorical</div>
         <div class="spc-level">${cat ? cat.label : 'General'}</div>
         <div class="spc-sublabel">${cat ? 'Risk Level ' + cat.rank + '/6' : 'No severe risk'}</div>
     </div>`;
 
-    // Tornado probability
     html += `<div class="spc-outlook-item ${probs.tornado ? (probs.tornado >= 10 ? 'spc-mod' : 'spc-slgt') : 'spc-general'}">
         <div class="spc-label">Tornado</div>
         <div class="spc-level">${probs.tornado ? probs.tornado + '%' : '--'}</div>
         <div class="spc-sublabel">Probability</div>
     </div>`;
 
-    // Wind probability
     html += `<div class="spc-outlook-item ${probs.wind ? (probs.wind >= 30 ? 'spc-enh' : 'spc-slgt') : 'spc-general'}">
         <div class="spc-label">Wind</div>
         <div class="spc-level">${probs.wind ? probs.wind + '%' : '--'}</div>
         <div class="spc-sublabel">Probability</div>
     </div>`;
 
-    // Hail probability
     html += `<div class="spc-outlook-item ${probs.hail ? (probs.hail >= 30 ? 'spc-enh' : 'spc-slgt') : 'spc-general'}">
         <div class="spc-label">Hail</div>
         <div class="spc-level">${probs.hail ? probs.hail + '%' : '--'}</div>
@@ -288,25 +273,21 @@ function renderSPCOutlook(data) {
     content.innerHTML = html;
 }
 
-// ---- Existing render functions ----
+// ---- Render functions ----
 
 function renderCurrentConditions(data, dailyData) {
-    // Temperature
     const temp = data.temperature?.degrees;
     document.getElementById('current-temp').innerHTML =
         `${WeatherAPI.formatTemp(temp)}<span class="unit">&deg;F</span>`;
 
-    // Condition text
     const condition = data.weatherCondition?.description?.text || data.weatherCondition?.type?.replace(/_/g, ' ') || 'Unknown';
     document.getElementById('current-condition').textContent = condition;
 
-    // Feels like
     const feelsLike = data.feelsLikeTemperature?.degrees;
     if (feelsLike != null) {
         document.getElementById('feels-like').textContent = `Feels like ${WeatherAPI.formatTemp(feelsLike)}\u00B0`;
     }
 
-    // Hi/Lo from daily forecast
     if (dailyData && dailyData.forecastDays && dailyData.forecastDays.length > 0) {
         const day = dailyData.forecastDays[0];
         const hi = day.maxTemperature?.degrees;
@@ -317,12 +298,10 @@ function renderCurrentConditions(data, dailyData) {
         }
     }
 
-    // Icon
     const condType = data.weatherCondition?.type || condition;
     const iconSvg = WeatherIcons.fromText(condType);
     document.getElementById('current-icon').innerHTML = iconSvg;
 
-    // Detail cards
     // Wind
     const windSpeed = data.wind?.speed?.value;
     const windGust = data.wind?.gust?.value;
@@ -414,7 +393,9 @@ function renderAirQuality(data) {
     badge.textContent = category.label;
     badge.className = `badge ${category.class}`;
 
-    // Position marker (AQI 0-500 scale)
+    // Position marker on the bar using same category thresholds
+    // Bar segments: Good(0-50)=10%, Moderate(51-100)=10%, USG(101-150)=10%, Unhealthy(151-200)=10%, Very Unhealthy(201-300)=20%, Hazardous(301-500)=40%
+    // Simplified: linear 0-500 scale mapped to percentage
     const pct = Math.min(100, (aqi / 500) * 100);
     document.getElementById('aqi-marker').style.left = pct + '%';
 
@@ -424,6 +405,7 @@ function renderAirQuality(data) {
 }
 
 function renderPollen(data) {
+    // Handle both possible response structures from the Pollen API
     const days = data.dailyInfo || [];
     if (days.length === 0) return;
 
@@ -460,7 +442,6 @@ function renderPollen(data) {
             const el = document.getElementById(elId);
             el.textContent = level;
 
-            // Color coding
             const lowerLevel = level.toLowerCase();
             if (lowerLevel.includes('very high')) {
                 el.className = 'level pollen-very-high';
