@@ -3,8 +3,12 @@
 // ============================================
 
 (async function () {
-    const lat = CONFIG.DEFAULT_LAT;
-    const lng = CONFIG.DEFAULT_LNG;
+    const loc = await LocationManager.init();
+    const lat = loc.lat;
+    const lng = loc.lng;
+ 
+    const nameEl = document.getElementById('location-name');
+    if (nameEl) nameEl.textContent = loc.name;
 
     try {
         const data = await WeatherAPI.getDailyForecast(lat, lng, 10);
