@@ -86,7 +86,10 @@
     <div class="app-container">
         <div class="hero-section fade-in">
             <h1>Ephrata Weather</h1>
-            <p class="subtitle">Real-time weather data for Ephrata, PA</p>
+            <div class="location-search-container" id="location-search-container" style="margin-bottom:12px;">
+                <span class="location" id="location-name" style="color:var(--text-secondary);font-size:1.1rem;">Loading...</span>
+            </div>
+            <p class="subtitle">Real-time weather data</p>
 
             <div class="nav-cards">
                 <a href="currentconditions.html" class="nav-card glass">
@@ -138,5 +141,13 @@
             </div>
         </div>
     </div>
+    <script src="js/config.js"></script>
+    <script src="js/location.js"></script>
+    <script>
+        LocationManager.init().then(loc => {
+            const el = document.getElementById('location-name');
+            if (el) el.textContent = loc.name;
+        });
+    </script>
 </body>
 </html>

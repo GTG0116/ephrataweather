@@ -13,7 +13,9 @@
         <header class="app-header glass-static">
             <div>
                 <h1>Ephrata Weather</h1>
-                <span class="location" id="location-name">Ephrata, PA</span>
+                <div class="location-search-container" id="location-search-container">
+                    <span class="location" id="location-name">Loading...</span>
+                </div>
             </div>
             <span class="badge" id="last-updated">Loading...</span>
         </header>
@@ -94,16 +96,6 @@
                 <div class="card-detail" id="uv-detail">--</div>
             </div>
 
-            <!-- Visibility -->
-            <div class="card glass" id="card-visibility">
-                <div class="card-header">
-                    <span class="card-title">Visibility</span>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </div>
-                <div class="card-value" id="visibility-value">--<span class="unit"> mi</span></div>
-                <div class="card-detail" id="visibility-detail"></div>
-            </div>
-
             <!-- Pressure -->
             <div class="card glass" id="card-pressure">
                 <div class="card-header">
@@ -179,6 +171,7 @@
     </div>
 
     <script src="js/config.js"></script>
+    <script src="js/location.js"></script>
     <script src="js/icons.js"></script>
     <script src="js/weather-api.js"></script>
     <script src="js/current.js"></script>

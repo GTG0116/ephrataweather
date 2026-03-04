@@ -111,7 +111,9 @@
         <header class="app-header glass-static">
             <div>
                 <h1>Ephrata Weather</h1>
-                <span class="location">Ephrata, PA</span>
+                <div class="location-search-container" id="location-search-container">
+                    <span class="location" id="location-name">Loading...</span>
+                </div>
             </div>
             <span class="badge" id="last-updated">Loading radar...</span>
         </header>
@@ -173,6 +175,7 @@
     </div>
 
     <script src="js/config.js"></script>
+    <script src="js/location.js"></script>
     <script src="js/mrms.js"></script>
 </body>
 </html>

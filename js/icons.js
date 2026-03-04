@@ -73,6 +73,26 @@ const WeatherIcons = {
         return this.get('default', sz);
     },
 
+    // ---- SVG snowflake path (6-armed) ----
+    _snowflakePath(cx, cy, r) {
+        let d = '';
+        for (let i = 0; i < 6; i++) {
+            const angle = (i * 60) * Math.PI / 180;
+            const x2 = cx + Math.cos(angle) * r;
+            const y2 = cy + Math.sin(angle) * r;
+            d += `M${cx},${cy}L${x2.toFixed(1)},${y2.toFixed(1)}`;
+            // Small branches
+            const br = r * 0.45;
+            const ba1 = angle + 0.5;
+            const ba2 = angle - 0.5;
+            const mx = cx + Math.cos(angle) * r * 0.6;
+            const my = cy + Math.sin(angle) * r * 0.6;
+            d += `M${mx.toFixed(1)},${my.toFixed(1)}L${(mx + Math.cos(ba1) * br).toFixed(1)},${(my + Math.sin(ba1) * br).toFixed(1)}`;
+            d += `M${mx.toFixed(1)},${my.toFixed(1)}L${(mx + Math.cos(ba2) * br).toFixed(1)},${(my + Math.sin(ba2) * br).toFixed(1)}`;
+        }
+        return d;
+    },
+
     // ---- Individual icon SVG generators ----
 
     _sunny(s) {
@@ -129,8 +149,8 @@ const WeatherIcons = {
                     <stop offset="100%" stop-color="rgba(220,225,230,0.9)"/>
                 </linearGradient>
             </defs>
-            <!-- Sun behind cloud, upper-right -->
-            <g transform="translate(58,30)">
+            <!-- Sun on the left, partially behind cloud -->
+            <g transform="translate(32,32)">
                 <g>
                     <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="30s" repeatCount="indefinite"/>
                     ${[0,60,120,180,240,300].map(a =>
@@ -143,12 +163,12 @@ const WeatherIcons = {
                     <animate attributeName="r" values="16;17;16" dur="4s" repeatCount="indefinite"/>
                 </circle>
             </g>
-            <!-- Cloud in front, overlapping lower part of sun -->
+            <!-- Cloud overlapping the sun's bottom-right -->
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="6s" repeatCount="indefinite"/>
-                <ellipse cx="42" cy="62" rx="30" ry="14" fill="url(#pcCloudGrad)"/>
-                <ellipse cx="30" cy="55" rx="18" ry="14" fill="rgba(255,255,255,0.95)"/>
-                <ellipse cx="52" cy="55" rx="16" ry="12" fill="rgba(245,245,245,0.95)"/>
+                <ellipse cx="55" cy="62" rx="30" ry="14" fill="url(#pcCloudGrad)"/>
+                <ellipse cx="42" cy="55" rx="18" ry="14" fill="rgba(255,255,255,0.95)"/>
+                <ellipse cx="65" cy="56" rx="16" ry="12" fill="rgba(245,245,245,0.95)"/>
             </g>
         </svg>`;
     },
@@ -216,6 +236,8 @@ const WeatherIcons = {
         </svg>`;
     },
 
+    // --- Rain icons: cloud with vertical drops falling DOWN only ---
+
     _lightRain(s) {
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
@@ -226,17 +248,16 @@ const WeatherIcons = {
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="35" rx="28" ry="14" fill="url(#lrCloudGrad)"/>
-                <ellipse cx="40" cy="28" rx="16" ry="12" fill="rgba(185,195,210,0.9)"/>
-                <ellipse cx="60" cy="30" rx="14" ry="11" fill="rgba(175,185,200,0.9)"/>
+                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#lrCloudGrad)"/>
+                <ellipse cx="40" cy="24" rx="16" ry="12" fill="rgba(185,195,210,0.9)"/>
+                <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(175,185,200,0.9)"/>
             </g>
-            ${[{x:40,d:0},{x:56,d:0.8}].map(drop =>
-                `<g>
-                    <path d="M${drop.x},55 Q${drop.x - 3},58 ${drop.x},62 Q${drop.x + 3},58 ${drop.x},55 Z" fill="rgba(80,160,255,0.7)">
-                        <animate attributeName="d" values="M${drop.x},52 Q${drop.x - 3},55 ${drop.x},59 Q${drop.x + 3},55 ${drop.x},52 Z;M${drop.x},80 Q${drop.x - 3},83 ${drop.x},87 Q${drop.x + 3},83 ${drop.x},80 Z;M${drop.x},52 Q${drop.x - 3},55 ${drop.x},59 Q${drop.x + 3},55 ${drop.x},52 Z" dur="1.5s" begin="${drop.d}s" repeatCount="indefinite"/>
-                        <animate attributeName="opacity" values="0;0.8;0" dur="1.5s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    </path>
-                </g>`
+            ${[{x:38,d:0},{x:50,d:0.5},{x:62,d:1.0}].map(drop =>
+                `<line x1="${drop.x}" y1="46" x2="${drop.x}" y2="56" stroke="rgba(80,160,255,0.7)" stroke-width="2" stroke-linecap="round">
+                    <animate attributeName="y1" values="46;78" dur="1.4s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="y2" values="56;88" dur="1.4s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.8;0" dur="1.4s" begin="${drop.d}s" repeatCount="indefinite"/>
+                </line>`
             ).join('')}
         </svg>`;
     },
@@ -248,28 +269,19 @@ const WeatherIcons = {
                     <stop offset="0%" stop-color="rgba(160,170,190,0.9)"/>
                     <stop offset="100%" stop-color="rgba(130,140,165,0.85)"/>
                 </linearGradient>
-                <linearGradient id="rainDropGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="rgba(60,150,255,0.9)"/>
-                    <stop offset="100%" stop-color="rgba(30,100,220,0.7)"/>
-                </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="32" rx="30" ry="15" fill="url(#rCloudGrad)"/>
-                <ellipse cx="38" cy="25" rx="17" ry="13" fill="rgba(165,175,195,0.9)"/>
-                <ellipse cx="62" cy="27" rx="15" ry="12" fill="rgba(155,165,185,0.9)"/>
+                <ellipse cx="50" cy="28" rx="30" ry="15" fill="url(#rCloudGrad)"/>
+                <ellipse cx="38" cy="21" rx="17" ry="13" fill="rgba(165,175,195,0.9)"/>
+                <ellipse cx="62" cy="23" rx="15" ry="12" fill="rgba(155,165,185,0.9)"/>
             </g>
-            ${[{x:34,d:0},{x:46,d:0.3},{x:58,d:0.6},{x:40,d:0.9}].map(drop =>
-                `<g>
-                    <path d="M${drop.x},52 Q${drop.x - 4},56 ${drop.x},61 Q${drop.x + 4},56 ${drop.x},52 Z" fill="url(#rainDropGrad)">
-                        <animate attributeName="d" values="M${drop.x},50 Q${drop.x - 4},54 ${drop.x},59 Q${drop.x + 4},54 ${drop.x},50 Z;M${drop.x},80 Q${drop.x - 4},84 ${drop.x},89 Q${drop.x + 4},84 ${drop.x},80 Z;M${drop.x},50 Q${drop.x - 4},54 ${drop.x},59 Q${drop.x + 4},54 ${drop.x},50 Z" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                        <animate attributeName="opacity" values="0;0.9;0" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    </path>
-                    <ellipse cx="${drop.x}" cy="90" rx="4" ry="1.5" fill="rgba(80,160,255,0.3)">
-                        <animate attributeName="rx" values="0;5;0" dur="1.2s" begin="${drop.d + 0.6}s" repeatCount="indefinite"/>
-                        <animate attributeName="opacity" values="0;0.4;0" dur="1.2s" begin="${drop.d + 0.6}s" repeatCount="indefinite"/>
-                    </ellipse>
-                </g>`
+            ${[{x:32,d:0},{x:40,d:0.2},{x:48,d:0.5},{x:56,d:0.15},{x:64,d:0.4},{x:44,d:0.7},{x:52,d:0.35},{x:60,d:0.6}].map(drop =>
+                `<line x1="${drop.x}" y1="44" x2="${drop.x}" y2="52" stroke="rgba(60,140,255,0.8)" stroke-width="1.8" stroke-linecap="round">
+                    <animate attributeName="y1" values="44;80" dur="1.0s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="y2" values="52;88" dur="1.0s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.9;0" dur="1.0s" begin="${drop.d}s" repeatCount="indefinite"/>
+                </line>`
             ).join('')}
         </svg>`;
     },
@@ -281,33 +293,27 @@ const WeatherIcons = {
                     <stop offset="0%" stop-color="rgba(130,140,165,0.95)"/>
                     <stop offset="100%" stop-color="rgba(100,110,140,0.9)"/>
                 </linearGradient>
-                <linearGradient id="heavyRainDropGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="rgba(40,120,255,0.95)"/>
-                    <stop offset="100%" stop-color="rgba(20,80,200,0.8)"/>
-                </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="6s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="28" rx="32" ry="16" fill="url(#hrCloudGrad)"/>
-                <ellipse cx="36" cy="20" rx="18" ry="14" fill="rgba(140,150,175,0.95)"/>
-                <ellipse cx="64" cy="22" rx="16" ry="13" fill="rgba(125,135,160,0.95)"/>
+                <ellipse cx="50" cy="24" rx="32" ry="16" fill="url(#hrCloudGrad)"/>
+                <ellipse cx="36" cy="16" rx="18" ry="14" fill="rgba(140,150,175,0.95)"/>
+                <ellipse cx="64" cy="18" rx="16" ry="13" fill="rgba(125,135,160,0.95)"/>
             </g>
-            ${[{x:30,d:0},{x:42,d:0.15},{x:54,d:0.35},{x:66,d:0.2},{x:36,d:0.5},{x:48,d:0.65}].map(drop =>
-                `<g>
-                    <path d="M${drop.x},46 Q${drop.x - 4.5},51 ${drop.x},57 Q${drop.x + 4.5},51 ${drop.x},46 Z" fill="url(#heavyRainDropGrad)">
-                        <animate attributeName="d" values="M${drop.x},44 Q${drop.x - 4.5},49 ${drop.x},55 Q${drop.x + 4.5},49 ${drop.x},44 Z;M${drop.x},80 Q${drop.x - 4.5},85 ${drop.x},91 Q${drop.x + 4.5},85 ${drop.x},80 Z;M${drop.x},44 Q${drop.x - 4.5},49 ${drop.x},55 Q${drop.x + 4.5},49 ${drop.x},44 Z" dur="0.9s" begin="${drop.d}s" repeatCount="indefinite"/>
-                        <animate attributeName="opacity" values="0;0.95;0" dur="0.9s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    </path>
-                    <ellipse cx="${drop.x}" cy="92" rx="5" ry="1.5" fill="rgba(60,140,255,0.3)">
-                        <animate attributeName="rx" values="0;6;0" dur="0.9s" begin="${drop.d + 0.5}s" repeatCount="indefinite"/>
-                        <animate attributeName="opacity" values="0;0.5;0" dur="0.9s" begin="${drop.d + 0.5}s" repeatCount="indefinite"/>
-                    </ellipse>
-                </g>`
+            ${[{x:28,d:0},{x:34,d:0.12},{x:40,d:0.28},{x:46,d:0.08},{x:52,d:0.22},{x:58,d:0.4},{x:64,d:0.16},{x:70,d:0.34},{x:37,d:0.45},{x:49,d:0.52},{x:55,d:0.3},{x:43,d:0.18}].map(drop =>
+                `<line x1="${drop.x}" y1="40" x2="${drop.x}" y2="50" stroke="rgba(40,120,255,0.85)" stroke-width="2.2" stroke-linecap="round">
+                    <animate attributeName="y1" values="40;82" dur="0.75s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="y2" values="50;92" dur="0.75s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.95;0" dur="0.75s" begin="${drop.d}s" repeatCount="indefinite"/>
+                </line>`
             ).join('')}
         </svg>`;
     },
 
+    // --- Snow icons: SVG-drawn snowflakes ---
+
     _snow(s) {
+        const flakes = [{x:38,y:48,r:6,d:0},{x:54,y:50,r:5,d:0.7},{x:64,y:46,r:5.5,d:1.4},{x:46,y:52,r:4.5,d:2.1}];
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
                 <linearGradient id="sCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -317,21 +323,21 @@ const WeatherIcons = {
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="8s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#sCloudGrad)"/>
-                <ellipse cx="40" cy="24" rx="16" ry="12" fill="rgba(195,205,220,0.9)"/>
-                <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(185,195,210,0.9)"/>
+                <ellipse cx="50" cy="26" rx="28" ry="14" fill="url(#sCloudGrad)"/>
+                <ellipse cx="40" cy="20" rx="16" ry="12" fill="rgba(195,205,220,0.9)"/>
+                <ellipse cx="60" cy="22" rx="14" ry="11" fill="rgba(185,195,210,0.9)"/>
             </g>
-            ${[{x:38,d:0},{x:52,d:0.7},{x:62,d:1.4},{x:45,d:2.1}].map(flake =>
-                `<text x="${flake.x}" y="55" font-size="8" fill="rgba(200,220,255,0.9)" text-anchor="middle" font-family="sans-serif">❄
-                    <animate attributeName="y" values="50;90;50" dur="3s" begin="${flake.d}s" repeatCount="indefinite"/>
-                    <animateTransform attributeName="transform" type="rotate" values="0 ${flake.x} 65;360 ${flake.x} 65" dur="4s" begin="${flake.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.9;0" dur="3s" begin="${flake.d}s" repeatCount="indefinite"/>
-                </text>`
-            ).join('')}
+            ${flakes.map(f => `<g>
+                <path d="${this._snowflakePath(f.x, f.y, f.r)}" fill="none" stroke="rgba(200,225,255,0.9)" stroke-width="1.3" stroke-linecap="round">
+                    <animate attributeName="opacity" values="0;0.9;0" dur="3s" begin="${f.d}s" repeatCount="indefinite"/>
+                </path>
+                <animateTransform attributeName="transform" type="translate" values="0,0;0,38" dur="3s" begin="${f.d}s" repeatCount="indefinite"/>
+            </g>`).join('')}
         </svg>`;
     },
 
     _lightSnow(s) {
+        const flakes = [{x:42,y:50,r:5,d:0},{x:58,y:48,r:4.5,d:1.2}];
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
                 <linearGradient id="lsCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -341,20 +347,21 @@ const WeatherIcons = {
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="8s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="34" rx="26" ry="13" fill="url(#lsCloudGrad)"/>
-                <ellipse cx="42" cy="28" rx="14" ry="11" fill="rgba(205,212,225,0.9)"/>
-                <ellipse cx="58" cy="30" rx="13" ry="10" fill="rgba(195,205,218,0.9)"/>
+                <ellipse cx="50" cy="30" rx="26" ry="13" fill="url(#lsCloudGrad)"/>
+                <ellipse cx="42" cy="24" rx="14" ry="11" fill="rgba(205,212,225,0.9)"/>
+                <ellipse cx="58" cy="26" rx="13" ry="10" fill="rgba(195,205,218,0.9)"/>
             </g>
-            ${[{x:42,d:0},{x:58,d:1.2}].map(flake =>
-                `<text x="${flake.x}" y="55" font-size="7" fill="rgba(200,220,255,0.8)" text-anchor="middle" font-family="sans-serif">❄
-                    <animate attributeName="y" values="52;88;52" dur="3.5s" begin="${flake.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.8;0" dur="3.5s" begin="${flake.d}s" repeatCount="indefinite"/>
-                </text>`
-            ).join('')}
+            ${flakes.map(f => `<g>
+                <path d="${this._snowflakePath(f.x, f.y, f.r)}" fill="none" stroke="rgba(200,225,255,0.8)" stroke-width="1.2" stroke-linecap="round">
+                    <animate attributeName="opacity" values="0;0.8;0" dur="3.5s" begin="${f.d}s" repeatCount="indefinite"/>
+                </path>
+                <animateTransform attributeName="transform" type="translate" values="0,0;0,36" dur="3.5s" begin="${f.d}s" repeatCount="indefinite"/>
+            </g>`).join('')}
         </svg>`;
     },
 
     _heavySnow(s) {
+        const flakes = [{x:32,y:44,r:6,d:0},{x:42,y:46,r:5.5,d:0.4},{x:52,y:42,r:6,d:0.8},{x:62,y:44,r:5,d:0.3},{x:48,y:48,r:5,d:1.2},{x:38,y:50,r:4.5,d:1.6}];
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
                 <linearGradient id="hsCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -364,17 +371,16 @@ const WeatherIcons = {
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="26" rx="30" ry="15" fill="url(#hsCloudGrad)"/>
-                <ellipse cx="38" cy="18" rx="17" ry="13" fill="rgba(175,185,205,0.95)"/>
-                <ellipse cx="62" cy="20" rx="15" ry="12" fill="rgba(160,170,195,0.95)"/>
+                <ellipse cx="50" cy="22" rx="30" ry="15" fill="url(#hsCloudGrad)"/>
+                <ellipse cx="38" cy="14" rx="17" ry="13" fill="rgba(175,185,205,0.95)"/>
+                <ellipse cx="62" cy="16" rx="15" ry="12" fill="rgba(160,170,195,0.95)"/>
             </g>
-            ${[{x:32,d:0},{x:42,d:0.4},{x:52,d:0.8},{x:62,d:0.3},{x:48,d:1.2},{x:38,d:1.6}].map(flake =>
-                `<text x="${flake.x}" y="50" font-size="9" fill="rgba(210,225,255,0.9)" text-anchor="middle" font-family="sans-serif">❄
-                    <animate attributeName="y" values="46;90;46" dur="2.5s" begin="${flake.d}s" repeatCount="indefinite"/>
-                    <animateTransform attributeName="transform" type="rotate" values="0 ${flake.x} 65;360 ${flake.x} 65" dur="3s" begin="${flake.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.9;0" dur="2.5s" begin="${flake.d}s" repeatCount="indefinite"/>
-                </text>`
-            ).join('')}
+            ${flakes.map(f => `<g>
+                <path d="${this._snowflakePath(f.x, f.y, f.r)}" fill="none" stroke="rgba(210,230,255,0.9)" stroke-width="1.4" stroke-linecap="round">
+                    <animate attributeName="opacity" values="0;0.9;0" dur="2.5s" begin="${f.d}s" repeatCount="indefinite"/>
+                </path>
+                <animateTransform attributeName="transform" type="translate" values="0,0;0,42" dur="2.5s" begin="${f.d}s" repeatCount="indefinite"/>
+            </g>`).join('')}
         </svg>`;
     },
 
@@ -393,18 +399,18 @@ const WeatherIcons = {
                 <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(165,175,195,0.9)"/>
             </g>
             ${[{x:38,d:0},{x:55,d:0.6}].map(drop =>
-                `<line x1="${drop.x}" y1="50" x2="${drop.x - 2}" y2="60" stroke="rgba(80,150,255,0.7)" stroke-width="2" stroke-linecap="round">
-                    <animate attributeName="y1" values="48;80;48" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="y2" values="56;88;56" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.8;0" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
+                `<line x1="${drop.x}" y1="46" x2="${drop.x}" y2="56" stroke="rgba(80,150,255,0.7)" stroke-width="2" stroke-linecap="round">
+                    <animate attributeName="y1" values="46;78" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="y2" values="56;88" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.8;0" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
                 </line>`
             ).join('')}
-            ${[{x:46,d:0.3},{x:62,d:1.0}].map(flake =>
-                `<circle cx="${flake.x}" cy="55" r="2.5" fill="rgba(200,220,255,0.8)">
-                    <animate attributeName="cy" values="50;85;50" dur="1.8s" begin="${flake.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.8;0" dur="1.8s" begin="${flake.d}s" repeatCount="indefinite"/>
-                </circle>`
-            ).join('')}
+            ${[{x:46,d:0.3},{x:62,d:1.0}].map(f => `<g>
+                <path d="${this._snowflakePath(f.x, 50, 4)}" fill="none" stroke="rgba(200,225,255,0.8)" stroke-width="1" stroke-linecap="round">
+                    <animate attributeName="opacity" values="0;0.8;0" dur="1.8s" begin="${f.d}s" repeatCount="indefinite"/>
+                </path>
+                <animateTransform attributeName="transform" type="translate" values="0,0;0,35" dur="1.8s" begin="${f.d}s" repeatCount="indefinite"/>
+            </g>`).join('')}
         </svg>`;
     },
 
@@ -423,12 +429,12 @@ const WeatherIcons = {
                 <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(160,175,200,0.9)"/>
             </g>
             ${[{x:36,d:0},{x:48,d:0.4},{x:60,d:0.8}].map(drop =>
-                `<line x1="${drop.x}" y1="50" x2="${drop.x - 2}" y2="60" stroke="rgba(120,200,255,0.7)" stroke-width="2" stroke-linecap="round">
-                    <animate attributeName="y1" values="48;80;48" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="y2" values="56;88;56" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.8;0" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
+                `<line x1="${drop.x}" y1="46" x2="${drop.x}" y2="56" stroke="rgba(120,200,255,0.7)" stroke-width="2" stroke-linecap="round">
+                    <animate attributeName="y1" values="46;78" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="y2" values="56;88" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.8;0" dur="1.2s" begin="${drop.d}s" repeatCount="indefinite"/>
                 </line>
-                <circle cx="${drop.x - 1}" cy="82" r="3" fill="none" stroke="rgba(120,200,255,0.5)" stroke-width="1">
+                <circle cx="${drop.x}" cy="82" r="3" fill="none" stroke="rgba(120,200,255,0.5)" stroke-width="1">
                     <animate attributeName="r" values="0;6;0" dur="1.2s" begin="${drop.d + 0.8}s" repeatCount="indefinite"/>
                     <animate attributeName="opacity" values="0;0.6;0" dur="1.2s" begin="${drop.d + 0.8}s" repeatCount="indefinite"/>
                 </circle>`
@@ -454,10 +460,10 @@ const WeatherIcons = {
                 <animate attributeName="opacity" values="0;1;1;0;0;0;0;1;0" dur="3s" repeatCount="indefinite"/>
             </polygon>
             ${[{x:35,d:0.2},{x:62,d:0.7}].map(drop =>
-                `<line x1="${drop.x}" y1="50" x2="${drop.x - 3}" y2="62" stroke="rgba(80,150,255,0.7)" stroke-width="2" stroke-linecap="round">
-                    <animate attributeName="y1" values="48;82;48" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="y2" values="56;90;56" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.7;0" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
+                `<line x1="${drop.x}" y1="46" x2="${drop.x}" y2="56" stroke="rgba(80,150,255,0.7)" stroke-width="2" stroke-linecap="round">
+                    <animate attributeName="y1" values="46;80" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="y2" values="56;90" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.7;0" dur="1.1s" begin="${drop.d}s" repeatCount="indefinite"/>
                 </line>`
             ).join('')}
         </svg>`;
@@ -483,10 +489,10 @@ const WeatherIcons = {
                 <animate attributeName="opacity" values="0;0;1;0;0;0;1;0;1;0;0" dur="2.5s" repeatCount="indefinite"/>
             </polygon>
             ${[{x:30,d:0},{x:42,d:0.2},{x:54,d:0.5},{x:66,d:0.3},{x:48,d:0.7}].map(drop =>
-                `<line x1="${drop.x}" y1="46" x2="${drop.x - 4}" y2="60" stroke="rgba(60,130,255,0.8)" stroke-width="2.5" stroke-linecap="round">
-                    <animate attributeName="y1" values="44;84;44" dur="0.8s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="y2" values="54;94;54" dur="0.8s" begin="${drop.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.85;0" dur="0.8s" begin="${drop.d}s" repeatCount="indefinite"/>
+                `<line x1="${drop.x}" y1="42" x2="${drop.x}" y2="52" stroke="rgba(60,130,255,0.8)" stroke-width="2.5" stroke-linecap="round">
+                    <animate attributeName="y1" values="42;82" dur="0.8s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="y2" values="52;92" dur="0.8s" begin="${drop.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.85;0" dur="0.8s" begin="${drop.d}s" repeatCount="indefinite"/>
                 </line>`
             ).join('')}
         </svg>`;
@@ -521,9 +527,9 @@ const WeatherIcons = {
                 <ellipse cx="62" cy="22" rx="15" ry="12" fill="rgba(130,140,170,0.95)"/>
             </g>
             ${[{x:36,d:0},{x:50,d:0.4},{x:64,d:0.8},{x:42,d:1.2},{x:56,d:0.6}].map(stone =>
-                `<circle cx="${stone.x}" cy="55" r="3.5" fill="url(#hailStone)" stroke="rgba(180,200,230,0.5)" stroke-width="0.5">
-                    <animate attributeName="cy" values="48;85;48" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0;0.9;0" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
+                `<circle cx="${stone.x}" cy="48" r="3.5" fill="url(#hailStone)" stroke="rgba(180,200,230,0.5)" stroke-width="0.5">
+                    <animate attributeName="cy" values="48;88" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
+                    <animate attributeName="opacity" values="0.9;0" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
                 </circle>`
             ).join('')}
         </svg>`;
