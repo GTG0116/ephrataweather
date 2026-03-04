@@ -3,8 +3,14 @@
 // ============================================
 
 (async function () {
-    const lat = CONFIG.DEFAULT_LAT;
-    const lng = CONFIG.DEFAULT_LNG;
+        // Initialize location (geolocation on first visit, then stored)
+    const loc = await LocationManager.init();
+    const lat = loc.lat;
+    const lng = loc.lng;
+ 
+    // Update location display
+    const nameEl = document.getElementById('location-name');
+    if (nameEl) nameEl.textContent = loc.name;
 
     // Request notification permission early
     if ('Notification' in window && Notification.permission === 'default') {
@@ -86,13 +92,18 @@ function renderAlerts(data) {
         return;
     }
 
-    container.style.display = 'block';
+     container.style.display = 'block';
     container.innerHTML = alerts.map((alert, i) => {
         const event = alert.event || alert.alertInfo?.[0]?.event || 'Weather Alert';
         const headline = alert.headline || alert.alertInfo?.[0]?.headline || event;
         const description = alert.description || alert.alertInfo?.[0]?.description || '';
         const severity = (alert.severity || alert.alertInfo?.[0]?.severity || '').toLowerCase();
         const urgency = (alert.urgency || '').toLowerCase();
+        const onset = alert.onset || alert.effective || alert.alertInfo?.[0]?.onset;
+        const expires = alert.expires || alert.alertInfo?.[0]?.expires;
+        const headline = alert.headline || alert.alertInfo?.[0]?.headline || event;
+        const description = alert.description || alert.alertInfo?.[0]?.description || '';
+        const severity = (alert.severity || alert.alertInfo?.[0]?.severity || '').toLowerCase();
         const onset = alert.onset || alert.effective || alert.alertInfo?.[0]?.onset;
         const expires = alert.expires || alert.alertInfo?.[0]?.expires;
 
@@ -150,7 +161,7 @@ function sendAlertNotifications(alerts) {
         const id = alert.id || headline;
 
         if (!notified.includes(id)) {
-            new Notification('Ephrata Weather Alert', {
+             new Notification('Weather Alert', {
                 body: headline,
                 icon: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF9800"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'),
                 tag: id,
@@ -352,14 +363,6 @@ function renderCurrentConditions(data, dailyData) {
         document.getElementById('uv-detail').textContent = uvLabel;
     }
 
-    // Visibility
-    const visibility = data.visibility?.distance;
-    if (visibility != null) {
-        const visMi = (visibility * 0.000621371).toFixed(1); // meters to miles
-        document.getElementById('visibility-value').innerHTML =
-            `${visMi}<span class="unit"> mi</span>`;
-    }
-
     // Pressure
     const pressure = data.pressure?.meanSeaLevelMillibars;
     if (pressure != null) {
@@ -421,10 +424,8 @@ function renderAirQuality(data) {
     document.getElementById('aqi-marker').style.left = pct + '%';
 
     // Dominant pollutant
+    const detail = document.getElementById('aqi-detail');
     const dominant = index.dominantPollutant;
-    if (dominant) {
-        document.getElementById('aqi-detail').textContent = `Dominant pollutant: ${dominant}`;
-    }
 }
 
 function renderPollen(data) {
@@ -434,15 +435,31 @@ function renderPollen(data) {
     const today = days[0];
     const types = today.pollenTypeInfo || [];
 
+    if (types.length === 0) return;
+
     types.forEach(pollen => {
-        const type = (pollen.code || pollen.displayName || '').toLowerCase();
-        const level = pollen.indexInfo?.category || pollen.indexInfo?.displayName || 'N/A';
-        const value = pollen.indexInfo?.value;
+        const code = (pollen.code || '').toUpperCase();
+        const displayName = (pollen.displayName || '').toLowerCase();
+        const indexInfo = pollen.indexInfo || {};
+ 
+        // Get the display value - try category first, then displayName, then numeric value
+        let level = indexInfo.category || indexInfo.displayName || '';
+        if (!level && indexInfo.value != null) {
+            // Convert numeric UPI value to label
+            const v = indexInfo.value;
+            if (v === 0) level = 'None';
+            else if (v <= 1) level = 'Very Low';
+            else if (v <= 2) level = 'Low';
+            else if (v <= 3) level = 'Moderate';
+            else if (v <= 4) level = 'High';
+            else level = 'Very High';
+        }
+        if (!level) level = 'N/A';
 
         let elId = null;
-        if (type.includes('tree')) elId = 'pollen-tree';
-        else if (type.includes('grass')) elId = 'pollen-grass';
-        else if (type.includes('weed')) elId = 'pollen-weed';
+        if (code === 'TREE' || displayName.includes('tree')) elId = 'pollen-tree';
+        else if (code === 'GRASS' || displayName.includes('grass')) elId = 'pollen-grass';
+        else if (code === 'WEED' || displayName.includes('weed')) elId = 'pollen-weed';
 
         if (elId) {
             const el = document.getElementById(elId);
@@ -450,7 +467,7 @@ function renderPollen(data) {
 
             // Color coding
             const lowerLevel = level.toLowerCase();
-            if (lowerLevel.includes('very') || lowerLevel.includes('high')) {
+            if (lowerLevel.includes('very high')) {
                 el.className = 'level pollen-very-high';
             } else if (lowerLevel.includes('high')) {
                 el.className = 'level pollen-high';
