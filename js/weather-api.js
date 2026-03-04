@@ -269,6 +269,8 @@ const WeatherAPI = {
             });
             if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
             return await resp.json();
+            if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
+            return await resp.json();
         } catch (e) {
             console.warn('Google AQI failed, using Open-Meteo:', e.message);
         }
@@ -294,6 +296,13 @@ const WeatherAPI = {
         if (!resp.ok) throw new Error(`Google Pollen API ${resp.status}`);
         return await resp.json();
     },
+ 
+    // === Weather Alerts ===
+    async getAlerts(lat, lng) {
+        const url = `${CONFIG.GOOGLE_WEATHER_BASE}/publicAlerts:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}&location.latitude=${lat}&location.longitude=${lng}&languageCode=en`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Google Alerts API ${resp.status}`);
+        return await resp.json();
 
     // === Weather Alerts ===
     async getAlerts(lat, lng) {
