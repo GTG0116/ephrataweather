@@ -101,10 +101,6 @@ function renderAlerts(data) {
         const urgency = (alert.urgency || '').toLowerCase();
         const onset = alert.onset || alert.effective || alert.alertInfo?.[0]?.onset;
         const expires = alert.expires || alert.alertInfo?.[0]?.expires;
-        const description = alert.description || alert.alertInfo?.[0]?.description || '';
-        const severity = (alert.severity || alert.alertInfo?.[0]?.severity || '').toLowerCase();
-        const onset = alert.onset || alert.effective || alert.alertInfo?.[0]?.onset;
-        const expires = alert.expires || alert.alertInfo?.[0]?.expires;
 
         // Determine alert class
         let alertClass = 'alert-advisory';
