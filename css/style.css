@@ -1,7 +1,7 @@
 /* ============================================
    WEATHER DATA VIEWER - LIQUID GLASS DESIGN
    ============================================ */
-
+ 
 /* --- CSS Variables --- */
 :root {
     --glass-bg: rgba(255, 255, 255, 0.12);
@@ -23,19 +23,19 @@
     --radius-xl: 32px;
     --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
+ 
 /* --- Reset & Base --- */
 *, *::before, *::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
 }
-
+ 
 html {
     font-size: 16px;
     scroll-behavior: smooth;
 }
-
+ 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color: var(--text-primary);
@@ -43,7 +43,7 @@ body {
     overflow-x: hidden;
     line-height: 1.5;
 }
-
+ 
 /* --- Animated Background --- */
 .bg-gradient {
     position: fixed;
@@ -63,7 +63,7 @@ body {
     background-size: 400% 400%;
     animation: gradientShift 20s ease infinite;
 }
-
+ 
 .bg-gradient::before {
     content: '';
     position: absolute;
@@ -76,12 +76,12 @@ body {
         radial-gradient(ellipse at 80% 20%, rgba(100, 160, 240, 0.1) 0%, transparent 50%),
         radial-gradient(ellipse at 40% 80%, rgba(80, 140, 220, 0.08) 0%, transparent 50%);
 }
-
+ 
 @keyframes gradientShift {
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
 }
-
+ 
 /* --- Glass Panel --- */
 .glass {
     background: var(--glass-bg);
@@ -94,7 +94,7 @@ body {
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
     transition: all var(--transition-smooth);
 }
-
+ 
 .glass:hover {
     background: var(--glass-hover-bg);
     box-shadow:
@@ -102,7 +102,7 @@ body {
         inset 0 1px 0 rgba(255, 255, 255, 0.15);
     transform: translateY(-2px);
 }
-
+ 
 .glass-static {
     background: var(--glass-bg);
     backdrop-filter: blur(var(--glass-blur));
@@ -113,7 +113,7 @@ body {
         0 8px 32px var(--glass-shadow),
         inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
-
+ 
 .glass-subtle {
     background: rgba(255, 255, 255, 0.06);
     backdrop-filter: blur(12px);
@@ -121,7 +121,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-md);
 }
-
+ 
 /* --- Layout --- */
 .app-container {
     max-width: 1200px;
@@ -129,7 +129,7 @@ body {
     padding: 20px;
     min-height: 100vh;
 }
-
+ 
 .app-header {
     display: flex;
     justify-content: space-between;
@@ -137,18 +137,18 @@ body {
     padding: 16px 24px;
     margin-bottom: 24px;
 }
-
+ 
 .app-header h1 {
     font-size: 1.5rem;
     font-weight: 600;
     letter-spacing: -0.02em;
 }
-
+ 
 .app-header .location {
     font-size: 0.9rem;
     color: var(--text-secondary);
 }
-
+ 
 /* --- Navigation --- */
 .nav-bar {
     display: flex;
@@ -157,7 +157,7 @@ body {
     margin-bottom: 24px;
     width: fit-content;
 }
-
+ 
 .nav-link {
     display: flex;
     align-items: center;
@@ -171,49 +171,49 @@ body {
     transition: all var(--transition-smooth);
     border: 1px solid transparent;
 }
-
+ 
 .nav-link:hover {
     color: var(--text-primary);
     background: rgba(255, 255, 255, 0.1);
 }
-
+ 
 .nav-link.active {
     color: var(--text-primary);
     background: rgba(255, 255, 255, 0.15);
     border-color: rgba(255, 255, 255, 0.2);
 }
-
+ 
 .nav-link svg {
     width: 18px;
     height: 18px;
     opacity: 0.8;
 }
-
+ 
 /* --- Cards Grid --- */
 .cards-grid {
     display: grid;
     gap: 16px;
 }
-
+ 
 .cards-grid-2 {
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
-
+ 
 .cards-grid-3 {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
-
+ 
 .card {
     padding: 24px;
 }
-
+ 
 .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16px;
 }
-
+ 
 .card-title {
     font-size: 0.85rem;
     font-weight: 600;
@@ -221,26 +221,26 @@ body {
     letter-spacing: 0.05em;
     color: var(--text-secondary);
 }
-
+ 
 .card-value {
     font-size: 2.5rem;
     font-weight: 300;
     letter-spacing: -0.03em;
     line-height: 1.1;
 }
-
+ 
 .card-value .unit {
     font-size: 1.2rem;
     color: var(--text-secondary);
     font-weight: 400;
 }
-
+ 
 .card-detail {
     font-size: 0.85rem;
     color: var(--text-secondary);
     margin-top: 8px;
 }
-
+ 
 /* --- Current Conditions Hero --- */
 .current-hero {
     display: flex;
@@ -249,53 +249,53 @@ body {
     padding: 40px;
     margin-bottom: 24px;
 }
-
+ 
 .current-hero .temp-display {
     font-size: 5rem;
     font-weight: 200;
     letter-spacing: -0.05em;
     line-height: 1;
 }
-
+ 
 .current-hero .temp-display .unit {
     font-size: 2rem;
     vertical-align: super;
     color: var(--text-secondary);
     font-weight: 300;
 }
-
+ 
 .current-hero .condition-text {
     font-size: 1.2rem;
     color: var(--text-secondary);
     margin-top: 8px;
 }
-
+ 
 .current-hero .feels-like {
     font-size: 0.9rem;
     color: var(--text-muted);
     margin-top: 4px;
 }
-
+ 
 .current-hero .icon-wrapper {
     flex-shrink: 0;
     width: 96px;
     height: 96px;
 }
-
+ 
 .current-hero .hi-lo {
     font-size: 1rem;
     color: var(--text-secondary);
     margin-top: 8px;
 }
-
+ 
 .current-hero .hi-lo .hi {
     color: var(--accent-warm);
 }
-
+ 
 .current-hero .hi-lo .lo {
     color: var(--accent-blue);
 }
-
+ 
 /* --- Hourly Forecast Strip --- */
 .hourly-strip {
     display: flex;
@@ -306,11 +306,11 @@ body {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
 }
-
+ 
 .hourly-strip::-webkit-scrollbar {
     display: none;
 }
-
+ 
 .hourly-item {
     display: flex;
     flex-direction: column;
@@ -322,37 +322,37 @@ body {
     scroll-snap-align: start;
     transition: background var(--transition-smooth);
 }
-
+ 
 .hourly-item:hover {
     background: rgba(255, 255, 255, 0.08);
 }
-
+ 
 .hourly-item.now {
     background: rgba(100, 180, 255, 0.12);
     border: 1px solid rgba(100, 180, 255, 0.2);
 }
-
+ 
 .hourly-item .time {
     font-size: 0.75rem;
     color: var(--text-secondary);
     font-weight: 500;
 }
-
+ 
 .hourly-item .temp {
     font-size: 1rem;
     font-weight: 500;
 }
-
+ 
 .hourly-item .precip {
     font-size: 0.7rem;
     color: var(--accent-blue);
 }
-
+ 
 /* --- 10-Day Forecast --- */
 .forecast-list {
     padding: 8px 0;
 }
-
+ 
 .forecast-row {
     display: grid;
     grid-template-columns: 100px 48px 1fr 60px 80px 60px;
@@ -362,37 +362,37 @@ body {
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     transition: background var(--transition-smooth);
 }
-
+ 
 .forecast-row:last-child {
     border-bottom: none;
 }
-
+ 
 .forecast-row:hover {
     background: rgba(255, 255, 255, 0.05);
 }
-
+ 
 .forecast-row .day {
     font-weight: 500;
     font-size: 0.95rem;
 }
-
+ 
 .forecast-row .day.today {
     color: var(--accent-blue);
 }
-
+ 
 .forecast-row .precip-chance {
     font-size: 0.8rem;
     color: var(--accent-blue);
     text-align: right;
 }
-
+ 
 .forecast-row .temp-bar-wrapper {
     position: relative;
     height: 6px;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.08);
 }
-
+ 
 .forecast-row .temp-bar {
     position: absolute;
     height: 100%;
@@ -400,25 +400,25 @@ body {
     background: linear-gradient(90deg, var(--accent-blue), var(--accent-warm));
     transition: all 0.5s ease;
 }
-
+ 
 .forecast-row .temp-lo {
     font-size: 0.85rem;
     color: var(--text-muted);
     text-align: right;
 }
-
+ 
 .forecast-row .temp-hi {
     font-size: 0.85rem;
     font-weight: 500;
     text-align: left;
 }
-
+ 
 .forecast-row .condition-brief {
     font-size: 0.8rem;
     color: var(--text-secondary);
     text-align: right;
 }
-
+ 
 /* --- Air Quality & Pollen --- */
 .aqi-bar {
     height: 8px;
@@ -433,7 +433,7 @@ body {
     position: relative;
     margin-top: 12px;
 }
-
+ 
 .aqi-marker {
     position: absolute;
     top: -4px;
@@ -446,7 +446,7 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: left 0.5s ease;
 }
-
+ 
 .aqi-labels {
     display: flex;
     justify-content: space-between;
@@ -454,37 +454,37 @@ body {
     font-size: 0.7rem;
     color: var(--text-muted);
 }
-
+ 
 .pollen-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
     margin-top: 12px;
 }
-
+ 
 .pollen-item {
     text-align: center;
     padding: 12px 8px;
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.05);
 }
-
+ 
 .pollen-item .label {
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-bottom: 4px;
 }
-
+ 
 .pollen-item .level {
     font-size: 0.9rem;
     font-weight: 600;
 }
-
+ 
 .pollen-low { color: #4CAF50; }
 .pollen-moderate { color: #FFEB3B; }
 .pollen-high { color: #FF9800; }
 .pollen-very-high { color: #F44336; }
-
+ 
 /* --- Weather Alerts --- */
 .alert-banner {
     padding: 16px 20px;
@@ -495,7 +495,7 @@ body {
     position: relative;
     overflow: hidden;
 }
-
+ 
 .alert-banner::before {
     content: '';
     position: absolute;
@@ -504,84 +504,84 @@ body {
     width: 4px;
     height: 100%;
 }
-
+ 
 .alert-banner:hover {
     transform: translateY(-1px);
 }
-
+ 
 .alert-warning {
     background: rgba(255, 152, 0, 0.15);
     border: 1px solid rgba(255, 152, 0, 0.3);
 }
-
+ 
 .alert-warning::before {
     background: #FF9800;
 }
-
+ 
 .alert-watch {
     background: rgba(255, 235, 59, 0.12);
     border: 1px solid rgba(255, 235, 59, 0.25);
 }
-
+ 
 .alert-watch::before {
     background: #FFEB3B;
 }
-
+ 
 .alert-advisory {
     background: rgba(100, 180, 255, 0.12);
     border: 1px solid rgba(100, 180, 255, 0.25);
 }
-
+ 
 .alert-advisory::before {
     background: var(--accent-blue);
 }
-
+ 
 .alert-extreme {
     background: rgba(244, 67, 54, 0.18);
     border: 1px solid rgba(244, 67, 54, 0.35);
 }
-
+ 
 .alert-extreme::before {
     background: #F44336;
 }
-
+ 
 .alert-header {
     display: flex;
     align-items: center;
     gap: 10px;
     margin-bottom: 6px;
 }
-
+ 
 .alert-icon {
     width: 22px;
     height: 22px;
     flex-shrink: 0;
 }
-
+ 
 .alert-title {
     font-size: 0.95rem;
     font-weight: 600;
 }
-
+ 
 .alert-warning .alert-title { color: #FFB74D; }
 .alert-watch .alert-title { color: #FFF176; }
 .alert-advisory .alert-title { color: var(--accent-blue); }
 .alert-extreme .alert-title { color: #EF5350; }
-
+ 
 .alert-detail {
     font-size: 0.8rem;
     color: var(--text-secondary);
     line-height: 1.5;
     padding-left: 32px;
 }
-
+ 
 .alert-time {
     font-size: 0.75rem;
     color: var(--text-muted);
     padding-left: 32px;
     margin-top: 4px;
 }
-
+ 
 .alert-expanded {
     display: none;
     padding: 12px 0 0 32px;
@@ -589,11 +589,11 @@ body {
     color: var(--text-secondary);
     line-height: 1.6;
 }
-
+ 
 .alert-banner.expanded .alert-expanded {
     display: block;
 }
-
+ 
 /* --- SPC Outlooks --- */
 .spc-outlook-grid {
     display: grid;
@@ -601,31 +601,31 @@ body {
     gap: 12px;
     margin-top: 12px;
 }
-
+ 
 .spc-outlook-item {
     text-align: center;
     padding: 16px 12px;
     border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.05);
 }
-
+ 
 .spc-outlook-item .spc-label {
     font-size: 0.75rem;
     color: var(--text-muted);
     margin-bottom: 6px;
 }
-
+ 
 .spc-outlook-item .spc-level {
     font-size: 1rem;
     font-weight: 600;
 }
-
+ 
 .spc-outlook-item .spc-sublabel {
     font-size: 0.7rem;
     color: var(--text-muted);
     margin-top: 4px;
 }
-
+ 
 .spc-general { color: #88E0A0; background: rgba(136, 224, 160, 0.08); }
 .spc-tstm { color: #C0E8C0; background: rgba(192, 232, 192, 0.08); }
 .spc-mrgl { color: #66CC66; background: rgba(102, 204, 102, 0.1); }
@@ -633,7 +633,7 @@ body {
 .spc-enh { color: #FFA040; background: rgba(255, 160, 64, 0.12); }
 .spc-mod { color: #FF6060; background: rgba(255, 96, 96, 0.12); }
 .spc-high { color: #FF40FF; background: rgba(255, 64, 255, 0.12); }
-
+ 
 /* --- MRMS Map --- */
 .map-container {
     position: relative;
@@ -643,12 +643,12 @@ body {
     border-radius: var(--radius-lg);
     overflow: hidden;
 }
-
+ 
 .map-container #map {
     width: 100%;
     height: 100%;
 }
-
+ 
 .map-controls {
     position: absolute;
     top: 16px;
@@ -658,7 +658,7 @@ body {
     flex-direction: column;
     gap: 8px;
 }
-
+ 
 .map-control-btn {
     display: flex;
     align-items: center;
@@ -675,17 +675,17 @@ body {
     transition: all var(--transition-smooth);
     font-family: inherit;
 }
-
+ 
 .map-control-btn:hover {
     background: rgba(15, 23, 42, 0.9);
     border-color: rgba(255, 255, 255, 0.3);
 }
-
+ 
 .map-control-btn.active {
     background: rgba(100, 180, 255, 0.2);
     border-color: rgba(100, 180, 255, 0.4);
 }
-
+ 
 .map-legend {
     position: absolute;
     bottom: 24px;
@@ -694,7 +694,7 @@ body {
     padding: 16px;
     min-width: 180px;
 }
-
+ 
 .map-legend h4 {
     font-size: 0.8rem;
     font-weight: 600;
@@ -703,7 +703,7 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
-
+ 
 .legend-item {
     display: flex;
     align-items: center;
@@ -712,14 +712,14 @@ body {
     font-size: 0.8rem;
     color: var(--text-secondary);
 }
-
+ 
 .legend-color {
     width: 16px;
     height: 10px;
     border-radius: 3px;
     flex-shrink: 0;
 }
-
+ 
 .map-info-overlay {
     position: absolute;
     top: 16px;
@@ -727,17 +727,17 @@ body {
     z-index: 10;
     padding: 12px 16px;
 }
-
+ 
 .map-info-overlay .timestamp {
     font-size: 0.8rem;
     color: var(--text-secondary);
 }
-
+ 
 .map-info-overlay .product-name {
     font-size: 0.95rem;
     font-weight: 600;
 }
-
+ 
 /* --- Loading States --- */
 .loading-shimmer {
     background: linear-gradient(
@@ -750,17 +750,17 @@ body {
     animation: shimmer 1.5s ease-in-out infinite;
     border-radius: var(--radius-sm);
 }
-
+ 
 @keyframes shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
-
+ 
 .loading-placeholder {
     min-height: 40px;
     margin: 8px 0;
 }
-
+ 
 .spinner {
     width: 32px;
     height: 32px;
@@ -770,11 +770,11 @@ body {
     animation: spin 0.8s linear infinite;
     margin: 20px auto;
 }
-
+ 
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
-
+ 
 .loading-overlay {
     position: absolute;
     inset: 0;
@@ -787,18 +787,18 @@ body {
     z-index: 20;
     border-radius: var(--radius-lg);
 }
-
+ 
 .loading-overlay .spinner {
     width: 48px;
     height: 48px;
 }
-
+ 
 .loading-overlay p {
     margin-top: 12px;
     font-size: 0.9rem;
     color: var(--text-secondary);
 }
-
+ 
 /* --- Error States --- */
 .error-message {
     padding: 20px 24px;
@@ -809,18 +809,18 @@ body {
     font-size: 0.9rem;
     text-align: center;
 }
-
+ 
 .error-message .error-hint {
     font-size: 0.8rem;
     color: var(--text-muted);
     margin-top: 8px;
 }
-
+ 
 /* --- Location Search --- */
 .location-search-container {
     position: relative;
 }
-
+ 
 .loc-trigger {
     display: flex;
     align-items: center;
@@ -832,12 +832,12 @@ body {
     font-size: 0.9rem;
     color: var(--text-secondary);
 }
-
+ 
 .loc-trigger:hover {
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
 }
-
+ 
 .loc-dropdown {
     position: absolute;
     top: calc(100% + 8px);
@@ -853,7 +853,7 @@ body {
     z-index: 1000;
     overflow: hidden;
 }
-
+ 
 .loc-search-wrap {
     display: flex;
     align-items: center;
@@ -861,7 +861,7 @@ body {
     padding: 14px 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-
+ 
 .loc-search-input {
     flex: 1;
     background: none;
@@ -871,15 +871,15 @@ body {
     font-size: 0.9rem;
     font-family: inherit;
 }
-
+ 
 .loc-search-input::placeholder {
     color: var(--text-muted);
 }
-
+ 
 .loc-favorites {
     padding: 0;
 }
-
+ 
 .loc-section-label {
     font-size: 0.7rem;
     text-transform: uppercase;
@@ -887,7 +887,7 @@ body {
     color: var(--text-muted);
     padding: 10px 16px 6px;
 }
-
+ 
 .loc-fav-chip {
     display: flex;
     align-items: center;
@@ -898,19 +898,19 @@ body {
     color: var(--text-secondary);
     transition: all var(--transition-smooth);
 }
-
+ 
 .loc-fav-chip:hover {
     background: rgba(255, 255, 255, 0.08);
     color: var(--text-primary);
 }
-
+ 
 .loc-results {
     max-height: 260px;
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.15) transparent;
 }
-
+ 
 .loc-result-item {
     display: flex;
     align-items: center;
@@ -918,22 +918,22 @@ body {
     padding: 10px 16px;
     transition: background var(--transition-smooth);
 }
-
+ 
 .loc-result-item:hover {
     background: rgba(255, 255, 255, 0.06);
 }
-
+ 
 .loc-result-name {
     flex: 1;
     cursor: pointer;
     font-size: 0.85rem;
     color: var(--text-secondary);
 }
-
+ 
 .loc-result-name:hover {
     color: var(--text-primary);
 }
-
+ 
 .loc-fav-btn {
     background: none;
     border: none;
@@ -943,136 +943,18 @@ body {
     display: flex;
     transition: all var(--transition-smooth);
 }
-
+ 
 .loc-fav-btn:hover {
     background: rgba(255, 255, 255, 0.1);
 }
-
+ 
 .loc-no-results {
     padding: 16px;
     text-align: center;
     font-size: 0.8rem;
     color: var(--text-muted);
 }
-
+ 
 /* --- Utility --- */
 .section-title {
     font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 16px;
-    padding-left: 4px;
-}
-
-.divider {
-    border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    margin: 16px 0;
-}
-
-.badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    background: rgba(100, 180, 255, 0.15);
-    color: var(--accent-blue);
-}
-
-.badge-warn {
-    background: rgba(255, 180, 100, 0.15);
-    color: var(--accent-warm);
-}
-
-.badge-danger {
-    background: rgba(255, 120, 120, 0.15);
-    color: var(--accent-red);
-}
-
-.badge-good {
-    background: rgba(100, 220, 160, 0.15);
-    color: var(--accent-green);
-}
-
-.fade-in {
-    animation: fadeIn 0.4s ease-out;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* --- Responsive --- */
-@media (max-width: 768px) {
-    .app-container {
-        padding: 12px;
-    }
-
-    .app-header {
-        padding: 12px 16px;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-    }
-
-    .nav-bar {
-        width: 100%;
-        overflow-x: auto;
-        scrollbar-width: none;
-    }
-
-    .nav-bar::-webkit-scrollbar {
-        display: none;
-    }
-
-    .nav-link {
-        padding: 8px 14px;
-        font-size: 0.8rem;
-        white-space: nowrap;
-    }
-
-    .current-hero {
-        flex-direction: column;
-        text-align: center;
-        padding: 28px 20px;
-        gap: 20px;
-    }
-
-    .current-hero .temp-display {
-        font-size: 3.5rem;
-    }
-
-    .forecast-row {
-        grid-template-columns: 70px 36px 1fr 50px 60px 50px;
-        padding: 10px 14px;
-        gap: 8px;
-        font-size: 0.85rem;
-    }
-
-    .cards-grid-2, .cards-grid-3 {
-        grid-template-columns: 1fr;
-    }
-
-    .map-container {
-        height: calc(100vh - 160px);
-        min-height: 400px;
-        border-radius: var(--radius-md);
-    }
-
-    .card {
-        padding: 18px;
-    }
-}
-
-@media (max-width: 480px) {
-    .forecast-row {
-        grid-template-columns: 55px 32px 1fr 40px;
-        font-size: 0.8rem;
-    }
-
-    .forecast-row .condition-brief,
-    .forecast-row .temp-bar-wrapper {
-        display: none;
-    }
-}

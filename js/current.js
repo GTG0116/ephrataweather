@@ -3,11 +3,11 @@
 // ============================================
 
 (async function () {
-    // Initialize location (geolocation on first visit, then stored)
+        // Initialize location (geolocation on first visit, then stored)
     const loc = await LocationManager.init();
     const lat = loc.lat;
     const lng = loc.lng;
-
+ 
     // Update location display
     const nameEl = document.getElementById('location-name');
     if (nameEl) nameEl.textContent = loc.name;
@@ -92,7 +92,7 @@ function renderAlerts(data) {
         return;
     }
 
-    container.style.display = 'block';
+     container.style.display = 'block';
     container.innerHTML = alerts.map((alert, i) => {
         const event = alert.event || alert.alertInfo?.[0]?.event || 'Weather Alert';
         const headline = alert.headline || alert.alertInfo?.[0]?.headline || event;
@@ -150,7 +150,7 @@ function sendAlertNotifications(alerts) {
         const id = alert.id || headline;
 
         if (!notified.includes(id)) {
-            new Notification('Weather Alert', {
+             new Notification('Weather Alert', {
                 body: headline,
                 icon: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF9800"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'),
                 tag: id,
@@ -399,12 +399,9 @@ function renderAirQuality(data) {
     const pct = Math.min(100, (aqi / 500) * 100);
     document.getElementById('aqi-marker').style.left = pct + '%';
 
-    // Also update the label below the bar to show the actual category
+    // Dominant pollutant
     const detail = document.getElementById('aqi-detail');
     const dominant = index.dominantPollutant;
-    let detailText = `${category.label} air quality`;
-    if (dominant) detailText += ` \u2022 Dominant pollutant: ${dominant}`;
-    detail.textContent = detailText;
 }
 
 function renderPollen(data) {
@@ -421,7 +418,7 @@ function renderPollen(data) {
         const code = (pollen.code || '').toUpperCase();
         const displayName = (pollen.displayName || '').toLowerCase();
         const indexInfo = pollen.indexInfo || {};
-
+ 
         // Get the display value - try category first, then displayName, then numeric value
         let level = indexInfo.category || indexInfo.displayName || '';
         if (!level && indexInfo.value != null) {

@@ -269,6 +269,8 @@ const WeatherAPI = {
             });
             if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
             return await resp.json();
+            if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
+            return await resp.json();
         } catch (e) {
             console.warn('Google AQI failed, using Open-Meteo:', e.message);
         }

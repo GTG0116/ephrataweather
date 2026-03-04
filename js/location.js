@@ -2,11 +2,11 @@
 // LOCATION MANAGER
 // Handles geolocation, search, favorites
 // ============================================
-
+ 
 const LocationManager = {
     STORAGE_KEY: 'ephrata_weather_location',
     FAVORITES_KEY: 'ephrata_weather_favorites',
-
+ 
     // Get current location from localStorage or default
     getCurrent() {
         try {
@@ -19,14 +19,14 @@ const LocationManager = {
             name: CONFIG.DEFAULT_LOCATION_NAME
         };
     },
-
+ 
     // Save current location
     setCurrent(lat, lng, name) {
         const loc = { lat, lng, name };
         localStorage.setItem(this.STORAGE_KEY, JSON.stringify(loc));
         return loc;
     },
-
+ 
     // Get favorites list
     getFavorites() {
         try {
@@ -35,7 +35,7 @@ const LocationManager = {
         } catch (e) {}
         return [];
     },
-
+ 
     // Add a favorite
     addFavorite(lat, lng, name) {
         const favs = this.getFavorites();
@@ -44,7 +44,7 @@ const LocationManager = {
         localStorage.setItem(this.FAVORITES_KEY, JSON.stringify(favs.slice(0, 20)));
         return favs;
     },
-
+ 
     // Remove a favorite
     removeFavorite(name) {
         let favs = this.getFavorites();
@@ -52,12 +52,12 @@ const LocationManager = {
         localStorage.setItem(this.FAVORITES_KEY, JSON.stringify(favs));
         return favs;
     },
-
+ 
     // Check if location is a favorite
     isFavorite(name) {
         return this.getFavorites().some(f => f.name === name);
     },
-
+ 
     // Search for locations using Nominatim
     async search(query) {
         if (!query || query.length < 2) return [];
@@ -89,7 +89,7 @@ const LocationManager = {
             };
         });
     },
-
+ 
     // Reverse geocode lat/lng to a name
     async reverseGeocode(lat, lng) {
         try {
@@ -114,7 +114,7 @@ const LocationManager = {
             return null;
         }
     },
-
+ 
     // Detect user location via browser geolocation
     detectLocation() {
         return new Promise((resolve) => {
@@ -129,12 +129,12 @@ const LocationManager = {
             );
         });
     },
-
+ 
     // Initialize on first load - try geolocation, fall back to default
     async init() {
         const stored = localStorage.getItem(this.STORAGE_KEY);
         if (stored) return this.getCurrent();
-
+ 
         const pos = await this.detectLocation();
         if (pos) {
             const name = await this.reverseGeocode(pos.lat, pos.lng);
@@ -145,22 +145,22 @@ const LocationManager = {
         return this.getCurrent();
     }
 };
-
+ 
 // ============================================
 // LOCATION SEARCH UI
 // ============================================
-
+ 
 function initLocationSearch() {
     const container = document.getElementById('location-search-container');
     if (!container) return;
-
+ 
     const current = LocationManager.getCurrent();
     const locationNameEl = document.getElementById('location-name');
     if (locationNameEl) locationNameEl.textContent = current.name;
-
+ 
     let searchTimeout = null;
     let isOpen = false;
-
+ 
     // Build the dropdown HTML
     container.innerHTML = `
         <div class="loc-trigger" id="loc-trigger">
@@ -177,13 +177,13 @@ function initLocationSearch() {
             <div id="loc-results" class="loc-results"></div>
         </div>
     `;
-
+ 
     const trigger = document.getElementById('loc-trigger');
     const dropdown = document.getElementById('loc-dropdown');
     const searchInput = document.getElementById('loc-search-input');
     const favoritesEl = document.getElementById('loc-favorites');
     const resultsEl = document.getElementById('loc-results');
-
+ 
     function renderFavorites() {
         const favs = LocationManager.getFavorites();
         if (favs.length === 0) {
@@ -197,14 +197,14 @@ function initLocationSearch() {
                     <span>${f.name}</span>
                 </div>
             `).join('');
-
+ 
         favoritesEl.querySelectorAll('.loc-fav-chip').forEach(chip => {
             chip.addEventListener('click', () => {
                 selectLocation(parseFloat(chip.dataset.lat), parseFloat(chip.dataset.lng), chip.dataset.name);
             });
         });
     }
-
+ 
     function renderResults(results) {
         if (results.length === 0) {
             resultsEl.innerHTML = searchInput.value.length >= 2
@@ -224,13 +224,13 @@ function initLocationSearch() {
                 </div>
             `;
         }).join('');
-
+ 
         resultsEl.querySelectorAll('.loc-result-name').forEach(el => {
             el.addEventListener('click', () => {
                 selectLocation(parseFloat(el.dataset.lat), parseFloat(el.dataset.lng), el.dataset.name);
             });
         });
-
+ 
         resultsEl.querySelectorAll('.loc-fav-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -247,9 +247,9 @@ function initLocationSearch() {
             });
         });
     }
-
+ 
     let lastResults = [];
-
+ 
     searchInput.addEventListener('input', () => {
         clearTimeout(searchTimeout);
         const q = searchInput.value.trim();
@@ -271,14 +271,14 @@ function initLocationSearch() {
             renderResults(results);
         }, 350);
     });
-
+ 
     function selectLocation(lat, lng, name) {
         LocationManager.setCurrent(lat, lng, name);
         closeDropdown();
         // Reload the page to fetch new data
         window.location.reload();
     }
-
+ 
     function openDropdown() {
         dropdown.style.display = 'block';
         isOpen = true;
@@ -287,29 +287,29 @@ function initLocationSearch() {
         resultsEl.innerHTML = '';
         setTimeout(() => searchInput.focus(), 50);
     }
-
+ 
     function closeDropdown() {
         dropdown.style.display = 'none';
         isOpen = false;
     }
-
+ 
     trigger.addEventListener('click', (e) => {
         e.stopPropagation();
         if (isOpen) closeDropdown();
         else openDropdown();
     });
-
+ 
     dropdown.addEventListener('click', (e) => e.stopPropagation());
-
+ 
     document.addEventListener('click', () => {
         if (isOpen) closeDropdown();
     });
-
+ 
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeDropdown();
     });
 }
-
+ 
 // Auto-init when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     initLocationSearch();

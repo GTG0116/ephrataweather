@@ -6,7 +6,7 @@
     const loc = await LocationManager.init();
     const lat = loc.lat;
     const lng = loc.lng;
-
+ 
     const nameEl = document.getElementById('location-name');
     if (nameEl) nameEl.textContent = loc.name;
 
