@@ -44,8 +44,10 @@ function _wmoCondition(code) {
 async function _googleGet(endpoint, params) {
     const qp = new URLSearchParams(params);
     qp.set('key', CONFIG.GOOGLE_WEATHER_API_KEY);
+    // Cache-buster: ensures a fresh response for every location/reload
+    qp.set('_cb', Date.now());
     const url = `${CONFIG.GOOGLE_WEATHER_BASE}/${endpoint}?${qp}`;
-    const resp = await fetch(url);
+    const resp = await fetch(url, { cache: 'no-store' });
     if (!resp.ok) throw new Error(`Google API ${resp.status}`);
     return resp.json();
 }
@@ -103,7 +105,7 @@ const WeatherAPI = {
             wind_speed_unit: 'mph',
             timezone: 'auto'
         });
-        const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+        const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
         if (!resp.ok) throw new Error(`Open-Meteo error: ${resp.status}`);
         const data = await resp.json();
         const c = data.current;
@@ -138,10 +140,16 @@ const WeatherAPI = {
                 interval: h.interval,
                 displayDateTime: _googleDateTimeToISO(h.displayDateTime) || h.interval?.startTime,
                 temperature: h.temperature,
+                feelsLikeTemperature: h.feelsLikeTemperature,
                 weatherCondition: h.weatherCondition,
                 precipitation: {
                     probability: h.precipitation?.probability?.percent
-                }
+                },
+                wind: {
+                    speed: h.wind?.speed?.value,
+                    direction: h.wind?.direction?.degrees
+                },
+                relativeHumidity: h.relativeHumidity
             }));
             return { forecastHours };
         } catch (e) {
@@ -150,13 +158,13 @@ const WeatherAPI = {
 
         const params = new URLSearchParams({
             latitude: lat, longitude: lng,
-            hourly: 'temperature_2m,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m',
+            hourly: 'temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m,relative_humidity_2m',
             temperature_unit: 'fahrenheit',
             wind_speed_unit: 'mph',
             timezone: 'auto',
             forecast_days: 3
         });
-        const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+        const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
         if (!resp.ok) throw new Error(`Open-Meteo error: ${resp.status}`);
         const data = await resp.json();
         const h = data.hourly;
@@ -170,8 +178,11 @@ const WeatherAPI = {
                 interval: { startTime: h.time[i] },
                 displayDateTime: h.time[i],
                 temperature: { degrees: h.temperature_2m[i] },
-                weatherCondition: { type: cond.type },
-                precipitation: { probability: h.precipitation_probability[i] }
+                feelsLikeTemperature: { degrees: h.apparent_temperature?.[i] },
+                weatherCondition: { type: cond.type, description: { text: cond.description } },
+                precipitation: { probability: h.precipitation_probability[i] },
+                wind: { speed: h.wind_speed_10m[i], direction: h.wind_direction_10m[i] },
+                relativeHumidity: h.relative_humidity_2m?.[i]
             });
         }
         return { forecastHours };
@@ -225,7 +236,7 @@ const WeatherAPI = {
             timezone: 'auto',
             forecast_days: Math.min(days, 16)
         });
-        const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+        const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
         if (!resp.ok) throw new Error(`Open-Meteo error: ${resp.status}`);
         const data = await resp.json();
         const d = data.daily;

@@ -71,7 +71,9 @@ function renderForecast(data) {
                 </div>
                 <span class="temp-lo">${lo != null ? WeatherAPI.formatTemp(lo) + '\u00B0' : '--'}</span>
                 <span class="temp-hi">${hi != null ? WeatherAPI.formatTemp(hi) + '\u00B0' : '--'}</span>
-                <span class="precip-chance">${precipChance != null && precipChance > 0 ? Math.round(precipChance) + '%' : ''}</span>
+                <span class="precip-chance">${precipChance != null && precipChance > 0
+                    ? `<svg width="11" height="11" viewBox="0 0 24 24" fill="rgba(100,180,255,0.85)" style="vertical-align:middle;margin-right:2px;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>${Math.round(precipChance)}%`
+                    : ''}</span>
             </div>
         `;
     }).join('');

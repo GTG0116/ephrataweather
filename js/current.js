@@ -18,14 +18,13 @@
     }
 
     // Fetch all data in parallel
-    const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult, alertsResult, spcResult] = await Promise.allSettled([
+    const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult, alertsResult] = await Promise.allSettled([
         WeatherAPI.getCurrentConditions(lat, lng),
         WeatherAPI.getHourlyForecast(lat, lng, 24),
         WeatherAPI.getDailyForecast(lat, lng, 1),
         WeatherAPI.getAirQuality(lat, lng),
         WeatherAPI.getPollen(lat, lng),
-        WeatherAPI.getAlerts(lat, lng),
-        fetchSPCOutlook(lat, lng)
+        WeatherAPI.getAlerts(lat, lng)
     ]);
 
     // --- Weather Alerts ---
@@ -66,15 +65,6 @@
         renderPollen(pollenResult.value);
     } else {
         console.error('Pollen error:', pollenResult.reason);
-    }
-
-    // --- SPC Outlooks ---
-    if (spcResult.status === 'fulfilled') {
-        renderSPCOutlook(spcResult.value);
-    } else {
-        document.getElementById('spc-content').innerHTML =
-            '<div style="padding:12px;color:var(--text-muted);font-size:0.85rem;">Unable to load SPC data</div>';
-        console.error('SPC error:', spcResult.reason);
     }
 
     // Update timestamp
@@ -163,114 +153,61 @@ function sendAlertNotifications(alerts) {
     localStorage.setItem(notifiedKey, JSON.stringify(notified.slice(-50)));
 }
 
-// ---- SPC Outlooks ----
-async function fetchSPCOutlook(lat, lng) {
-    const url = `https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson`;
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`SPC API ${resp.status}`);
-    const geojson = await resp.json();
+// ---- Hourly detail popup ----
+let _hourlyData = [];
 
-    let maxRisk = null;
-    const riskLevels = {
-        'TSTM': { rank: 1, label: 'Thunderstorm', color: 'tstm' },
-        'MRGL': { rank: 2, label: 'Marginal', color: 'mrgl' },
-        'SLGT': { rank: 3, label: 'Slight', color: 'slgt' },
-        'ENH':  { rank: 4, label: 'Enhanced', color: 'enh' },
-        'MDT':  { rank: 5, label: 'Moderate', color: 'mod' },
-        'HIGH': { rank: 6, label: 'High', color: 'high' }
+function showHourlyDetail(idx) {
+    const h = _hourlyData[idx];
+    if (!h) return;
+
+    // Remove any existing popup
+    const existing = document.getElementById('hourly-detail-popup');
+    if (existing) existing.remove();
+
+    const time = idx === 0 ? 'Now' : WeatherAPI.formatTime(h.interval?.startTime || h.displayDateTime);
+    const temp = WeatherAPI.formatTemp(h.temperature?.degrees);
+    const feelsLike = h.feelsLikeTemperature?.degrees != null
+        ? WeatherAPI.formatTemp(h.feelsLikeTemperature.degrees) + '°'
+        : null;
+    const cond = h.weatherCondition?.description?.text
+        || (h.weatherCondition?.type || '').replace(/_/g, ' ').toLowerCase()
+        || '—';
+    const precip = h.precipitation?.probability;
+    const windSpeed = h.wind?.speed;
+    const windDir = h.wind?.direction != null ? WeatherAPI.windDirection(h.wind.direction) : null;
+    const humidity = h.relativeHumidity;
+
+    const rows = [];
+    if (feelsLike) rows.push(`<div class="hpop-row"><span class="hpop-key">Feels Like</span><span>${feelsLike}</span></div>`);
+    if (precip != null) rows.push(`<div class="hpop-row"><span class="hpop-key">Precip</span><span>${Math.round(precip)}%</span></div>`);
+    if (windSpeed != null) rows.push(`<div class="hpop-row"><span class="hpop-key">Wind</span><span>${Math.round(windSpeed)} mph${windDir ? ' ' + windDir : ''}</span></div>`);
+    if (humidity != null) rows.push(`<div class="hpop-row"><span class="hpop-key">Humidity</span><span>${Math.round(humidity)}%</span></div>`);
+
+    const popup = document.createElement('div');
+    popup.id = 'hourly-detail-popup';
+    popup.className = 'hourly-detail-popup glass';
+    popup.innerHTML = `
+        <div class="hpop-header">
+            <span class="hpop-time">${time}</span>
+            <span class="hpop-temp">${temp}°</span>
+            <button class="hpop-close" onclick="document.getElementById('hourly-detail-popup').remove()">&#x2715;</button>
+        </div>
+        <div class="hpop-cond">${cond}</div>
+        ${rows.join('')}
+    `;
+
+    // Insert after the hourly strip container
+    const strip = document.getElementById('hourly-strip');
+    strip.parentNode.insertAdjacentElement('afterend', popup);
+
+    // Auto-dismiss when clicking outside
+    const dismiss = (e) => {
+        if (!popup.contains(e.target)) {
+            popup.remove();
+            document.removeEventListener('click', dismiss);
+        }
     };
-
-    if (geojson.features) {
-        for (const feature of geojson.features) {
-            const label = (feature.properties?.LABEL || feature.properties?.LABEL2 || '').toUpperCase();
-            const risk = riskLevels[label];
-            if (risk && feature.geometry) {
-                if (pointInGeoJSON(lng, lat, feature.geometry)) {
-                    if (!maxRisk || risk.rank > maxRisk.rank) {
-                        maxRisk = { ...risk, raw: label };
-                    }
-                }
-            }
-        }
-    }
-
-    const [torResp, windResp, hailResp] = await Promise.allSettled([
-        fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_torn.nolyr.geojson').then(r => r.ok ? r.json() : null),
-        fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_wind.nolyr.geojson').then(r => r.ok ? r.json() : null),
-        fetch('https://www.spc.noaa.gov/products/outlook/day1otlk_hail.nolyr.geojson').then(r => r.ok ? r.json() : null)
-    ]);
-
-    const probabilities = {};
-    [['tornado', torResp], ['wind', windResp], ['hail', hailResp]].forEach(([type, result]) => {
-        if (result.status !== 'fulfilled' || !result.value?.features) return;
-        let maxProb = 0;
-        for (const feature of result.value.features) {
-            const label = feature.properties?.LABEL || feature.properties?.LABEL2 || '0';
-            const prob = parseInt(label) || 0;
-            if (prob > 0 && feature.geometry && pointInGeoJSON(lng, lat, feature.geometry)) {
-                maxProb = Math.max(maxProb, prob);
-            }
-        }
-        if (maxProb > 0) probabilities[type] = maxProb;
-    });
-
-    return { categorical: maxRisk, probabilities };
-}
-
-function pointInGeoJSON(x, y, geometry) {
-    if (geometry.type === 'Polygon') {
-        return pointInPolygon(x, y, geometry.coordinates[0]);
-    } else if (geometry.type === 'MultiPolygon') {
-        return geometry.coordinates.some(poly => pointInPolygon(x, y, poly[0]));
-    }
-    return false;
-}
-
-function pointInPolygon(x, y, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const xi = ring[i][0], yi = ring[i][1];
-        const xj = ring[j][0], yj = ring[j][1];
-        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
-            inside = !inside;
-        }
-    }
-    return inside;
-}
-
-function renderSPCOutlook(data) {
-    const content = document.getElementById('spc-content');
-    const cat = data.categorical;
-    const probs = data.probabilities || {};
-
-    let html = '<div class="spc-outlook-grid">';
-
-    html += `<div class="spc-outlook-item ${cat ? 'spc-' + cat.color : 'spc-general'}">
-        <div class="spc-label">Categorical</div>
-        <div class="spc-level">${cat ? cat.label : 'General'}</div>
-        <div class="spc-sublabel">${cat ? 'Risk Level ' + cat.rank + '/6' : 'No severe risk'}</div>
-    </div>`;
-
-    html += `<div class="spc-outlook-item ${probs.tornado ? (probs.tornado >= 10 ? 'spc-mod' : 'spc-slgt') : 'spc-general'}">
-        <div class="spc-label">Tornado</div>
-        <div class="spc-level">${probs.tornado ? probs.tornado + '%' : '--'}</div>
-        <div class="spc-sublabel">Probability</div>
-    </div>`;
-
-    html += `<div class="spc-outlook-item ${probs.wind ? (probs.wind >= 30 ? 'spc-enh' : 'spc-slgt') : 'spc-general'}">
-        <div class="spc-label">Wind</div>
-        <div class="spc-level">${probs.wind ? probs.wind + '%' : '--'}</div>
-        <div class="spc-sublabel">Probability</div>
-    </div>`;
-
-    html += `<div class="spc-outlook-item ${probs.hail ? (probs.hail >= 30 ? 'spc-enh' : 'spc-slgt') : 'spc-general'}">
-        <div class="spc-label">Hail</div>
-        <div class="spc-level">${probs.hail ? probs.hail + '%' : '--'}</div>
-        <div class="spc-sublabel">Probability</div>
-    </div>`;
-
-    html += '</div>';
-    content.innerHTML = html;
+    setTimeout(() => document.addEventListener('click', dismiss), 50);
 }
 
 // ---- Render functions ----
@@ -355,14 +292,14 @@ function renderCurrentConditions(data, dailyData) {
 
 function renderHourlyForecast(data) {
     const strip = document.getElementById('hourly-strip');
-    const hours = data.forecastHours || [];
+    _hourlyData = data.forecastHours || [];
 
-    if (hours.length === 0) {
+    if (_hourlyData.length === 0) {
         strip.innerHTML = '<div class="error-message">No hourly data available</div>';
         return;
     }
 
-    strip.innerHTML = hours.map((hour, i) => {
+    strip.innerHTML = _hourlyData.map((hour, i) => {
         const time = i === 0 ? 'Now' : WeatherAPI.formatTime(hour.interval?.startTime || hour.displayDateTime);
         const temp = WeatherAPI.formatTemp(hour.temperature?.degrees);
         const condType = hour.weatherCondition?.type || '';
@@ -371,7 +308,10 @@ function renderHourlyForecast(data) {
         const precipStr = precip != null && precip > 0 ? `${Math.round(precip)}%` : '';
 
         return `
-            <div class="hourly-item ${i === 0 ? 'now' : ''} fade-in" style="animation-delay:${i * 30}ms">
+            <div class="hourly-item ${i === 0 ? 'now' : ''} fade-in"
+                 style="animation-delay:${i * 30}ms;cursor:pointer;"
+                 onclick="showHourlyDetail(${i})"
+                 title="Tap for details">
                 <span class="time">${time}</span>
                 <div style="width:36px;height:36px;">${iconSvg}</div>
                 <span class="temp">${temp}&deg;</span>

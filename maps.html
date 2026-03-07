@@ -503,11 +503,13 @@
     let currentLayer = 'spc';
     let currentDay = 1;
     let currentType = 'cat';
+    // ID of the first symbol layer in the Mapbox style — data layers are
+    // inserted before this so place-name labels always render on top.
+    let firstSymbolLayerId = undefined;
 
     // Radar state
     let radarFrames = [];
     let rainviewerHost = '';
-    let radarAnimTimer = null;
     let radarPlaying = false;
     let currentFrameIdx = 0;
 
@@ -561,87 +563,81 @@
         8: [{ key: 'prob', label: 'Probability' }],
     };
 
-    // ---- SPC Color Helpers ----
-    const CAT_COLORS = {
-        'TSTM': { fill: 'rgba(192,232,192,0.50)', stroke: '#96D896', label: 'Thunderstorm' },
-        'MRGL': { fill: 'rgba(102,204,102,0.55)', stroke: '#44BB44', label: 'Marginal' },
-        'SLGT': { fill: 'rgba(255,224,102,0.55)', stroke: '#DDBB00', label: 'Slight' },
-        'ENH':  { fill: 'rgba(255,160,64,0.55)',  stroke: '#CC7700', label: 'Enhanced' },
-        'MDT':  { fill: 'rgba(255,96,96,0.55)',   stroke: '#CC2222', label: 'Moderate' },
-        'HIGH': { fill: 'rgba(255,64,255,0.55)',  stroke: '#CC00CC', label: 'High' },
-    };
-
-    const PROB_COLORS = [
-        { min: 60, fill: 'rgba(100,0,180,0.60)',   stroke: '#6600CC', label: '60%+' },
-        { min: 45, fill: 'rgba(160,0,200,0.58)',   stroke: '#9900BB', label: '45%+' },
-        { min: 30, fill: 'rgba(220,30,30,0.58)',   stroke: '#BB1111', label: '30%+' },
-        { min: 15, fill: 'rgba(255,140,0,0.55)',   stroke: '#CC7000', label: '15%+' },
-        { min: 10, fill: 'rgba(255,220,0,0.55)',   stroke: '#CCAA00', label: '10%+' },
-        { min: 5,  fill: 'rgba(100,200,60,0.55)',  stroke: '#55AA00', label: '5%+' },
-        { min: 2,  fill: 'rgba(80,180,80,0.50)',   stroke: '#339933', label: '2%+' },
+    // ---- SPC Legend Data ----
+    const CAT_LEGEND = [
+        { fill: 'rgba(192,232,192,0.55)', stroke: '#96D896', label: 'Thunderstorm' },
+        { fill: 'rgba(102,204,102,0.55)', stroke: '#44BB44', label: 'Marginal' },
+        { fill: 'rgba(255,224,102,0.55)', stroke: '#DDBB00', label: 'Slight' },
+        { fill: 'rgba(255,160,64,0.55)',  stroke: '#CC7700', label: 'Enhanced' },
+        { fill: 'rgba(255,96,96,0.55)',   stroke: '#CC2222', label: 'Moderate' },
+        { fill: 'rgba(255,64,255,0.55)',  stroke: '#CC00CC', label: 'High' },
+    ];
+    const PROB_LEGEND = [
+        { fill: 'rgba(100,0,180,0.60)',  stroke: '#6600CC', label: '60%+' },
+        { fill: 'rgba(160,0,200,0.58)',  stroke: '#9900BB', label: '45%+' },
+        { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
+        { fill: 'rgba(255,140,0,0.55)',  stroke: '#CC7000', label: '15%+' },
+        { fill: 'rgba(255,220,0,0.55)',  stroke: '#CCAA00', label: '10%+' },
+        { fill: 'rgba(100,200,60,0.55)', stroke: '#55AA00', label: '5%+' },
+        { fill: 'rgba(80,180,80,0.50)',  stroke: '#339933', label: '2%+' },
     ];
 
-    function getCatColor(label) {
-        return CAT_COLORS[(label || '').toUpperCase().trim()] || null;
-    }
+    // ---- Mapbox paint expressions — evaluated natively by the renderer ----
+    // Categorical: match on the LABEL string property
+    const CAT_FILL_EXPR = ['match', ['upcase', ['coalesce', ['get', 'LABEL'], '']],
+        'TSTM', 'rgba(192,232,192,0.55)',
+        'MRGL', 'rgba(102,204,102,0.55)',
+        'SLGT', 'rgba(255,224,102,0.55)',
+        'ENH',  'rgba(255,160,64,0.55)',
+        'MDT',  'rgba(255,96,96,0.55)',
+        'HIGH', 'rgba(255,64,255,0.55)',
+        'rgba(0,0,0,0)'
+    ];
+    const CAT_LINE_EXPR = ['match', ['upcase', ['coalesce', ['get', 'LABEL'], '']],
+        'TSTM', '#96D896',
+        'MRGL', '#44BB44',
+        'SLGT', '#DDBB00',
+        'ENH',  '#CC7700',
+        'MDT',  '#CC2222',
+        'HIGH', '#CC00CC',
+        'rgba(0,0,0,0)'
+    ];
 
-    function getProbColor(probVal) {
-        const v = typeof probVal === 'string' ? parseInt(probVal) : probVal;
-        for (const tier of PROB_COLORS) {
-            if (v >= tier.min) return tier;
-        }
-        return null;
-    }
-
-    function colorizeGeoJSON(geojson, type) {
-        if (!geojson || !geojson.features) return geojson;
-        geojson.features.forEach(f => {
-            const rawLabel = f.properties?.LABEL || f.properties?.LABEL2 || '';
-            if (type === 'cat') {
-                const c = getCatColor(rawLabel);
-                f.properties._fill   = c ? c.fill   : 'rgba(0,0,0,0)';
-                f.properties._stroke = c ? c.stroke : 'rgba(0,0,0,0)';
-            } else {
-                const prob = parseInt(rawLabel) || 0;
-                const c = getProbColor(prob);
-                f.properties._fill   = c ? c.fill   : 'rgba(0,0,0,0)';
-                f.properties._stroke = c ? c.stroke : 'rgba(0,0,0,0)';
-            }
-        });
-        return geojson;
-    }
+    // Probability: step on the numeric LABEL value.
+    // Non-numeric values (e.g. "SIGN" hatching) convert to 0 → transparent.
+    const PROB_NUM = ['coalesce', ['to-number', ['get', 'LABEL']], 0];
+    const PROB_FILL_EXPR = ['step', PROB_NUM,
+        'rgba(0,0,0,0)',
+        2,  'rgba(80,180,80,0.50)',
+        5,  'rgba(100,200,60,0.55)',
+        10, 'rgba(255,220,0,0.55)',
+        15, 'rgba(255,140,0,0.55)',
+        30, 'rgba(220,30,30,0.58)',
+        45, 'rgba(160,0,200,0.58)',
+        60, 'rgba(100,0,180,0.60)'
+    ];
+    const PROB_LINE_EXPR = ['step', PROB_NUM,
+        'rgba(0,0,0,0)',
+        2,  '#339933',
+        5,  '#55AA00',
+        10, '#CCAA00',
+        15, '#CC7000',
+        30, '#BB1111',
+        45, '#8800AA',
+        60, '#6600BB'
+    ];
 
     // ---- Legend Helpers ----
     function updateSPCLegend(type) {
-        const legend = document.getElementById('spc-legend');
-        const title = document.getElementById('legend-title');
-        const items = document.getElementById('legend-items');
-
-        legend.classList.add('visible');
-
-        if (type === 'cat') {
-            title.textContent = 'Categorical Risk';
-            const entries = [
-                { fill: CAT_COLORS.TSTM.fill, stroke: CAT_COLORS.TSTM.stroke, label: 'Thunderstorm' },
-                { fill: CAT_COLORS.MRGL.fill, stroke: CAT_COLORS.MRGL.stroke, label: 'Marginal' },
-                { fill: CAT_COLORS.SLGT.fill, stroke: CAT_COLORS.SLGT.stroke, label: 'Slight' },
-                { fill: CAT_COLORS.ENH.fill,  stroke: CAT_COLORS.ENH.stroke,  label: 'Enhanced' },
-                { fill: CAT_COLORS.MDT.fill,  stroke: CAT_COLORS.MDT.stroke,  label: 'Moderate' },
-                { fill: CAT_COLORS.HIGH.fill, stroke: CAT_COLORS.HIGH.stroke, label: 'High' },
-            ];
-            items.innerHTML = entries.map(e => `
-                <div class="legend-row">
-                    <div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};"></div>
-                    <span>${e.label}</span>
-                </div>`).join('');
-        } else {
-            title.textContent = 'Probability';
-            items.innerHTML = PROB_COLORS.map(e => `
-                <div class="legend-row">
-                    <div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};"></div>
-                    <span>${e.label}</span>
-                </div>`).join('');
-        }
+        document.getElementById('spc-legend').classList.add('visible');
+        document.getElementById('legend-title').textContent =
+            type === 'cat' ? 'Categorical Risk' : 'Probability';
+        const data = type === 'cat' ? CAT_LEGEND : PROB_LEGEND;
+        document.getElementById('legend-items').innerHTML = data.map(e => `
+            <div class="legend-row">
+                <div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};"></div>
+                <span>${e.label}</span>
+            </div>`).join('');
     }
 
     function hideSPCLegend() {
@@ -649,25 +645,18 @@
     }
 
     // ---- Map Layer Management ----
-    function removeLayer(id) {
-        if (map.getLayer(id)) map.removeLayer(id);
-    }
-
-    function removeSource(id) {
-        if (map.getSource(id)) map.removeSource(id);
-    }
+    function removeLayer(id) { if (map.getLayer(id))  map.removeLayer(id); }
+    function removeSource(id){ if (map.getSource(id)) map.removeSource(id); }
 
     function clearSPCLayers() {
         removeLayer('spc-fill');
         removeLayer('spc-line');
         removeSource('spc-data');
     }
-
     function clearRadarLayers() {
         removeLayer('radar-layer');
         removeSource('radar-source');
     }
-
     function clearOWMLayers() {
         removeLayer('owm-layer');
         removeSource('owm-source');
@@ -676,13 +665,9 @@
     // ---- SPC Outlook ----
     async function loadSPCLayer(day, type) {
         const url = SPC_URLS[day]?.[type];
-        if (!url) {
-            clearSPCLayers();
-            hideSPCLegend();
-            return;
-        }
+        if (!url) { clearSPCLayers(); hideSPCLegend(); return; }
 
-        showLoading('Loading SPC Day ' + day + ' outlook...');
+        showLoading('Loading SPC Day ' + day + ' outlook…');
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -690,30 +675,31 @@
 
             clearSPCLayers();
 
-            const colored = colorizeGeoJSON(data, type);
+            // Use the raw GeoJSON — Mapbox expressions handle the colour mapping.
+            map.addSource('spc-data', { type: 'geojson', data });
 
-            map.addSource('spc-data', { type: 'geojson', data: colored });
-
+            const isCat = (type === 'cat');
+            // Insert before the first symbol layer so town/city labels
+            // from the base style remain visible above the SPC polygons.
             map.addLayer({
                 id: 'spc-fill',
                 type: 'fill',
                 source: 'spc-data',
                 paint: {
-                    'fill-color': ['get', '_fill'],
-                    'fill-opacity': 1,
+                    'fill-color':     isCat ? CAT_FILL_EXPR : PROB_FILL_EXPR,
                     'fill-antialias': true
                 }
-            });
+            }, firstSymbolLayerId);
 
             map.addLayer({
                 id: 'spc-line',
                 type: 'line',
                 source: 'spc-data',
                 paint: {
-                    'line-color': ['get', '_stroke'],
+                    'line-color': isCat ? CAT_LINE_EXPR : PROB_LINE_EXPR,
                     'line-width': 1.2
                 }
-            });
+            }, firstSymbolLayerId);
 
             updateSPCLegend(type);
         } catch (e) {
@@ -756,21 +742,18 @@
         const tileUrl = `${rainviewerHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
 
         map.addSource('radar-source', {
-            type: 'raster',
-            tiles: [tileUrl],
-            tileSize: 256,
-            attribution: 'RainViewer'
+            type: 'raster', tiles: [tileUrl], tileSize: 256, attribution: 'RainViewer'
         });
 
+        // Insert before symbol layers so labels remain on top
         map.addLayer({
             id: 'radar-layer',
             type: 'raster',
             source: 'radar-source',
             paint: { 'raster-opacity': currentRadarOpacity }
-        });
+        }, firstSymbolLayerId);
 
-        // Update timestamp
-        const ts  = new Date(frame.time * 1000);
+        const ts = new Date(frame.time * 1000);
         const tsEl = document.getElementById('radar-ts');
         if (tsEl) tsEl.textContent = ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
@@ -782,9 +765,8 @@
 
     function setRadarOpacity(val) {
         currentRadarOpacity = val / 100;
-        if (map.getLayer('radar-layer')) {
+        if (map.getLayer('radar-layer'))
             map.setPaintProperty('radar-layer', 'raster-opacity', currentRadarOpacity);
-        }
     }
 
     let radarInterval = null;
@@ -847,12 +829,13 @@
             attribution: '&copy; <a href="https://openweathermap.org">OpenWeatherMap</a>'
         });
 
+        // Insert before symbol layers so town labels remain on top
         map.addLayer({
             id: 'owm-layer',
             type: 'raster',
             source: 'owm-source',
             paint: { 'raster-opacity': currentOWMOpacity }
-        });
+        }, firstSymbolLayerId);
     }
 
     function setOWMOpacity(val) {
@@ -1012,6 +995,16 @@
         map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
         map.on('load', () => {
+            // Find the first symbol (text/label) layer in the style so we can
+            // insert data layers below it, keeping town names visible.
+            const styleLayers = map.getStyle().layers;
+            for (const layer of styleLayers) {
+                if (layer.type === 'symbol') {
+                    firstSymbolLayerId = layer.id;
+                    break;
+                }
+            }
+
             // Default: load SPC Day 1 categorical
             buildTypeButtons(1);
             // Map click for OWM exact values
