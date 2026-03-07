@@ -12,7 +12,7 @@ const CONFIG = {
 
     // OpenWeatherMap API Key — add yours here for temperature/wind map overlays
     // Get a free key at: https://openweathermap.org/api
-    OWM_API_KEY: 'YOUR_OWM_API_KEY_HERE',
+    OWM_API_KEY: '5906af06cdd57431ce881975e794e337',
 
     // Default location (Ephrata, PA)
     DEFAULT_LAT: 40.1798,
