@@ -304,14 +304,80 @@ body {
     display: flex;
     gap: 4px;
     overflow-x: auto;
-    padding: 20px;
+    padding: 20px 20px 14px;
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    /* Show a thin scrollbar on desktop so mouse users know it scrolls */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.2) rgba(255,255,255,0.05);
 }
- 
-.hourly-strip::-webkit-scrollbar {
-    display: none;
+
+.hourly-strip::-webkit-scrollbar { height: 5px; }
+.hourly-strip::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 3px; }
+.hourly-strip::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+.hourly-strip::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+
+/* --- Hourly Detail Popup --- */
+.hourly-detail-popup {
+    margin: -8px 0 20px;
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    position: relative;
+    animation: fadeIn 0.15s ease;
+}
+
+.hpop-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.hpop-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.hpop-temp {
+    font-size: 1.5rem;
+    font-weight: 300;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.hpop-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 4px;
+    line-height: 1;
+}
+
+.hpop-cond {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: capitalize;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.hpop-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+}
+
+.hpop-key {
+    color: var(--text-muted);
+    font-size: 0.78rem;
 }
  
 .hourly-item {
@@ -865,6 +931,26 @@ body {
     padding: 14px 16px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+.loc-locate-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    background: rgba(100, 180, 255, 0.08);
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    color: var(--accent-blue);
+    font-size: 0.82rem;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--transition-smooth);
+}
+
+.loc-locate-btn:hover { background: rgba(100, 180, 255, 0.16); }
+.loc-locate-btn:disabled { opacity: 0.5; cursor: default; }
  
 .loc-search-input {
     flex: 1;

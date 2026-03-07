@@ -125,33 +125,42 @@ const LocationManager = {
             navigator.geolocation.getCurrentPosition(
                 pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
                 () => resolve(null),
-                // maximumAge: 60s so the browser returns a recent cached fix quickly
-                // but doesn't use a stale position from hours ago
                 { timeout: 8000, maximumAge: 60000 }
             );
         });
     },
 
-    // Initialize on page load - always try geolocation first so the location
-    // reflects where the user IS now, not where they last searched.
-    // Falls back to the stored/default location if geolocation is denied or times out.
+    // Geolocate and navigate to the user's physical location.
+    // Called when the user clicks the "locate me" button.
+    async locateMe() {
+        const pos = await this.detectLocation();
+        if (!pos) return null;
+        const name = await this.reverseGeocode(pos.lat, pos.lng);
+        if (name) {
+            this.setCurrent(pos.lat, pos.lng, name);
+            window.location.reload();
+        }
+        return pos;
+    },
+
+    // Initialize on page load.
+    // If a location is already stored (from a previous search or visit) use it
+    // so the user sees the last place they were viewing.
+    // On first ever visit (nothing stored) try geolocation, then fall back to
+    // the hardcoded default.
     async init() {
+        const stored = localStorage.getItem(this.STORAGE_KEY);
+        if (stored) {
+            // Already have a saved location — use it as-is.
+            return this.getCurrent();
+        }
+        // First visit: try geolocation
         const pos = await this.detectLocation();
         if (pos) {
             const name = await this.reverseGeocode(pos.lat, pos.lng);
-            if (name) {
-                return this.setCurrent(pos.lat, pos.lng, name);
-            }
-            // Got coords but reverse-geocode failed — keep coords, reuse stored name
-            const stored = localStorage.getItem(this.STORAGE_KEY);
-            if (stored) {
-                try {
-                    const s = JSON.parse(stored);
-                    return this.setCurrent(pos.lat, pos.lng, s.name);
-                } catch (e) {}
-            }
+            if (name) return this.setCurrent(pos.lat, pos.lng, name);
         }
-        // Geolocation failed/denied — fall back to stored or default
+        // Geolocation unavailable — use hardcoded default
         return this.getCurrent();
     }
 };
@@ -183,6 +192,10 @@ function initLocationSearch() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" id="loc-search-input" class="loc-search-input" placeholder="Search for a city..." autocomplete="off"/>
             </div>
+            <button class="loc-locate-btn" id="loc-locate-btn" title="Use my current location">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="9" stroke-dasharray="4 2"/></svg>
+                Use my current location
+            </button>
             <div id="loc-favorites" class="loc-favorites"></div>
             <div id="loc-results" class="loc-results"></div>
         </div>
@@ -191,8 +204,20 @@ function initLocationSearch() {
     const trigger = document.getElementById('loc-trigger');
     const dropdown = document.getElementById('loc-dropdown');
     const searchInput = document.getElementById('loc-search-input');
+    const locateBtn = document.getElementById('loc-locate-btn');
     const favoritesEl = document.getElementById('loc-favorites');
     const resultsEl = document.getElementById('loc-results');
+
+    // "Use my current location" button
+    locateBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        locateBtn.textContent = 'Detecting…';
+        locateBtn.disabled = true;
+        await LocationManager.locateMe();
+        // If locateMe returns without reloading (geo denied), restore button
+        locateBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="9" stroke-dasharray="4 2"/></svg> Unable to detect location`;
+        locateBtn.disabled = false;
+    });
  
     function renderFavorites() {
         const favs = LocationManager.getFavorites();
