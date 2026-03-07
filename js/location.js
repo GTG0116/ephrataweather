@@ -125,23 +125,33 @@ const LocationManager = {
             navigator.geolocation.getCurrentPosition(
                 pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
                 () => resolve(null),
-                { timeout: 8000, maximumAge: 300000 }
+                // maximumAge: 60s so the browser returns a recent cached fix quickly
+                // but doesn't use a stale position from hours ago
+                { timeout: 8000, maximumAge: 60000 }
             );
         });
     },
- 
-    // Initialize on first load - try geolocation, fall back to default
+
+    // Initialize on page load - always try geolocation first so the location
+    // reflects where the user IS now, not where they last searched.
+    // Falls back to the stored/default location if geolocation is denied or times out.
     async init() {
-        const stored = localStorage.getItem(this.STORAGE_KEY);
-        if (stored) return this.getCurrent();
- 
         const pos = await this.detectLocation();
         if (pos) {
             const name = await this.reverseGeocode(pos.lat, pos.lng);
             if (name) {
                 return this.setCurrent(pos.lat, pos.lng, name);
             }
+            // Got coords but reverse-geocode failed — keep coords, reuse stored name
+            const stored = localStorage.getItem(this.STORAGE_KEY);
+            if (stored) {
+                try {
+                    const s = JSON.parse(stored);
+                    return this.setCurrent(pos.lat, pos.lng, s.name);
+                } catch (e) {}
+            }
         }
+        // Geolocation failed/denied — fall back to stored or default
         return this.getCurrent();
     }
 };

@@ -10,6 +10,10 @@ const CONFIG = {
     // Mapbox Access Token
     MAPBOX_ACCESS_TOKEN: 'pk.eyJ1IjoiZ3RnMDExNiIsImEiOiJjbWxsODV6NXAwNThmM2ZwdWlkYm0xNjFlIn0.vI186twXYzY45nnuV5FucQ',
 
+    // OpenWeatherMap API Key — add yours here for temperature/wind map overlays
+    // Get a free key at: https://openweathermap.org/api
+    OWM_API_KEY: 'YOUR_OWM_API_KEY_HERE',
+
     // Default location (Ephrata, PA)
     DEFAULT_LAT: 40.1798,
     DEFAULT_LNG: -76.1789,
