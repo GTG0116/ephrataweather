@@ -20,7 +20,9 @@ async function initCurrentView(lat, lng) {
     const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult, alertsResult] = await Promise.allSettled([
         WeatherAPI.getCurrentConditions(lat, lng),
         WeatherAPI.getHourlyForecast(lat, lng, 24),
-        WeatherAPI.getDailyForecast(lat, lng, 1),
+        // Pull a few days so hourly day/night selection can use
+        // each hour's date-specific sunrise/sunset window.
+        WeatherAPI.getDailyForecast(lat, lng, 3),
         WeatherAPI.getAirQuality(lat, lng),
         WeatherAPI.getPollen(lat, lng),
         WeatherAPI.getAlerts(lat, lng)
@@ -43,8 +45,8 @@ async function initCurrentView(lat, lng) {
 
     // --- Hourly Forecast ---
     if (hourlyResult.status === 'fulfilled') {
-        const daily0 = dailyResult.status === 'fulfilled' ? dailyResult.value?.forecastDays?.[0] : null;
-        renderHourlyForecast(hourlyResult.value, daily0);
+        const forecastDays = dailyResult.status === 'fulfilled' ? dailyResult.value?.forecastDays : [];
+        renderHourlyForecast(hourlyResult.value, forecastDays);
     } else {
         document.getElementById('hourly-strip').innerHTML =
             '<div class="error-message">Unable to load hourly forecast<div class="error-hint">Check your API key</div></div>';
@@ -227,9 +229,44 @@ function showHourlyDetail(idx) {
 // Google returns an ISO string with offset or Z.
 function _parseSunTime(str) {
     if (!str) return NaN;
+    if (typeof str === 'object') {
+        const y = str.year;
+        const m = str.month;
+        const d = str.day;
+        if (y != null && m != null && d != null) {
+            const h = str.hours || 0;
+            const min = str.minutes || 0;
+            const s = str.seconds || 0;
+            return new Date(y, m - 1, d, h, min, s).getTime();
+        }
+    }
     const ms = Date.parse(str);
     if (!isNaN(ms)) return ms;
     return NaN;
+}
+
+function _dateKeyFromMs(tsMs) {
+    const d = new Date(tsMs);
+    if (isNaN(d)) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function _dailyKey(day) {
+    if (!day) return null;
+    if (typeof day.displayDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day.displayDate)) {
+        return day.displayDate;
+    }
+    const base = day.interval?.startTime || day.displayDate;
+    if (!base) return null;
+    const tsMs = Date.parse(base);
+    return isNaN(tsMs) ? null : _dateKeyFromMs(tsMs);
+}
+
+function _dayForTimestamp(tsMs, forecastDays) {
+    if (!Array.isArray(forecastDays) || forecastDays.length === 0 || isNaN(tsMs)) return null;
+    const targetKey = _dateKeyFromMs(tsMs);
+    if (!targetKey) return forecastDays[0] || null;
+    return forecastDays.find((d) => _dailyKey(d) === targetKey) || forecastDays[0] || null;
 }
 
 // Returns true if current time is between sunset and sunrise (nighttime).
@@ -333,7 +370,7 @@ function renderCurrentConditions(data, dailyData) {
     }
 }
 
-function renderHourlyForecast(data, daily0) {
+function renderHourlyForecast(data, forecastDays) {
     const strip = document.getElementById('hourly-strip');
     _hourlyData = data.forecastHours || [];
 
@@ -347,9 +384,10 @@ function renderHourlyForecast(data, daily0) {
         const temp = WeatherAPI.formatTemp(hour.temperature?.degrees);
         const condType = hour.weatherCondition?.type || '';
 
-        // Night check per hour using the shared helper
+        // Night check per hour using that hour's forecast day sunrise/sunset
         const tsMs = Date.parse(hour.interval?.startTime || hour.displayDateTime || '');
-        const hourNight = _isTimestampNight(tsMs, daily0);
+        const dayForHour = _dayForTimestamp(tsMs, forecastDays);
+        const hourNight = _isTimestampNight(tsMs, dayForHour);
 
         const iconSvg = WeatherIcons.fromText(condType, hourNight);
         const precip = hour.precipitation?.probability;
