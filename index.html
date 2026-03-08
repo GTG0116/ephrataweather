@@ -206,6 +206,43 @@
             .layer-btn, .day-btn, .type-btn { padding: 5px 9px; font-size: 0.75rem; }
             .chart-tab { padding: 5px 9px; font-size: 0.73rem; }
         }
+
+        /* ---- Redesigned Header ---- */
+        .app-header { align-items: flex-start; padding: 14px 20px; }
+        .header-left { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+        .header-title-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .header-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .header-meta-row .location-search-container { flex: 1; min-width: 0; }
+
+        /* ---- Refresh button ---- */
+        .refresh-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 50%;
+            color: var(--text-secondary);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all var(--transition-smooth);
+        }
+        .refresh-btn:hover { background: rgba(255,255,255,0.16); color: var(--text-primary); }
+        .refresh-btn svg { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .refresh-btn.spinning svg { animation: spin 0.8s linear; }
     </style>
 </head>
 <body>
@@ -214,18 +251,27 @@
 
         <!-- ===== Shared Header ===== -->
         <header class="app-header glass-static">
-            <div>
-                <h1>Ephrata Weather</h1>
-                <div class="location-search-container" id="location-search-container">
-                    <span class="location" id="location-name">Loading...</span>
+            <div class="header-left">
+                <div class="header-title-row">
+                    <h1>Ephrata Weather</h1>
+                    <div class="source-toggle" title="Select weather data source">
+                        <button class="source-btn active" id="btn-src-google" onclick="setWeatherDataSource('google')">Google</button>
+                        <button class="source-btn" id="btn-src-nws" onclick="setWeatherDataSource('nws')">NWS</button>
+                    </div>
                 </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-                <div class="source-toggle" title="Select weather data source">
-                    <button class="source-btn active" id="btn-src-google" onclick="setWeatherDataSource('google')">Google</button>
-                    <button class="source-btn" id="btn-src-nws" onclick="setWeatherDataSource('nws')">NWS</button>
+                <div class="header-meta-row">
+                    <div class="location-search-container" id="location-search-container">
+                        <span class="location" id="location-name">Loading...</span>
+                    </div>
+                    <span class="badge" id="last-updated" style="flex-shrink:0;">Weather</span>
+                    <button class="refresh-btn" id="refresh-btn" onclick="refreshCurrentView()" title="Refresh data" aria-label="Refresh weather data">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M23 4v6h-6"/>
+                            <path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                    </button>
                 </div>
-                <span class="badge" id="last-updated">Weather</span>
             </div>
         </header>
 
@@ -476,7 +522,10 @@
             <div id="day-detail" class="card glass-static fade-in" style="margin-top:24px;display:none;padding:28px;">
                 <div class="card-header">
                     <span class="card-title" id="detail-day-name">--</span>
-                    <span class="badge" id="detail-date">--</span>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="badge" id="detail-date">--</span>
+                        <button onclick="closeDayDetail()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:var(--text-secondary);border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1rem;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;" title="Close" aria-label="Close detail">&times;</button>
+                    </div>
                 </div>
                 <div style="display:flex;align-items:center;gap:24px;margin:16px 0;flex-wrap:wrap;">
                     <div id="detail-icon" style="width:80px;height:80px;flex-shrink:0;"></div>
@@ -489,10 +538,10 @@
                 <div class="cards-grid cards-grid-3" style="margin-top:16px;">
                     <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Precipitation</div><div style="font-size:1.1rem;font-weight:500;" id="detail-precip">--</div></div>
                     <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Wind</div><div style="font-size:1.1rem;font-weight:500;" id="detail-wind">--</div></div>
-                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Humidity</div><div style="font-size:1.1rem;font-weight:500;" id="detail-humidity">--</div></div>
-                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">UV Index</div><div style="font-size:1.1rem;font-weight:500;" id="detail-uv">--</div></div>
-                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunrise</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunrise">--</div></div>
-                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunset</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunset">--</div></div>
+                    <div id="detail-humidity-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Humidity</div><div style="font-size:1.1rem;font-weight:500;" id="detail-humidity">--</div></div>
+                    <div id="detail-uv-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">UV Index</div><div style="font-size:1.1rem;font-weight:500;" id="detail-uv">--</div></div>
+                    <div id="detail-sunrise-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunrise</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunrise">--</div></div>
+                    <div id="detail-sunset-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunset</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunset">--</div></div>
                 </div>
             </div>
         </section>
@@ -632,8 +681,19 @@
         WeatherAPI.setDataSource(src);
         document.getElementById('btn-src-google').classList.toggle('active', src === 'google');
         document.getElementById('btn-src-nws').classList.toggle('active', src === 'nws');
-        // Re-fetch data for currently active view
+        // Reset all data views so they re-fetch with the new source on next visit
+        VALID_VIEWS.forEach(v => { viewInited[v] = false; });
+        // Immediately re-fetch data for currently active view
         if (currentViewId === 'current' || currentViewId === 'forecast') {
+            initViewData(currentViewId);
+        }
+    }
+
+    // Refresh button — re-fetch data for the current view
+    function refreshCurrentView() {
+        if (currentViewId === 'current' || currentViewId === 'forecast') {
+            const btn = document.getElementById('refresh-btn');
+            if (btn) { btn.classList.add('spinning'); setTimeout(() => btn.classList.remove('spinning'), 1000); }
             viewInited[currentViewId] = false;
             initViewData(currentViewId);
         }

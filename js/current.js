@@ -527,10 +527,11 @@ function renderCurrentConditions(data, dailyData) {
     const windGust = data.wind?.gust?.value;
     const windDir = data.wind?.direction;
     if (windSpeed != null) {
+        const fmtWind = v => v % 1 === 0 ? v : parseFloat(v.toFixed(1));
         document.getElementById('wind-speed').innerHTML =
-            `${Math.round(windSpeed)}<span class="unit"> mph</span>`;
+            `${fmtWind(windSpeed)}<span class="unit"> mph</span>`;
         let detail = windDir != null ? WeatherAPI.windDirection(windDir) : '';
-        if (windGust != null) detail += ` \u2022 Gusts ${Math.round(windGust)} mph`;
+        if (windGust != null) detail += ` \u2022 Gusts ${fmtWind(windGust)} mph`;
         document.getElementById('wind-detail').textContent = detail;
     }
 
