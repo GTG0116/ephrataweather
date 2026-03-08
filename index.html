@@ -479,19 +479,8 @@
                         <button class="day-btn" data-band="watervapor" onclick="selectSatBand('watervapor')">Water Vapor</button>
                     </div>
                 </div>
-                <!-- Radar Sub-Controls -->
-                <div class="radar-controls" id="radar-controls">
-                    <div class="timeline-row">
-                        <button id="play-btn" onclick="toggleRadarPlay()">&#9654; Play</button>
-                        <input type="range" id="timeline-slider" min="0" max="0" value="0" oninput="onTimelineChange(this.value)">
-                        <span class="radar-ts" id="radar-ts">--</span>
-                        <button onclick="refreshRadar()">&#x21bb; Refresh</button>
-                    </div>
-                    <div class="opacity-row">
-                        <span>Opacity:</span>
-                        <input type="range" min="0" max="100" value="70" oninput="setRadarOpacity(this.value)">
-                    </div>
-                </div>
+                <!-- Radar Sub-Controls (none needed for iframe viewer) -->
+                <div class="radar-controls" id="radar-controls" style="display:none;"></div>
                 <!-- OWM Sub-Controls -->
                 <div class="owm-controls" id="owm-controls">
                     <span style="font-size:0.8rem;color:var(--text-secondary);">
@@ -526,7 +515,15 @@
                 </div>
             </div>
 
-            <!-- Map (for Radar / Temperature / Wind) -->
+            <!-- MRMS Radar Viewer -->
+            <div id="radar-image-view" style="display:none;">
+                <iframe src="https://ephrataweather.github.io/MRMS/public/"
+                        style="width:100%;height:calc(100vh - 220px);min-height:500px;border:none;border-radius:var(--radius-lg);"
+                        title="MRMS Radar Viewer"
+                        allowfullscreen></iframe>
+            </div>
+
+            <!-- Map (for Temperature / Wind) -->
             <div class="map-wrapper glass-static" id="map-view-wrap" style="display:none;">
                 <div id="map"></div>
                 <div class="spc-legend visible" id="spc-legend">
@@ -655,10 +652,7 @@
     let currentDay = 0;  // 0 = show all days
     let currentType = 'cat';
     let firstSymbolLayerId = undefined;
-    let radarFrames = [];
-    let rainviewerHost = '';
-    let radarPlaying = false;
-    let currentFrameIdx = 0;
+
 
     const SPC_URLS = {
         1: {
@@ -763,9 +757,8 @@
 
     function removeLayer(id) { if (map && map.getLayer(id))  map.removeLayer(id); }
     function removeSource(id){ if (map && map.getSource(id)) map.removeSource(id); }
-    function clearSPCLayers()   { removeLayer('spc-fill'); removeLayer('spc-line'); removeSource('spc-data'); }
-    function clearRadarLayers() { removeLayer('radar-layer'); removeSource('radar-source'); }
-    function clearOWMLayers()   { removeLayer('owm-layer'); removeSource('owm-source'); }
+    function clearSPCLayers() { removeLayer('spc-fill'); removeLayer('spc-line'); removeSource('spc-data'); }
+    function clearOWMLayers() { removeLayer('owm-layer'); removeSource('owm-source'); }
 
     async function fetchSPCGeoJSON(url) {
         try {
@@ -802,60 +795,7 @@
         } finally { hideLoading(); }
     }
 
-    async function loadRadarData() {
-        showLoading('Loading radar data...');
-        try {
-            const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-            const data = await resp.json();
-            rainviewerHost = data.host;
-            const past    = data.radar?.past    || [];
-            const nowcast = data.radar?.nowcast || [];
-            radarFrames = [...past, ...nowcast];
-            const slider = document.getElementById('timeline-slider');
-            slider.max   = radarFrames.length - 1;
-            slider.value = radarFrames.length - 1;
-            showRadarFrame(radarFrames.length - 1);
-        } catch (e) { console.error('Radar error:', e); hideLoading(); }
-    }
 
-    function showRadarFrame(idx) {
-        clearRadarLayers();
-        if (!radarFrames[idx]) { hideLoading(); return; }
-        currentFrameIdx = idx;
-        const frame = radarFrames[idx];
-        const tileUrl = `${rainviewerHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
-        map.addSource('radar-source', { type: 'raster', tiles: [tileUrl], tileSize: 256, attribution: 'RainViewer' });
-        map.addLayer({ id: 'radar-layer', type: 'raster', source: 'radar-source',
-            paint: { 'raster-opacity': currentRadarOpacity }
-        }, firstSymbolLayerId);
-        const ts = new Date(frame.time * 1000);
-        const tsEl = document.getElementById('radar-ts');
-        if (tsEl) tsEl.textContent = ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-        document.getElementById('timeline-slider').value = idx;
-        hideLoading();
-    }
-
-    let currentRadarOpacity = 0.7;
-    function setRadarOpacity(val) {
-        currentRadarOpacity = val / 100;
-        if (map && map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', currentRadarOpacity);
-    }
-
-    let radarInterval = null;
-    function toggleRadarPlay() {
-        const btn = document.getElementById('play-btn');
-        if (radarPlaying) {
-            clearInterval(radarInterval); radarPlaying = false; btn.innerHTML = '&#9654; Play';
-        } else {
-            radarPlaying = true; btn.innerHTML = '&#9646;&#9646; Pause';
-            radarInterval = setInterval(() => { const next = (currentFrameIdx + 1) % radarFrames.length; showRadarFrame(next); }, 500);
-        }
-    }
-    function onTimelineChange(val) {
-        if (radarPlaying) { clearInterval(radarInterval); radarPlaying = false; document.getElementById('play-btn').innerHTML = '&#9654; Play'; }
-        showRadarFrame(parseInt(val));
-    }
-    function refreshRadar() { if (radarPlaying) toggleRadarPlay(); loadRadarData(); }
 
     let currentOWMOpacity = 0.7;
     function loadOWMLayer(type) {
@@ -863,7 +803,7 @@
         const warn = document.getElementById('owm-key-warn');
         if (!key || key === 'YOUR_OWM_API_KEY_HERE') { warn.classList.add('visible'); clearOWMLayers(); return; }
         warn.classList.remove('visible');
-        clearSPCLayers(); clearRadarLayers(); clearOWMLayers(); hideSPCLegend();
+        clearSPCLayers(); clearOWMLayers(); hideSPCLegend();
         const layerName = type === 'temperature' ? 'temp_new' : 'wind_new';
         map.addSource('owm-source', { type: 'raster',
             tiles: [`https://tile.openweathermap.org/map/${layerName}/{z}/{x}/{y}.png?appid=${key}`],
@@ -919,26 +859,26 @@
 
     const SPC_IMAGES = {
         1: [
-            { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.gif',           label: 'Day 1 – Categorical' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_torn.gif',  label: 'Day 1 – Tornado' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_wind.gif',  label: 'Day 1 – Wind' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_hail.gif',  label: 'Day 1 – Hail' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.png',           label: 'Day 1 – Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_torn.png',  label: 'Day 1 – Tornado' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_wind.png',  label: 'Day 1 – Wind' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_hail.png',  label: 'Day 1 – Hail' },
         ],
         2: [
-            { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.gif',           label: 'Day 2 – Categorical' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_torn.gif',  label: 'Day 2 – Tornado' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_wind.gif',  label: 'Day 2 – Wind' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_hail.gif',  label: 'Day 2 – Hail' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.png',           label: 'Day 2 – Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_torn.png',  label: 'Day 2 – Tornado' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_wind.png',  label: 'Day 2 – Wind' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_hail.png',  label: 'Day 2 – Hail' },
         ],
         3: [
-            { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.gif',           label: 'Day 3 – Categorical' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day3prob.gif',           label: 'Day 3 – Probability' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.png',           label: 'Day 3 – Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day3prob.png',           label: 'Day 3 – Probability' },
         ],
-        4: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day4prob.gif',      label: 'Day 4 – Probability' }],
-        5: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day5prob.gif',      label: 'Day 5 – Probability' }],
-        6: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day6prob.gif',      label: 'Day 6 – Probability' }],
-        7: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day7prob.gif',      label: 'Day 7 – Probability' }],
-        8: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day8prob.gif',      label: 'Day 8 – Probability' }],
+        4: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day4prob.png',      label: 'Day 4 – Probability' }],
+        5: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day5prob.png',      label: 'Day 5 – Probability' }],
+        6: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day6prob.png',      label: 'Day 6 – Probability' }],
+        7: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day7prob.png',      label: 'Day 7 – Probability' }],
+        8: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day8prob.png',      label: 'Day 8 – Probability' }],
     };
 
     function renderSPCImages(filterDay) {
@@ -1016,19 +956,23 @@
         }
     });
 
-    function _showSPCView()       { document.getElementById('spc-image-view').style.display = ''; document.getElementById('satellite-image-view').style.display = 'none'; document.getElementById('map-view-wrap').style.display = 'none'; }
-    function _showSatelliteView() { document.getElementById('spc-image-view').style.display = 'none'; document.getElementById('satellite-image-view').style.display = ''; document.getElementById('map-view-wrap').style.display = 'none'; }
-    function _showMapView()       { document.getElementById('spc-image-view').style.display = 'none'; document.getElementById('satellite-image-view').style.display = 'none'; document.getElementById('map-view-wrap').style.display = ''; }
+    function _hideAllViews() {
+        document.getElementById('spc-image-view').style.display = 'none';
+        document.getElementById('satellite-image-view').style.display = 'none';
+        document.getElementById('radar-image-view').style.display = 'none';
+        document.getElementById('map-view-wrap').style.display = 'none';
+    }
+    function _showSPCView()       { _hideAllViews(); document.getElementById('spc-image-view').style.display = ''; }
+    function _showSatelliteView() { _hideAllViews(); document.getElementById('satellite-image-view').style.display = ''; }
+    function _showRadarView()     { _hideAllViews(); document.getElementById('radar-image-view').style.display = ''; }
+    function _showMapView()       { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; }
 
     function switchLayer(layer) {
         currentLayer = layer;
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
         document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
-        document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
         document.getElementById('owm-controls').classList.toggle('visible', layer === 'temperature' || layer === 'wind');
-
-        if (radarPlaying) toggleRadarPlay();
 
         if (layer === 'spc') {
             _showSPCView();
@@ -1036,12 +980,12 @@
         } else if (layer === 'satellite') {
             _showSatelliteView();
             loadSatelliteImage(currentSatBand);
+        } else if (layer === 'radar') {
+            _showRadarView();
         } else {
             _showMapView();
-            clearSPCLayers(); clearRadarLayers(); clearOWMLayers(); hideSPCLegend();
-            if (layer === 'radar') loadRadarData();
-            else if (layer === 'temperature' || layer === 'wind') loadOWMLayer(layer);
-            // ensure map is sized
+            clearSPCLayers(); clearOWMLayers(); hideSPCLegend();
+            if (layer === 'temperature' || layer === 'wind') loadOWMLayer(layer);
             if (map) setTimeout(() => map.resize(), 50);
         }
     }
