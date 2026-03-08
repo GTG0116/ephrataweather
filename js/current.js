@@ -11,9 +11,29 @@ async function initCurrentView(lat, lng) {
         lng = loc.lng;
     }
 
-    // Request notification permission early
+    // Request notification permission early, then sync locations to IDB so the
+    // service worker can check alerts in the background when the app is closed.
     if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
+        Notification.requestPermission().then(async (permission) => {
+            if (permission === 'granted') {
+                await _syncLocationsToSW();
+                // Attempt to register periodic background sync now that permission is granted.
+                if ('serviceWorker' in navigator) {
+                    const reg = await navigator.serviceWorker.ready.catch(() => null);
+                    if (reg && 'periodicSync' in reg) {
+                        try {
+                            const perm = await navigator.permissions.query({ name: 'periodic-background-sync' });
+                            if (perm.state === 'granted') {
+                                await reg.periodicSync.register('weather-alerts', { minInterval: 30 * 60 * 1000 });
+                            }
+                        } catch (_) { /* not supported */ }
+                    }
+                }
+            }
+        });
+    } else {
+        // Permission already granted — keep locations in sync for the SW.
+        _syncLocationsToSW().catch(() => {});
     }
 
     // Fetch weather data in parallel
@@ -271,6 +291,52 @@ function _drawAlertMap(alert) {
 
     if (_alertMap.loaded()) loadOrUpdate();
     else _alertMap.once('load', loadOrUpdate);
+}
+
+// ---- IndexedDB sync for service worker background notifications ----
+// Writes current + starred locations (and the already-notified alert IDs) to
+// IndexedDB so that sw.js can access them when the page is closed.
+async function _syncLocationsToSW() {
+    if (!('indexedDB' in window)) return;
+
+    const currentLoc = LocationManager.getCurrent();
+    const favorites = LocationManager.getFavorites() || [];
+
+    const all = [];
+    if (currentLoc?.lat != null) {
+        all.push({ lat: currentLoc.lat, lng: currentLoc.lng, name: currentLoc.name || 'Current Location' });
+    }
+    favorites.forEach((f) => {
+        if (f?.lat != null) all.push({ lat: f.lat, lng: f.lng, name: f.name });
+    });
+
+    // Dedupe by rounded coordinates
+    const seen = new Set();
+    const locations = all.filter((loc) => {
+        const key = `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+
+    const notifiedArr = JSON.parse(localStorage.getItem('ephrata_notified_alerts') || '[]');
+
+    await new Promise((resolve) => {
+        const req = indexedDB.open('ephrata-weather', 1);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('store')) db.createObjectStore('store');
+        };
+        req.onsuccess = (e) => {
+            const db = e.target.result;
+            const tx = db.transaction('store', 'readwrite');
+            tx.objectStore('store').put(locations, 'locations');
+            tx.objectStore('store').put(notifiedArr, 'notifiedAlerts');
+            tx.oncomplete = () => { db.close(); resolve(); };
+            tx.onerror = () => { db.close(); resolve(); };
+        };
+        req.onerror = () => resolve();
+    });
 }
 
 function sendAlertNotifications(byLocation) {

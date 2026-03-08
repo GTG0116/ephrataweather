@@ -419,15 +419,15 @@ body {
  
 /* --- 10-Day Forecast --- */
 .forecast-list {
-    padding: 8px 0;
+    padding: 4px 0;
 }
- 
+
 .forecast-row {
     display: grid;
-    grid-template-columns: 100px 48px 1fr 60px 80px 60px;
+    grid-template-columns: 90px 40px 1fr 52px 60px 52px;
     align-items: center;
-    padding: 14px 24px;
-    gap: 12px;
+    padding: 10px 20px;
+    gap: 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     transition: background var(--transition-smooth);
 }
@@ -488,6 +488,12 @@ body {
     text-align: right;
 }
  
+/* --- Forecast Charts --- */
+#forecast-charts-container .chart-tabs {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    padding-bottom: 12px;
+}
+
 /* --- Air Quality & Pollen --- */
 .aqi-bar {
     height: 8px;
@@ -1158,24 +1164,23 @@ body {
 }
 
 /* --- 10-Day forecast row ---
-   On narrow screens hide the condition-brief column and shrink columns. */
+   Keep all 6 columns (including precip-chance) visible on all screen sizes. */
 @media (max-width: 540px) {
     .forecast-row {
-        grid-template-columns: 68px 36px 1fr 48px 52px;
-        padding: 12px 14px;
-        gap: 6px;
-        font-size: 0.85rem;
+        grid-template-columns: 62px 32px 1fr 40px 44px 38px;
+        padding: 9px 12px;
+        gap: 5px;
+        font-size: 0.82rem;
     }
-    .forecast-row .condition-brief { display: none; }
-    .forecast-row .day { font-size: 0.85rem; }
+    .forecast-row .day { font-size: 0.82rem; }
 }
 
 @media (max-width: 360px) {
     .forecast-row {
-        grid-template-columns: 58px 30px 1fr 44px 46px;
-        padding: 10px 10px;
-        gap: 4px;
-        font-size: 0.78rem;
+        grid-template-columns: 54px 28px 1fr 36px 40px 34px;
+        padding: 8px 8px;
+        gap: 3px;
+        font-size: 0.75rem;
     }
 }
 
