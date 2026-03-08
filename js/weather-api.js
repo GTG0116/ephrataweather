@@ -2,7 +2,75 @@
 // WEATHER API HELPER
 // Primary: Google Weather API (GET with query params)
 // Fallback: Open-Meteo (free, CORS-enabled)
+// Optional: NWS (National Weather Service) — user-selectable
 // ============================================
+
+// --- Data Source Preference ---
+const _DATA_SOURCE_KEY = 'ephrata_data_source';
+function _getDataSource() { return localStorage.getItem(_DATA_SOURCE_KEY) || 'google'; }
+function _setDataSource(src) { localStorage.setItem(_DATA_SOURCE_KEY, src); }
+
+// --- NWS Helpers ---
+
+// Map NWS text description to our internal condition type codes
+function _nwsConditionType(text) {
+    if (!text) return 'PARTLY_CLOUDY';
+    const t = text.toLowerCase();
+    if (t.includes('thunderstorm') || t.includes('t-storm')) return t.includes('heavy') ? 'HEAVY_THUNDERSTORM' : 'THUNDERSTORM';
+    if (t.includes('heavy rain') || t.includes('heavy shower')) return 'HEAVY_RAIN';
+    if (t.includes('light rain') || t.includes('drizzle')) return 'LIGHT_RAIN';
+    if (t.includes('rain') || t.includes('shower')) return 'RAIN';
+    if (t.includes('blizzard') || t.includes('heavy snow')) return 'HEAVY_SNOW';
+    if (t.includes('light snow') || t.includes('flurr')) return 'LIGHT_SNOW';
+    if (t.includes('snow')) return 'SNOW';
+    if (t.includes('sleet') || t.includes('freezing rain') || t.includes('ice pellet')) return 'SLEET';
+    if (t.includes('freezing') || t.includes('ice')) return 'FREEZING_RAIN';
+    if (t.includes('fog') || t.includes('mist') || t.includes('haze')) return 'FOG';
+    if (t.includes('mostly sunny') || t.includes('mostly clear')) return 'MOSTLY_CLEAR';
+    if (t.includes('partly cloudy') || t.includes('partly sunny') || t.includes('mix of sun')) return 'PARTLY_CLOUDY';
+    if (t.includes('clear') || t.includes('sunny')) return 'CLEAR';
+    if (t.includes('overcast') || t.includes('cloudy')) return t.includes('mostly') ? 'MOSTLY_CLOUDY' : 'OVERCAST';
+    if (t.includes('windy') || t.includes('breezy')) return 'WIND';
+    if (t.includes('hail')) return 'HAIL';
+    return 'PARTLY_CLOUDY';
+}
+
+// Convert NWS cloud layer amount code to percentage
+function _nwsCloudAmount(amount) {
+    const map = { CLR: 0, SKC: 0, FEW: 12, SCT: 37, BKN: 75, OVC: 100, VV: 100 };
+    return map[String(amount).toUpperCase()] ?? null;
+}
+
+// Convert NWS cardinal wind direction to degrees
+function _nwsCardinalToDeg(dir) {
+    if (dir == null) return null;
+    if (typeof dir === 'number') return dir;
+    const map = { N: 0, NNE: 22, NE: 45, ENE: 67, E: 90, ESE: 112, SE: 135, SSE: 157,
+                  S: 180, SSW: 202, SW: 225, WSW: 247, W: 270, WNW: 292, NW: 315, NNW: 337 };
+    return map[String(dir).toUpperCase().trim()] ?? 0;
+}
+
+// Parse NWS wind speed string like "10 mph" → number
+function _nwsWindSpeed(str) {
+    if (str == null) return null;
+    if (typeof str === 'number') return str;
+    const m = String(str).match(/(\d+)/);
+    return m ? parseInt(m[1]) : null;
+}
+
+// NWS grid points cache (avoids redundant /points requests)
+const _nwsPointsCache = {};
+async function _getNWSPoints(lat, lng) {
+    const key = `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}`;
+    if (_nwsPointsCache[key]) return _nwsPointsCache[key];
+    const resp = await fetch(`https://api.weather.gov/points/${lat},${lng}`, {
+        headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
+    });
+    if (!resp.ok) throw new Error(`NWS /points ${resp.status}`);
+    const data = await resp.json();
+    _nwsPointsCache[key] = data.properties;
+    return data.properties;
+}
 
 // WMO Weather Codes for Open-Meteo fallback
 const WMO_CODES = {
@@ -344,6 +412,136 @@ const WeatherAPI = {
         });
 
         return { alerts };
+    },
+
+    // === Data Source Preference ===
+    getDataSource: _getDataSource,
+    setDataSource: _setDataSource,
+
+    // === NWS Current Conditions ===
+    async getNWSCurrentConditions(lat, lng) {
+        const points = await _getNWSPoints(lat, lng);
+        // Fetch observation station list
+        const stResp = await fetch(points.observationStations, {
+            headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
+        });
+        if (!stResp.ok) throw new Error(`NWS stations ${stResp.status}`);
+        const stData = await stResp.json();
+        const stationId = stData.features?.[0]?.properties?.stationIdentifier;
+        if (!stationId) throw new Error('No NWS station found nearby');
+
+        // Fetch latest observation
+        const obsResp = await fetch(`https://api.weather.gov/stations/${stationId}/observations/latest`, {
+            headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
+        });
+        if (!obsResp.ok) throw new Error(`NWS observations ${obsResp.status}`);
+        const obs = (await obsResp.json()).properties;
+
+        // Convert SI units to imperial
+        const toF = c => c != null ? c * 9 / 5 + 32 : null;
+        const toMph = mps => mps != null ? mps * 2.237 : null;
+        const tempF = toF(obs.temperature?.value);
+        const feelsRaw = obs.heatIndex?.value ?? obs.windChill?.value;
+        const feelsF = feelsRaw != null ? toF(feelsRaw) : tempF;
+        const pressMb = obs.barometricPressure?.value != null ? obs.barometricPressure.value / 100 : null;
+        const cloudLayers = obs.cloudLayers || [];
+        const topLayer = cloudLayers[cloudLayers.length - 1];
+
+        return {
+            temperature: { degrees: tempF },
+            feelsLikeTemperature: { degrees: feelsF },
+            weatherCondition: {
+                type: _nwsConditionType(obs.textDescription),
+                description: { text: obs.textDescription || 'Unknown' }
+            },
+            wind: {
+                speed: { value: toMph(obs.windSpeed?.value) },
+                gust: { value: toMph(obs.windGust?.value) },
+                direction: obs.windDirection?.value
+            },
+            relativeHumidity: obs.relativeHumidity?.value,
+            dewPoint: { degrees: toF(obs.dewpoint?.value) },
+            uvIndex: null,
+            visibility: { distance: obs.visibility?.value },
+            pressure: { meanSeaLevelMillibars: pressMb },
+            cloudCover: topLayer ? _nwsCloudAmount(topLayer.amount) : null,
+            _nwsStation: stationId
+        };
+    },
+
+    // === NWS Hourly Forecast ===
+    async getNWSHourlyForecast(lat, lng, hours = 24) {
+        const points = await _getNWSPoints(lat, lng);
+        const resp = await fetch(points.forecastHourly, {
+            headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
+        });
+        if (!resp.ok) throw new Error(`NWS hourly forecast ${resp.status}`);
+        const data = await resp.json();
+        const periods = (data.properties?.periods || []).slice(0, hours);
+
+        const forecastHours = periods.map(p => ({
+            interval: { startTime: p.startTime },
+            displayDateTime: p.startTime,
+            temperature: { degrees: p.temperature }, // NWS hourly is already °F
+            feelsLikeTemperature: { degrees: null },
+            weatherCondition: {
+                type: _nwsConditionType(p.shortForecast),
+                description: { text: p.shortForecast || '' }
+            },
+            precipitation: { probability: p.probabilityOfPrecipitation?.value ?? 0 },
+            wind: {
+                speed: _nwsWindSpeed(p.windSpeed),
+                direction: _nwsCardinalToDeg(p.windDirection)
+            },
+            relativeHumidity: p.relativeHumidity?.value ?? null,
+            pressure: null
+        }));
+        return { forecastHours };
+    },
+
+    // === NWS Daily Forecast ===
+    async getNWSDailyForecast(lat, lng, days = 10) {
+        const points = await _getNWSPoints(lat, lng);
+        const resp = await fetch(points.forecast, {
+            headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
+        });
+        if (!resp.ok) throw new Error(`NWS daily forecast ${resp.status}`);
+        const data = await resp.json();
+        const periods = data.properties?.periods || [];
+
+        const forecastDays = [];
+        for (let i = 0; i < periods.length && forecastDays.length < days; i++) {
+            const p = periods[i];
+            if (!p.isDaytime) continue; // pair day + night
+            const night = periods[i + 1]; // immediately following night period
+            const dateStr = p.startTime?.split('T')[0];
+
+            forecastDays.push({
+                displayDate: dateStr,
+                interval: { startTime: p.startTime },
+                maxTemperature: { degrees: p.temperature },       // daytime temp = high
+                minTemperature: { degrees: night?.temperature ?? null }, // night temp = low
+                weatherCondition: {
+                    type: _nwsConditionType(p.shortForecast),
+                    description: { text: p.shortForecast || '' }
+                },
+                precipitation: {
+                    probability: p.probabilityOfPrecipitation?.value ?? 0,
+                    qpf: { millimeters: 0 }
+                },
+                maxWind: {
+                    speed: { value: _nwsWindSpeed(p.windSpeed) },
+                    direction: _nwsCardinalToDeg(p.windDirection)
+                },
+                relativeHumidity: p.relativeHumidity?.value ?? null,
+                avgHumidity: p.relativeHumidity?.value ?? null,
+                uvIndex: null,
+                maxUvIndex: null,
+                sunrise: null,
+                sunset: null
+            });
+        }
+        return { forecastDays };
     },
 
     // === Helpers ===

@@ -220,7 +220,13 @@
                     <span class="location" id="location-name">Loading...</span>
                 </div>
             </div>
-            <span class="badge" id="last-updated">Weather</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                <div class="source-toggle" title="Select weather data source">
+                    <button class="source-btn active" id="btn-src-google" onclick="setWeatherDataSource('google')">Google</button>
+                    <button class="source-btn" id="btn-src-nws" onclick="setWeatherDataSource('nws')">NWS</button>
+                </div>
+                <span class="badge" id="last-updated">Weather</span>
+            </div>
         </header>
 
         <!-- ===== Shared Nav (scrollable on mobile) ===== -->
@@ -230,15 +236,34 @@
                 Home
             </a>
             <a href="#current" class="nav-link" data-view="current">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                <!-- Sun-behind-cloud for current conditions -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                    <circle cx="9" cy="9" r="3.5" fill="rgba(255,220,80,0.35)"/>
+                    <path d="M9 2v1.5M9 16v-1M2 9h1.5M15.5 9H14M4.22 4.22l1 1M13.78 4.22l-1 1"/>
+                    <path d="M7 15 Q6 11 9 11 Q10.5 9 14 10 Q17 10 17 13 Q19 13 19 15.5 Q19 18 16.5 18 L8 18 Q6 18 6 15.5 Q6 14.5 7 15Z" fill="rgba(255,255,255,0.2)"/>
+                </svg>
                 Current
             </a>
             <a href="#forecast" class="nav-link" data-view="forecast">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <!-- Calendar icon for 10-day forecast -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <text x="12" y="19" text-anchor="middle" fill="currentColor" stroke="none" font-size="6" font-weight="700">10</text>
+                </svg>
                 10-Day
             </a>
             <a href="#maps" class="nav-link" data-view="maps">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                <!-- Radar sweep icon for maps -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                    <circle cx="12" cy="13" r="9" stroke-opacity="0.5"/>
+                    <circle cx="12" cy="13" r="5.5" stroke-opacity="0.7"/>
+                    <path d="M12 13 L12 4 A9 9 0 0 1 19.8 18 Z" fill="currentColor" fill-opacity="0.15" stroke-opacity="0.6"/>
+                    <line x1="12" y1="13" x2="19.8" y2="18" stroke-opacity="0.9"/>
+                    <circle cx="12" cy="13" r="1.5" fill="currentColor"/>
+                </svg>
                 Maps
             </a>
         </nav>
@@ -251,47 +276,65 @@
                 <h2>Ephrata Weather</h2>
                 <p class="subtitle">Real-time weather data</p>
                 <div class="nav-cards">
+                    <!-- Current Conditions: Sun with cloud (part-cloudy style) -->
                     <a href="#current" class="nav-card glass" data-view="current">
                         <div class="nav-icon">
                             <svg viewBox="0 0 64 64" fill="none">
-                                <circle cx="32" cy="20" r="10" fill="rgba(255,220,100,0.8)"/>
-                                <path d="M16 38 Q32 28 48 38 Q52 42 48 46 L16 46 Q12 42 16 38Z" fill="rgba(255,255,255,0.6)"/>
-                                <line x1="28" y1="50" x2="26" y2="58" stroke="rgba(100,180,255,0.6)" stroke-width="2" stroke-linecap="round"/>
-                                <line x1="36" y1="50" x2="34" y2="58" stroke="rgba(100,180,255,0.6)" stroke-width="2" stroke-linecap="round"/>
+                                <!-- Sun rays -->
+                                <line x1="22" y1="10" x2="22" y2="6"  stroke="rgba(255,220,80,0.75)" stroke-width="2.5" stroke-linecap="round"/>
+                                <line x1="10" y1="22" x2="6"  y2="22" stroke="rgba(255,220,80,0.75)" stroke-width="2.5" stroke-linecap="round"/>
+                                <line x1="14" y1="14" x2="11" y2="11" stroke="rgba(255,220,80,0.75)" stroke-width="2.5" stroke-linecap="round"/>
+                                <line x1="30" y1="14" x2="33" y2="11" stroke="rgba(255,220,80,0.75)" stroke-width="2.5" stroke-linecap="round"/>
+                                <line x1="34" y1="22" x2="38" y2="22" stroke="rgba(255,220,80,0.75)" stroke-width="2.5" stroke-linecap="round"/>
+                                <!-- Sun body -->
+                                <circle cx="22" cy="22" r="8" fill="rgba(255,220,80,0.85)"/>
+                                <!-- Cloud in front -->
+                                <path d="M16 37 Q14 28 22 28 Q25 22 34 24 Q42 24 42 32 Q46 32 46 38 Q46 44 40 44 L20 44 Q14 44 14 38 Q14 35 16 37Z" fill="rgba(255,255,255,0.7)"/>
                             </svg>
                         </div>
                         <h3>Current Conditions</h3>
                         <p>Live weather, hourly forecast, air quality, and pollen data</p>
                     </a>
+                    <!-- 10-Day Forecast: calendar page with a day number -->
                     <a href="#forecast" class="nav-card glass" data-view="forecast">
                         <div class="nav-icon">
                             <svg viewBox="0 0 64 64" fill="none">
-                                <rect x="10" y="10" width="44" height="44" rx="8" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
-                                <line x1="10" y1="24" x2="54" y2="24" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
-                                <circle cx="22" cy="34" r="3" fill="rgba(255,220,100,0.7)"/>
-                                <circle cx="32" cy="34" r="3" fill="rgba(200,210,225,0.7)"/>
-                                <circle cx="42" cy="34" r="3" fill="rgba(100,180,255,0.7)"/>
-                                <circle cx="22" cy="46" r="3" fill="rgba(200,210,225,0.7)"/>
-                                <circle cx="32" cy="46" r="3" fill="rgba(255,220,100,0.7)"/>
-                                <circle cx="42" cy="46" r="3" fill="rgba(200,210,225,0.7)"/>
+                                <!-- Calendar body -->
+                                <rect x="8" y="14" width="48" height="44" rx="6" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
+                                <!-- Header bar -->
+                                <rect x="8" y="14" width="48" height="14" rx="6" fill="rgba(100,180,255,0.35)"/>
+                                <rect x="8" y="20" width="48" height="8" fill="rgba(100,180,255,0.35)"/>
+                                <!-- Binding rings -->
+                                <line x1="21" y1="9"  x2="21" y2="19" stroke="rgba(255,255,255,0.6)" stroke-width="2.5" stroke-linecap="round"/>
+                                <line x1="43" y1="9"  x2="43" y2="19" stroke="rgba(255,255,255,0.6)" stroke-width="2.5" stroke-linecap="round"/>
+                                <!-- Day number "10" -->
+                                <text x="32" y="47" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-size="18" font-weight="700" font-family="-apple-system,BlinkMacSystemFont,sans-serif">10</text>
                             </svg>
                         </div>
                         <h3>10-Day Forecast</h3>
                         <p>Extended forecast with highs, lows, and precipitation chances</p>
                     </a>
+                    <!-- Maps: Radar sweep icon -->
                     <a href="#maps" class="nav-card glass" data-view="maps">
                         <div class="nav-icon">
                             <svg viewBox="0 0 64 64" fill="none">
-                                <polygon points="4 14 4 52 20 44 40 52 60 44 60 12 40 20 20 12 4 14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" stroke-linejoin="round"/>
-                                <line x1="20" y1="12" x2="20" y2="44" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-                                <line x1="40" y1="20" x2="40" y2="52" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-                                <rect x="6" y="24" width="12" height="6" rx="1" fill="rgba(255,224,102,0.45)"/>
-                                <rect x="22" y="28" width="16" height="5" rx="1" fill="rgba(255,160,64,0.45)"/>
-                                <rect x="42" y="22" width="16" height="6" rx="1" fill="rgba(102,204,102,0.45)"/>
+                                <!-- Radar rings -->
+                                <circle cx="32" cy="36" r="24" stroke="rgba(100,220,160,0.25)" stroke-width="1.2"/>
+                                <circle cx="32" cy="36" r="16" stroke="rgba(100,220,160,0.35)" stroke-width="1.2"/>
+                                <circle cx="32" cy="36" r="8"  stroke="rgba(100,220,160,0.5)"  stroke-width="1.2"/>
+                                <!-- Radar sweep (filled wedge) -->
+                                <path d="M32 36 L32 12 A24 24 0 0 1 52.8 50.4 Z" fill="rgba(100,220,160,0.18)"/>
+                                <path d="M32 36 L32 12 A24 24 0 0 1 52.8 50.4 Z" stroke="rgba(100,220,160,0.55)" stroke-width="1" fill="none"/>
+                                <!-- Sweep line -->
+                                <line x1="32" y1="36" x2="52.8" y2="50.4" stroke="rgba(100,220,160,0.8)" stroke-width="1.5" stroke-linecap="round"/>
+                                <!-- Center dot -->
+                                <circle cx="32" cy="36" r="2.5" fill="rgba(100,220,160,0.9)"/>
+                                <!-- Echo blip -->
+                                <circle cx="44" cy="22" r="3" fill="rgba(255,200,60,0.75)"/>
                             </svg>
                         </div>
                         <h3>Maps</h3>
-                        <p>SPC outlooks, radar, temperature, and wind on an interactive map</p>
+                        <p>SPC outlooks, radar, satellite, temperature, and wind on an interactive map</p>
                     </a>
                 </div>
             </div>
@@ -423,6 +466,7 @@
             <div class="glass-static fade-in" id="forecast-charts-container" style="display:none;margin-top:16px;padding:16px 16px 10px;">
                 <div class="chart-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
                     <button class="chart-tab active" data-fmetric="temp" onclick="switchForecastChart('temp')">Temperature</button>
+                    <button class="chart-tab" data-fmetric="wind" onclick="switchForecastChart('wind')">Wind Speed</button>
                     <button class="chart-tab" data-fmetric="precip" onclick="switchForecastChart('precip')">Precip Chance</button>
                 </div>
                 <svg id="forecast-chart-svg" width="100%" style="display:block;overflow:visible;"></svg>
@@ -467,20 +511,16 @@
                     <button class="layer-btn" data-layer="radar" onclick="switchLayer('radar')">Radar</button>
                     <button class="layer-btn" data-layer="temperature" onclick="switchLayer('temperature')">Temperature</button>
                     <button class="layer-btn" data-layer="wind" onclick="switchLayer('wind')">Wind Speed</button>
+                    <button class="layer-btn" data-layer="clouds" onclick="switchLayer('clouds')">Cloud Cover</button>
                 </div>
-                <!-- SPC Sub-Controls -->
+                <!-- SPC Sub-Controls (Days 1-3 only) -->
                 <div class="spc-controls visible" id="spc-controls">
                     <div class="ctrl-row">
-                        <span class="ctrl-label">Filter:</span>
+                        <span class="ctrl-label">Day:</span>
                         <button class="day-btn active" data-day="0" onclick="selectDay(0)">All Days</button>
                         <button class="day-btn" data-day="1" onclick="selectDay(1)">Day 1</button>
                         <button class="day-btn" data-day="2" onclick="selectDay(2)">Day 2</button>
                         <button class="day-btn" data-day="3" onclick="selectDay(3)">Day 3</button>
-                        <button class="day-btn" data-day="4" onclick="selectDay(4)">Day 4</button>
-                        <button class="day-btn" data-day="5" onclick="selectDay(5)">Day 5</button>
-                        <button class="day-btn" data-day="6" onclick="selectDay(6)">Day 6</button>
-                        <button class="day-btn" data-day="7" onclick="selectDay(7)">Day 7</button>
-                        <button class="day-btn" data-day="8" onclick="selectDay(8)">Day 8</button>
                     </div>
                 </div>
                 <!-- Satellite Sub-Controls -->
@@ -585,6 +625,29 @@
     <script src="js/forecast.js"></script>
 
     <script>
+    // ============================================================
+    // DATA SOURCE TOGGLE
+    // ============================================================
+    function setWeatherDataSource(src) {
+        WeatherAPI.setDataSource(src);
+        document.getElementById('btn-src-google').classList.toggle('active', src === 'google');
+        document.getElementById('btn-src-nws').classList.toggle('active', src === 'nws');
+        // Re-fetch data for currently active view
+        if (currentViewId === 'current' || currentViewId === 'forecast') {
+            viewInited[currentViewId] = false;
+            initViewData(currentViewId);
+        }
+    }
+
+    // Initialise toggle state from saved preference
+    (function() {
+        const saved = WeatherAPI.getDataSource();
+        if (saved === 'nws') {
+            document.getElementById('btn-src-google').classList.remove('active');
+            document.getElementById('btn-src-nws').classList.add('active');
+        }
+    })();
+
     // ============================================================
     // SPA ROUTER
     // ============================================================
@@ -693,22 +756,12 @@
             cat:  'https://www.spc.noaa.gov/products/outlook/day3otlk.nolyr.geojson',
             prob: 'https://www.spc.noaa.gov/products/outlook/day3otlk_prob.nolyr.geojson',
         },
-        4: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day4prob.nolyr.geojson' },
-        5: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day5prob.nolyr.geojson' },
-        6: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day6prob.nolyr.geojson' },
-        7: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day7prob.nolyr.geojson' },
-        8: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day8prob.nolyr.geojson' },
     };
 
     const DAY_TYPES = {
         1: [{ key:'cat', label:'Categorical' }, { key:'torn', label:'Tornado' }, { key:'wind', label:'Wind' }, { key:'hail', label:'Hail' }],
         2: [{ key:'cat', label:'Categorical' }, { key:'torn', label:'Tornado' }, { key:'wind', label:'Wind' }, { key:'hail', label:'Hail' }],
         3: [{ key:'cat', label:'Categorical' }, { key:'prob', label:'Probability' }],
-        4: [{ key:'prob', label:'Probability' }],
-        5: [{ key:'prob', label:'Probability' }],
-        6: [{ key:'prob', label:'Probability' }],
-        7: [{ key:'prob', label:'Probability' }],
-        8: [{ key:'prob', label:'Probability' }],
     };
 
     const CAT_LEGEND = [
@@ -826,7 +879,8 @@
         if (!key || key === 'YOUR_OWM_API_KEY_HERE') { warn.classList.add('visible'); clearOWMLayers(); return; }
         warn.classList.remove('visible');
         clearSPCLayers(); clearOWMLayers(); hideSPCLegend();
-        const layerName = type === 'temperature' ? 'temp_new' : 'wind_new';
+        const layerMap = { temperature: 'temp_new', wind: 'wind_new', clouds: 'clouds_new' };
+        const layerName = layerMap[type] || 'temp_new';
         map.addSource('owm-source', { type: 'raster',
             tiles: [`https://tile.openweathermap.org/map/${layerName}/{z}/{x}/{y}.png?appid=${key}`],
             tileSize: 256, attribution: '&copy; <a href="https://openweathermap.org">OpenWeatherMap</a>'
@@ -841,7 +895,7 @@
     }
 
     async function handleOWMClick(e) {
-        if (currentLayer !== 'temperature' && currentLayer !== 'wind') return;
+        if (currentLayer !== 'temperature' && currentLayer !== 'wind' && currentLayer !== 'clouds') return;
         const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
         if (!key || key === 'YOUR_OWM_API_KEY_HERE') return;
         const { lat, lng } = e.lngLat;
@@ -862,6 +916,12 @@
                 html += `<div class="popup-stat"><span class="popup-key">Temperature</span><span class="popup-val">${temp}</span></div>
                          <div class="popup-stat"><span class="popup-key">Feels Like</span><span class="popup-val">${feelsLike}</span></div>
                          <div class="popup-stat"><span class="popup-key">Humidity</span><span class="popup-val">${humidity}</span></div>`;
+            } else if (currentLayer === 'clouds') {
+                const clouds = data.clouds?.all != null ? data.clouds.all + '%' : '--';
+                const cond = data.weather?.[0]?.description || '--';
+                html += `<div class="popup-stat"><span class="popup-key">Cloud Cover</span><span class="popup-val">${clouds}</span></div>
+                         <div class="popup-stat"><span class="popup-key">Condition</span><span class="popup-val">${cond}</span></div>
+                         <div class="popup-stat"><span class="popup-key">Humidity</span><span class="popup-val">${humidity}</span></div>`;
             } else {
                 html += `<div class="popup-stat"><span class="popup-key">Wind Speed</span><span class="popup-val">${windSpeed}</span></div>
                          ${windGust ? `<div class="popup-stat"><span class="popup-key">Gusts</span><span class="popup-val">${windGust}</span></div>` : ''}
@@ -881,47 +941,60 @@
 
     const SPC_IMAGES = {
         1: [
-            { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.png',           label: 'Day 1 – Categorical' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_torn.png',  label: 'Day 1 – Tornado' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_wind.png',  label: 'Day 1 – Wind' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_hail.png',  label: 'Day 1 – Hail' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.png',           label: 'Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_torn.png',  label: 'Tornado' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_wind.png',  label: 'Wind' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_hail.png',  label: 'Hail' },
         ],
         2: [
-            { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.png',           label: 'Day 2 – Categorical' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_torn.png',  label: 'Day 2 – Tornado' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_wind.png',  label: 'Day 2 – Wind' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_hail.png',  label: 'Day 2 – Hail' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.png',           label: 'Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_torn.png',  label: 'Tornado' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_wind.png',  label: 'Wind' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_hail.png',  label: 'Hail' },
         ],
         3: [
-            { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.png',           label: 'Day 3 – Categorical' },
-            { url: 'https://www.spc.noaa.gov/products/outlook/day3prob.png',           label: 'Day 3 – Probability' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.png',           label: 'Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day3prob.png',           label: 'Probability' },
         ],
-        4: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day4prob.png',      label: 'Day 4 – Probability' }],
-        5: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day5prob.png',      label: 'Day 5 – Probability' }],
-        6: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day6prob.png',      label: 'Day 6 – Probability' }],
-        7: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day7prob.png',      label: 'Day 7 – Probability' }],
-        8: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day8prob.png',      label: 'Day 8 – Probability' }],
     };
 
     function renderSPCImages(filterDay) {
-        const grid = document.getElementById('spc-img-grid');
-        if (!grid) return;
-        let imgs;
-        if (!filterDay || filterDay === 0) {
-            imgs = Object.values(SPC_IMAGES).flat();
-        } else {
-            imgs = SPC_IMAGES[filterDay] || [];
-        }
+        const container = document.getElementById('spc-img-grid');
+        if (!container) return;
         const ts = Date.now();
-        grid.innerHTML = imgs.map(img => `
-            <div class="spc-img-card" onclick="openImageZoom('${img.url}?cb=${ts}', '${img.label}')" title="Click to zoom">
-                <div class="spc-img-label">${img.label}</div>
-                <img src="${img.url}?cb=${ts}" alt="${img.label}"
-                     style="width:100%;border-radius:6px;display:block;cursor:zoom-in;"
-                     loading="lazy"
-                     onerror="this.parentElement.style.display='none'">
-            </div>
-        `).join('');
+
+        function imgCard(img, dayLabel) {
+            const fullLabel = dayLabel ? `${dayLabel} – ${img.label}` : img.label;
+            return `
+                <div class="spc-img-card" onclick="openImageZoom('${img.url}?cb=${ts}', '${fullLabel}')" title="Click to zoom">
+                    <div class="spc-img-label">${img.label}</div>
+                    <img src="${img.url}?cb=${ts}" alt="${fullLabel}"
+                         style="width:100%;border-radius:6px;display:block;cursor:zoom-in;"
+                         loading="lazy"
+                         onerror="this.parentElement.style.display='none'">
+                </div>`;
+        }
+
+        if (filterDay && filterDay !== 0) {
+            // Filtered to a specific day — flat grid, no section header
+            const imgs = SPC_IMAGES[filterDay] || [];
+            container.style.display = 'grid';
+            container.innerHTML = imgs.map(img => imgCard(img, `Day ${filterDay}`)).join('');
+        } else {
+            // Show all days, sectioned by day number
+            container.style.display = 'block';
+            container.innerHTML = [1, 2, 3].map(day => {
+                const imgs = SPC_IMAGES[day] || [];
+                const cards = imgs.map(img => imgCard(img, `Day ${day}`)).join('');
+                return `
+                    <div class="spc-day-section">
+                        <div class="spc-day-section-title">Day ${day} Outlook</div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
+                            ${cards}
+                        </div>
+                    </div>`;
+            }).join('');
+        }
     }
 
     // ============================================================
@@ -994,7 +1067,7 @@
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
         document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
-        document.getElementById('owm-controls').classList.toggle('visible', layer === 'temperature' || layer === 'wind');
+        document.getElementById('owm-controls').classList.toggle('visible', layer === 'temperature' || layer === 'wind' || layer === 'clouds');
 
         if (layer === 'spc') {
             _showSPCView();
@@ -1007,7 +1080,7 @@
         } else {
             _showMapView();
             clearSPCLayers(); clearOWMLayers(); hideSPCLegend();
-            if (layer === 'temperature' || layer === 'wind') loadOWMLayer(layer);
+            if (layer === 'temperature' || layer === 'wind' || layer === 'clouds') loadOWMLayer(layer);
             if (map) setTimeout(() => map.resize(), 50);
         }
     }
