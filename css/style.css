@@ -34,6 +34,7 @@
 html {
     font-size: 16px;
     scroll-behavior: smooth;
+    background-color: #0f1729;
 }
  
 body {
@@ -42,6 +43,7 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     line-height: 1.5;
+    background-color: #0f1729;
 }
  
 /* --- Animated Background --- */
@@ -126,7 +128,7 @@ body {
 .app-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 20px calc(20px + env(safe-area-inset-bottom, 0px));
     min-height: 100vh;
 }
  
