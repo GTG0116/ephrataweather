@@ -133,14 +133,19 @@ const WeatherIcons = {
         const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <radialGradient id="${id}mg" cx="40%" cy="40%">
+                <radialGradient id="${id}mg" cx="38%" cy="38%">
                     <stop offset="0%" stop-color="#FFF9C4"/>
-                    <stop offset="100%" stop-color="#CFD8DC"/>
+                    <stop offset="70%" stop-color="#E8EAF6"/>
+                    <stop offset="100%" stop-color="#B0BEC5"/>
                 </radialGradient>
+                <mask id="${id}mm">
+                    <rect width="100" height="100" fill="white"/>
+                    <circle cx="57" cy="37" r="17" fill="black"/>
+                </mask>
             </defs>
-            <circle cx="45" cy="45" r="20" fill="url(#${id}mg)"/>
-            <circle cx="55" cy="38" r="16" fill="#1a1a3e"/>
-            ${[{x:72,y:25,d:0.3},{x:80,y:50,d:0.7},{x:65,y:70,d:1.1},{x:30,y:22,d:1.5},{x:20,y:65,d:0.1}].map(star =>
+            <!-- Crescent moon using mask (no background-color hack) -->
+            <circle cx="46" cy="46" r="22" fill="url(#${id}mg)" mask="url(#${id}mm)"/>
+            ${[{x:74,y:22,d:0.3},{x:82,y:48,d:0.7},{x:68,y:72,d:1.1},{x:28,y:20,d:1.5},{x:18,y:66,d:0.1}].map(star =>
                 `<circle cx="${star.x}" cy="${star.y}" r="1.2" fill="#FFF9C4">
                     <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" begin="${star.d}s" repeatCount="indefinite"/>
                 </circle>`
@@ -189,21 +194,23 @@ const WeatherIcons = {
         const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <radialGradient id="${id}mg" cx="40%" cy="40%">
+                <radialGradient id="${id}mg" cx="38%" cy="38%">
                     <stop offset="0%" stop-color="#FFF9C4"/>
+                    <stop offset="70%" stop-color="#E8EAF6"/>
                     <stop offset="100%" stop-color="#B0BEC5"/>
                 </radialGradient>
+                <mask id="${id}mm">
+                    <rect width="100" height="100" fill="white"/>
+                    <circle cx="72" cy="26" r="13" fill="black"/>
+                </mask>
                 <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(200,210,230,0.95)"/>
                     <stop offset="100%" stop-color="rgba(160,175,200,0.9)"/>
                 </linearGradient>
             </defs>
-            <!-- Moon behind cloud -->
-            <g transform="translate(62,32)">
-                <circle r="16" fill="url(#${id}mg)"/>
-                <circle cx="8" cy="-6" r="12" fill="#1a1a3e"/>
-            </g>
-            ${[{x:75,y:18,d:0.4},{x:82,y:38,d:1.0}].map(star =>
+            <!-- Crescent moon behind cloud -->
+            <circle cx="62" cy="32" r="18" fill="url(#${id}mg)" mask="url(#${id}mm)"/>
+            ${[{x:78,y:16,d:0.4},{x:85,y:40,d:1.0}].map(star =>
                 `<circle cx="${star.x}" cy="${star.y}" r="1" fill="#FFF9C4">
                     <animate attributeName="opacity" values="0.2;0.9;0.2" dur="2s" begin="${star.d}s" repeatCount="indefinite"/>
                 </circle>`

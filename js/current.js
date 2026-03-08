@@ -221,6 +221,37 @@ function showHourlyDetail(idx) {
     setTimeout(() => document.addEventListener('click', dismiss), 50);
 }
 
+// ---- Day/night helper ----
+// Parses a sunrise or sunset string robustly.
+// Open-Meteo returns "2026-03-08T06:45" (local, no tz offset).
+// Google returns an ISO string with offset or Z.
+function _parseSunTime(str) {
+    if (!str) return NaN;
+    const ms = Date.parse(str);
+    if (!isNaN(ms)) return ms;
+    return NaN;
+}
+
+// Returns true if current time is between sunset and sunrise (nighttime).
+function _isNighttime(day0) {
+    if (!day0) return false;
+    const srMs = _parseSunTime(day0.sunrise);
+    const ssMs = _parseSunTime(day0.sunset);
+    if (isNaN(srMs) || isNaN(ssMs)) return false;
+    const now = Date.now();
+    // Daytime = between sunrise and sunset; nighttime = everything else
+    return now < srMs || now > ssMs;
+}
+
+// Returns true if a given timestamp (ms) is nighttime relative to a day's sunrise/sunset.
+function _isTimestampNight(tsMs, day0) {
+    if (!day0 || isNaN(tsMs)) return false;
+    const srMs = _parseSunTime(day0.sunrise);
+    const ssMs = _parseSunTime(day0.sunset);
+    if (isNaN(srMs) || isNaN(ssMs)) return false;
+    return tsMs < srMs || tsMs > ssMs;
+}
+
 // ---- Render functions ----
 
 function renderCurrentConditions(data, dailyData) {
@@ -247,19 +278,7 @@ function renderCurrentConditions(data, dailyData) {
     }
 
     const condType = data.weatherCondition?.type || condition;
-    // Determine day/night from daily sunrise/sunset
-    let isNight = false;
-    if (dailyData?.forecastDays?.[0]) {
-        const d0 = dailyData.forecastDays[0];
-        const sunriseStr = d0.sunrise;
-        const sunsetStr = d0.sunset;
-        if (sunriseStr && sunsetStr) {
-            const now = Date.now();
-            const sr = new Date(sunriseStr).getTime();
-            const ss = new Date(sunsetStr).getTime();
-            isNight = now < sr || now > ss;
-        }
-    }
+    const isNight = _isNighttime(dailyData?.forecastDays?.[0]);
     const iconSvg = WeatherIcons.fromText(condType, isNight);
     document.getElementById('current-icon').innerHTML = iconSvg;
 
@@ -323,24 +342,14 @@ function renderHourlyForecast(data, daily0) {
         return;
     }
 
-    // Determine sunrise/sunset for night icon logic
-    let sunriseMs = null, sunsetMs = null;
-    if (daily0) {
-        if (daily0.sunrise) sunriseMs = new Date(daily0.sunrise).getTime();
-        if (daily0.sunset)  sunsetMs  = new Date(daily0.sunset).getTime();
-    }
-
     strip.innerHTML = _hourlyData.map((hour, i) => {
         const time = i === 0 ? 'Now' : WeatherAPI.formatTime(hour.interval?.startTime || hour.displayDateTime);
         const temp = WeatherAPI.formatTemp(hour.temperature?.degrees);
         const condType = hour.weatherCondition?.type || '';
 
-        // Night check per hour
-        let hourNight = false;
-        if (sunriseMs != null && sunsetMs != null) {
-            const ts = new Date(hour.interval?.startTime || hour.displayDateTime).getTime();
-            if (!isNaN(ts)) hourNight = ts < sunriseMs || ts > sunsetMs;
-        }
+        // Night check per hour using the shared helper
+        const tsMs = Date.parse(hour.interval?.startTime || hour.displayDateTime || '');
+        const hourNight = _isTimestampNight(tsMs, daily0);
 
         const iconSvg = WeatherIcons.fromText(condType, hourNight);
         const precip = hour.precipitation?.probability;
