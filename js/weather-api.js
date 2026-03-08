@@ -312,12 +312,38 @@ const WeatherAPI = {
         return await resp.json();
     },
 
-    // === Weather Alerts ===
+    // === Weather Alerts (NWS API) ===
     async getAlerts(lat, lng) {
-        const url = `${CONFIG.GOOGLE_WEATHER_BASE}/publicAlerts:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}&location.latitude=${lat}&location.longitude=${lng}&languageCode=en`;
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`Google Alerts API ${resp.status}`);
-        return await resp.json();
+        const url = `https://api.weather.gov/alerts/active?point=${lat},${lng}`;
+        const resp = await fetch(url, {
+            cache: 'no-store',
+            headers: { 'Accept': 'application/geo+json' }
+        });
+        if (!resp.ok) throw new Error(`NWS Alerts API ${resp.status}`);
+
+        const data = await resp.json();
+        const alerts = (data.features || []).map(feature => {
+            const p = feature.properties || {};
+            return {
+                id: feature.id || p.id || `${p.event || 'alert'}-${p.sent || ''}`,
+                event: p.event || 'Weather Alert',
+                headline: p.headline || p.event || 'Weather Alert',
+                description: p.description || '',
+                instruction: p.instruction || '',
+                severity: (p.severity || '').toLowerCase(),
+                certainty: p.certainty || '',
+                urgency: p.urgency || '',
+                onset: p.onset || p.effective || null,
+                effective: p.effective || null,
+                expires: p.expires || p.ends || null,
+                areaDesc: p.areaDesc || '',
+                sender: p.senderName || '',
+                geometry: feature.geometry || null,
+                raw: feature
+            };
+        });
+
+        return { alerts };
     },
 
     // === Helpers ===

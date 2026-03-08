@@ -16,23 +16,22 @@ async function initCurrentView(lat, lng) {
         Notification.requestPermission();
     }
 
-    // Fetch all data in parallel
-    const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult, alertsResult] = await Promise.allSettled([
+    // Fetch weather data in parallel
+    const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult] = await Promise.allSettled([
         WeatherAPI.getCurrentConditions(lat, lng),
         WeatherAPI.getHourlyForecast(lat, lng, 24),
         // Pull a few days so hourly day/night selection can use
         // each hour's date-specific sunrise/sunset window.
         WeatherAPI.getDailyForecast(lat, lng, 3),
         WeatherAPI.getAirQuality(lat, lng),
-        WeatherAPI.getPollen(lat, lng),
-        WeatherAPI.getAlerts(lat, lng)
+        WeatherAPI.getPollen(lat, lng)
     ]);
 
-    // --- Weather Alerts ---
-    if (alertsResult.status === 'fulfilled') {
-        renderAlerts(alertsResult.value);
-    } else {
-        console.warn('Alerts error:', alertsResult.reason);
+    // --- Weather Alerts (NWS for current + starred locations) ---
+    try {
+        await loadAndRenderAlerts(lat, lng);
+    } catch (err) {
+        console.warn('Alerts error:', err);
     }
 
     // --- Current Conditions ---
@@ -86,39 +85,83 @@ if (typeof _SPA_MODE === 'undefined') {
 }
 
 // ---- Alerts ----
-function renderAlerts(data) {
-    const container = document.getElementById('alerts-container');
-    const alerts = data.alerts || [];
+let _renderedAlerts = [];
+let _alertMap = null;
 
-    if (alerts.length === 0) {
+function _escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch] || ch));
+}
+
+function _formatAlertTime(ts) {
+    if (!ts) return 'N/A';
+    const d = new Date(ts);
+    if (isNaN(d)) return 'N/A';
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function _alertClass(alert) {
+    const severity = (alert.severity || '').toLowerCase();
+    const event = (alert.event || '').toLowerCase();
+    if (severity === 'extreme' || severity === 'severe') return 'alert-extreme';
+    if (event.includes('warning')) return 'alert-warning';
+    if (event.includes('watch')) return 'alert-watch';
+    return 'alert-advisory';
+}
+
+function _dedupeLocations(locations) {
+    const seen = new Set();
+    const out = [];
+    locations.forEach((loc) => {
+        if (loc?.lat == null || loc?.lng == null) return;
+        const key = `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(loc);
+    });
+    return out;
+}
+
+async function loadAndRenderAlerts(lat, lng) {
+    const currentLoc = LocationManager.getCurrent();
+    const favorites = LocationManager.getFavorites() || [];
+    const locations = _dedupeLocations([
+        { lat, lng, name: currentLoc?.name || 'Current Location', isCurrent: true },
+        ...favorites.map((f) => ({ lat: f.lat, lng: f.lng, name: f.name, isCurrent: false }))
+    ]);
+
+    const results = await Promise.allSettled(locations.map((loc) => WeatherAPI.getAlerts(loc.lat, loc.lng)));
+
+    const byLocation = [];
+    results.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+            byLocation.push({ location: locations[i], alerts: result.value.alerts || [] });
+        }
+    });
+
+    const currentAlerts = byLocation.find((x) => x.location.isCurrent)?.alerts || [];
+    renderAlerts(currentAlerts);
+    sendAlertNotifications(byLocation);
+}
+
+function renderAlerts(alerts) {
+    const container = document.getElementById('alerts-container');
+    if (!container) return;
+
+    _renderedAlerts = alerts || [];
+    if (_renderedAlerts.length === 0) {
         container.style.display = 'none';
+        container.innerHTML = '';
         return;
     }
 
-     container.style.display = 'block';
-    container.innerHTML = alerts.map((alert, i) => {
-        const event = alert.event || alert.alertInfo?.[0]?.event || 'Weather Alert';
-        const headline = alert.headline || alert.alertInfo?.[0]?.headline || event;
-        const description = alert.description || alert.alertInfo?.[0]?.description || '';
-        const severity = (alert.severity || alert.alertInfo?.[0]?.severity || '').toLowerCase();
-        const onset = alert.onset || alert.effective || alert.alertInfo?.[0]?.onset;
-        const expires = alert.expires || alert.alertInfo?.[0]?.expires;
-
-        let alertClass = 'alert-advisory';
-        if (severity === 'extreme' || severity === 'severe') alertClass = 'alert-extreme';
-        else if (event.toLowerCase().includes('warning')) alertClass = 'alert-warning';
-        else if (event.toLowerCase().includes('watch')) alertClass = 'alert-watch';
-
-        let timeStr = '';
-        if (onset) {
-            const start = new Date(onset).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-            timeStr = `Effective: ${start}`;
-        }
-        if (expires) {
-            const end = new Date(expires).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-            timeStr += timeStr ? ` - Expires: ${end}` : `Expires: ${end}`;
-        }
-
+    container.style.display = 'block';
+    container.innerHTML = _renderedAlerts.map((alert, i) => {
+        const headline = _escapeHtml(alert.headline || alert.event || 'Weather Alert');
+        const area = _escapeHtml(alert.areaDesc || 'Your county');
+        const excerpt = _escapeHtml((alert.description || '').slice(0, 180));
+        const hasMore = (alert.description || '').length > 180;
         const iconSvg = `<svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
             <line x1="12" y1="9" x2="12" y2="13"/>
@@ -126,44 +169,134 @@ function renderAlerts(data) {
         </svg>`;
 
         return `
-            <div class="alert-banner ${alertClass} fade-in" style="animation-delay:${i * 100}ms" onclick="this.classList.toggle('expanded')">
+            <button type="button" class="alert-banner ${_alertClass(alert)} fade-in" style="animation-delay:${i * 80}ms" onclick="openAlertDetail(${i})">
                 <div class="alert-header">
                     ${iconSvg}
                     <span class="alert-title">${headline}</span>
                 </div>
-                ${description ? `<div class="alert-detail">${description.substring(0, 150)}${description.length > 150 ? '...' : ''}</div>` : ''}
-                ${timeStr ? `<div class="alert-time">${timeStr}</div>` : ''}
-                ${description.length > 150 ? `<div class="alert-expanded">${description}</div>` : ''}
-            </div>
+                <div class="alert-detail">${excerpt}${hasMore ? '…' : ''}</div>
+                <div class="alert-time">Areas: ${area}</div>
+                <div class="alert-time">Expires: ${_formatAlertTime(alert.expires)}</div>
+            </button>
         `;
     }).join('');
-
-    sendAlertNotifications(alerts);
 }
 
-function sendAlertNotifications(alerts) {
+function openAlertDetail(index) {
+    const alert = _renderedAlerts[index];
+    if (!alert) return;
+
+    const modal = document.getElementById('alert-modal');
+    const titleEl = document.getElementById('alert-modal-title');
+    const metaEl = document.getElementById('alert-modal-meta');
+    const bodyEl = document.getElementById('alert-modal-body');
+    if (!modal || !titleEl || !metaEl || !bodyEl) return;
+
+    titleEl.textContent = alert.headline || alert.event || 'Weather Alert';
+    metaEl.textContent = `Effective: ${_formatAlertTime(alert.onset || alert.effective)} • Expires: ${_formatAlertTime(alert.expires)} • Areas: ${alert.areaDesc || 'N/A'}`;
+
+    const parts = [alert.description, alert.instruction].filter(Boolean);
+    bodyEl.textContent = parts.length ? parts.join('\n\n') : 'No additional text provided by NWS.';
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _drawAlertMap(alert);
+}
+
+function closeAlertDetail() {
+    const modal = document.getElementById('alert-modal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function _drawAlertMap(alert) {
+    const mapEl = document.getElementById('alert-modal-map');
+    if (!mapEl) return;
+
+    if (!window.mapboxgl) {
+        mapEl.innerHTML = '<div style="padding:16px;color:var(--text-secondary);">Map preview unavailable.</div>';
+        return;
+    }
+
+    if (!_alertMap) {
+        mapboxgl.accessToken = CONFIG.MAPBOX_ACCESS_TOKEN;
+        _alertMap = new mapboxgl.Map({
+            container: 'alert-modal-map',
+            style: 'mapbox://styles/mapbox/dark-v11',
+            center: [LocationManager.getCurrent().lng, LocationManager.getCurrent().lat],
+            zoom: 6
+        });
+        _alertMap.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    }
+
+    const feature = {
+        type: 'Feature',
+        geometry: alert.geometry,
+        properties: { title: alert.headline || alert.event || 'Alert' }
+    };
+
+    const sourceData = {
+        type: 'FeatureCollection',
+        features: alert.geometry ? [feature] : []
+    };
+
+    const loadOrUpdate = () => {
+        if (_alertMap.getSource('alert-geo')) {
+            _alertMap.getSource('alert-geo').setData(sourceData);
+        } else {
+            _alertMap.addSource('alert-geo', { type: 'geojson', data: sourceData });
+            _alertMap.addLayer({
+                id: 'alert-fill',
+                type: 'fill',
+                source: 'alert-geo',
+                paint: { 'fill-color': '#ff7043', 'fill-opacity': 0.22 }
+            });
+            _alertMap.addLayer({
+                id: 'alert-line',
+                type: 'line',
+                source: 'alert-geo',
+                paint: { 'line-color': '#ffab91', 'line-width': 2.2 }
+            });
+        }
+
+        if (alert.geometry && window.turf) {
+            const bounds = turf.bbox(sourceData);
+            _alertMap.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 30, duration: 0 });
+        } else {
+            const loc = LocationManager.getCurrent();
+            _alertMap.easeTo({ center: [loc.lng, loc.lat], zoom: 7, duration: 0 });
+        }
+        setTimeout(() => _alertMap.resize(), 30);
+    };
+
+    if (_alertMap.loaded()) loadOrUpdate();
+    else _alertMap.once('load', loadOrUpdate);
+}
+
+function sendAlertNotifications(byLocation) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
     const notifiedKey = 'ephrata_notified_alerts';
-    const notified = JSON.parse(localStorage.getItem(notifiedKey) || '[]');
+    const notified = new Set(JSON.parse(localStorage.getItem(notifiedKey) || '[]'));
 
-    alerts.forEach(alert => {
-        const event = alert.event || alert.alertInfo?.[0]?.event || 'Weather Alert';
-        const headline = alert.headline || alert.alertInfo?.[0]?.headline || event;
-        const id = alert.id || headline;
+    byLocation.forEach(({ location, alerts }) => {
+        (alerts || []).forEach((alert) => {
+            const id = alert.id || `${location.name}-${alert.event}-${alert.expires || ''}`;
+            const noteKey = `${location.name}:${id}`;
+            if (notified.has(noteKey)) return;
 
-        if (!notified.includes(id)) {
-             new Notification('Weather Alert', {
-                body: headline,
+            const expiresText = _formatAlertTime(alert.expires);
+            new Notification(`Weather Alert • ${location.name}`, {
+                body: `${alert.event || 'Alert'} — Expires ${expiresText}`,
                 icon: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF9800"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'),
-                tag: id,
+                tag: noteKey,
                 requireInteraction: true
             });
-            notified.push(id);
-        }
+            notified.add(noteKey);
+        });
     });
 
-    localStorage.setItem(notifiedKey, JSON.stringify(notified.slice(-50)));
+    localStorage.setItem(notifiedKey, JSON.stringify(Array.from(notified).slice(-200)));
 }
 
 // ---- Hourly detail popup ----

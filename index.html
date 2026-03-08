@@ -530,10 +530,6 @@
                     <div class="legend-title" id="legend-title">Categorical Risk</div>
                     <div id="legend-items"></div>
                 </div>
-                <div class="map-loading" id="map-loading">
-                    <div class="spinner"></div>
-                    <p id="loading-msg">Loading map...</p>
-                </div>
             </div>
 
         </section>
@@ -547,6 +543,18 @@
         <div style="max-width:95vw;max-height:92vh;text-align:center;" onclick="event.stopPropagation()">
             <img id="zoom-img" src="" alt="" style="max-width:95vw;max-height:84vh;object-fit:contain;border-radius:6px;">
             <div id="zoom-caption" style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:10px;"></div>
+        </div>
+    </div>
+
+    <div id="alert-modal" class="alert-modal-overlay" onclick="if(event.target.id==='alert-modal') closeAlertDetail()">
+        <div class="alert-modal" role="dialog" aria-modal="true" aria-labelledby="alert-modal-title">
+            <button class="alert-modal-close" onclick="closeAlertDetail()" aria-label="Close alert details">&times;</button>
+            <div class="alert-modal-main">
+                <div id="alert-modal-title" class="alert-modal-title">Weather Alert</div>
+                <div id="alert-modal-meta" class="alert-modal-meta"></div>
+                <div id="alert-modal-body" class="alert-modal-body"></div>
+            </div>
+            <div id="alert-modal-map" class="alert-modal-map"></div>
         </div>
     </div>
 
@@ -996,11 +1004,8 @@
         if (currentLayer === 'spc') renderSPCImages(day);
     }
 
-    function showLoading(msg) {
-        const el = document.getElementById('map-loading');
-        if (el) { el.style.display = 'flex'; const m = document.getElementById('loading-msg'); if (m) m.textContent = msg || 'Loading...'; }
-    }
-    function hideLoading() { const el = document.getElementById('map-loading'); if (el) el.style.display = 'none'; }
+    function showLoading() {}
+    function hideLoading() {}
 
     async function initMapsView() {
         // Show SPC images right away (no map needed)
