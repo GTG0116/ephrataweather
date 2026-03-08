@@ -5,150 +5,904 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ephrata Weather</title>
     <link rel="stylesheet" href="css/style.css">
+    <!-- Mapbox loaded here so the maps view works when activated -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
     <style>
+        /* ======================================================
+           SPA VIEW SYSTEM
+           ====================================================== */
+        .view { display: none; }
+        .view.active { display: block; }
+
+        /* ---- Home hero ---- */
         .hero-section {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding: 80px 20px 60px;
+            padding: 60px 20px 50px;
         }
-
-        .hero-section h1 {
-            font-size: 3rem;
+        .hero-section h2 {
+            font-size: 2.4rem;
             font-weight: 200;
             letter-spacing: -0.04em;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
-
         .hero-section .subtitle {
-            font-size: 1.1rem;
+            font-size: 1rem;
             color: var(--text-secondary);
-            margin-bottom: 48px;
+            margin-bottom: 40px;
         }
-
         .nav-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 18px;
             width: 100%;
-            max-width: 960px;
+            max-width: 900px;
         }
-
         .nav-card {
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 40px 28px;
+            padding: 36px 24px;
             text-decoration: none;
             color: var(--text-primary);
             cursor: pointer;
         }
-
         .nav-card .nav-icon {
-            width: 64px;
-            height: 64px;
-            margin-bottom: 20px;
+            width: 60px;
+            height: 60px;
+            margin-bottom: 18px;
             opacity: 0.85;
         }
-
-        .nav-card h2 {
-            font-size: 1.15rem;
+        .nav-card h3 {
+            font-size: 1.1rem;
             font-weight: 600;
-            margin-bottom: 8px;
+            margin-bottom: 7px;
         }
-
         .nav-card p {
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             color: var(--text-secondary);
             text-align: center;
             line-height: 1.5;
         }
 
-        @media (max-width: 768px) {
-            .hero-section h1 {
-                font-size: 2rem;
-            }
+        /* ---- Map controls (from maps.html) ---- */
+        .map-controls-panel {
+            padding: 14px 16px 10px;
+            margin-bottom: 12px;
+        }
+        .layer-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .layer-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-right: 4px;
+        }
+        .layer-btn {
+            padding: 7px 15px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.13);
+            color: var(--text-secondary);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-weight: 500;
+            font-family: inherit;
+            transition: all var(--transition-smooth);
+        }
+        .layer-btn:hover { background: rgba(255,255,255,0.14); color: var(--text-primary); }
+        .layer-btn.active { background: rgba(100,180,255,0.22); border-color: rgba(100,180,255,0.45); color: #8dd4ff; }
 
-            .hero-section {
-                padding: 40px 16px 40px;
-            }
+        .spc-controls { display: none; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.07); }
+        .spc-controls.visible { display: flex; }
+        .ctrl-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+        .ctrl-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); min-width: 36px; }
+        .day-btn { padding: 5px 11px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); border-radius: var(--radius-sm); cursor: pointer; font-size: 0.78rem; font-family: inherit; transition: all var(--transition-smooth); }
+        .day-btn:hover { background: rgba(255,255,255,0.11); color: var(--text-secondary); }
+        .day-btn.active { background: rgba(255,160,64,0.2); border-color: rgba(255,160,64,0.45); color: #FFA040; }
+        .type-btn { padding: 5px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); border-radius: var(--radius-sm); cursor: pointer; font-size: 0.78rem; font-family: inherit; transition: all var(--transition-smooth); }
+        .type-btn:hover { background: rgba(255,255,255,0.11); color: var(--text-secondary); }
+        .type-btn.active { background: rgba(100,220,160,0.15); border-color: rgba(100,220,160,0.35); color: #64DCa0; }
 
-            .nav-cards {
-                grid-template-columns: 1fr;
-            }
+        .radar-controls { display: none; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.07); }
+        .radar-controls.visible { display: flex; }
+        .owm-controls { display: none; align-items: center; gap: 12px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.07); font-size: 0.8rem; color: var(--text-secondary); }
+        .owm-controls.visible { display: flex; }
+        .owm-controls input[type="range"] { width: 100px; accent-color: var(--accent-blue); }
+        .opacity-row { display: flex; align-items: center; gap: 10px; font-size: 0.78rem; color: var(--text-muted); }
+        .opacity-row input[type="range"] { width: 110px; accent-color: var(--accent-blue); }
+        .timeline-row { display: flex; align-items: center; gap: 10px; }
+        .timeline-row button { padding: 5px 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: var(--text-primary); border-radius: var(--radius-sm); cursor: pointer; font-size: 0.78rem; font-family: inherit; white-space: nowrap; transition: all var(--transition-smooth); }
+        .timeline-row button:hover { background: rgba(100,180,255,0.2); }
+        .timeline-row input[type="range"] { flex: 1; max-width: 240px; accent-color: var(--accent-blue); }
+        .radar-ts { font-size: 0.72rem; color: var(--text-muted); }
+
+        .map-wrapper { position: relative; height: calc(100vh - 320px); min-height: 440px; border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 16px; }
+        #map { width: 100%; height: 100%; }
+
+        .spc-legend { position: absolute; bottom: 16px; right: 16px; z-index: 10; padding: 10px 13px; background: rgba(12,18,38,0.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.13); border-radius: var(--radius-sm); font-size: 0.72rem; display: none; }
+        .spc-legend.visible { display: block; }
+        .legend-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 7px; }
+        .legend-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; color: var(--text-secondary); }
+        .legend-swatch { width: 18px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+        .map-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(12,18,38,0.65); backdrop-filter: blur(6px); z-index: 30; gap: 10px; border-radius: var(--radius-lg); }
+        .map-loading p { font-size: 0.85rem; color: var(--text-secondary); }
+
+        .mapboxgl-popup-content { background: rgba(12,18,38,0.95) !important; border: 1px solid rgba(255,255,255,0.18) !important; color: #fff !important; padding: 12px 16px !important; border-radius: 10px !important; box-shadow: 0 8px 28px rgba(0,0,0,0.45) !important; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size: 0.85rem; }
+        .mapboxgl-popup-close-button { color: rgba(255,255,255,0.5) !important; font-size: 18px !important; }
+        .mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip { border-top-color: rgba(12,18,38,0.95) !important; }
+        .mapboxgl-popup-anchor-top .mapboxgl-popup-tip { border-bottom-color: rgba(12,18,38,0.95) !important; }
+        .popup-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 8px; color: #8dd4ff; }
+        .popup-stat { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .popup-stat:last-child { border-bottom: none; }
+        .popup-key { color: var(--text-muted); font-size: 0.78rem; }
+        .popup-val { font-weight: 600; font-size: 0.85rem; }
+
+        .owm-key-warn { display: none; padding: 8px 14px; background: rgba(255,160,64,0.12); border: 1px solid rgba(255,160,64,0.3); border-radius: var(--radius-sm); font-size: 0.78rem; color: #FFA040; margin-top: 6px; }
+        .owm-key-warn.visible { display: block; }
+        .layer-notice { font-size: 0.78rem; color: var(--text-muted); padding: 4px 0; }
+
+        @media (max-width: 640px) {
+            .map-wrapper { height: calc(100vh - 370px); min-height: 360px; }
+            .hero-section { padding: 32px 16px 36px; }
+            .hero-section h2 { font-size: 1.8rem; }
+            .nav-cards { grid-template-columns: 1fr; gap: 12px; }
+        }
+        @media (max-width: 400px) {
+            .layer-btn, .day-btn, .type-btn { padding: 5px 9px; font-size: 0.75rem; }
         }
     </style>
 </head>
 <body>
     <div class="bg-gradient"></div>
     <div class="app-container">
-        <div class="hero-section fade-in">
-            <h1>Ephrata Weather</h1>
-            <div class="location-search-container" id="location-search-container" style="margin-bottom:12px;">
-                <span class="location" id="location-name" style="color:var(--text-secondary);font-size:1.1rem;">Loading...</span>
+
+        <!-- ===== Shared Header ===== -->
+        <header class="app-header glass-static">
+            <div>
+                <h1>Ephrata Weather</h1>
+                <div class="location-search-container" id="location-search-container">
+                    <span class="location" id="location-name">Loading...</span>
+                </div>
             </div>
-            <p class="subtitle">Real-time weather data</p>
+            <span class="badge" id="last-updated">Weather</span>
+        </header>
 
-            <div class="nav-cards">
-                <a href="currentconditions.html" class="nav-card glass">
-                    <div class="nav-icon">
-                        <svg viewBox="0 0 64 64" fill="none">
-                            <circle cx="32" cy="20" r="10" fill="rgba(255,220,100,0.8)"/>
-                            <path d="M16 38 Q32 28 48 38 Q52 42 48 46 L16 46 Q12 42 16 38Z" fill="rgba(255,255,255,0.6)"/>
-                            <line x1="28" y1="50" x2="26" y2="58" stroke="rgba(100,180,255,0.6)" stroke-width="2" stroke-linecap="round"/>
-                            <line x1="36" y1="50" x2="34" y2="58" stroke="rgba(100,180,255,0.6)" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
-                    </div>
-                    <h2>Current Conditions</h2>
-                    <p>Live weather, hourly forecast, air quality, and pollen data</p>
-                </a>
+        <!-- ===== Shared Nav (scrollable on mobile) ===== -->
+        <nav class="nav-bar glass-static" id="main-nav">
+            <a href="#home" class="nav-link" data-view="home">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                Home
+            </a>
+            <a href="#current" class="nav-link" data-view="current">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                Current
+            </a>
+            <a href="#forecast" class="nav-link" data-view="forecast">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                10-Day
+            </a>
+            <a href="#maps" class="nav-link" data-view="maps">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                Maps
+            </a>
+        </nav>
 
-                <a href="10dayforecast.html" class="nav-card glass">
-                    <div class="nav-icon">
-                        <svg viewBox="0 0 64 64" fill="none">
-                            <rect x="10" y="10" width="44" height="44" rx="8" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
-                            <line x1="10" y1="24" x2="54" y2="24" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
-                            <circle cx="22" cy="34" r="3" fill="rgba(255,220,100,0.7)"/>
-                            <circle cx="32" cy="34" r="3" fill="rgba(200,210,225,0.7)"/>
-                            <circle cx="42" cy="34" r="3" fill="rgba(100,180,255,0.7)"/>
-                            <circle cx="22" cy="46" r="3" fill="rgba(200,210,225,0.7)"/>
-                            <circle cx="32" cy="46" r="3" fill="rgba(255,220,100,0.7)"/>
-                            <circle cx="42" cy="46" r="3" fill="rgba(200,210,225,0.7)"/>
-                        </svg>
-                    </div>
-                    <h2>10-Day Forecast</h2>
-                    <p>Extended forecast with highs, lows, and precipitation chances</p>
-                </a>
-
-                <a href="maps.html" class="nav-card glass">
-                    <div class="nav-icon">
-                        <svg viewBox="0 0 64 64" fill="none">
-                            <!-- Map icon -->
-                            <polygon points="4 14 4 52 20 44 40 52 60 44 60 12 40 20 20 12 4 14"
-                                fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" stroke-linejoin="round"/>
-                            <line x1="20" y1="12" x2="20" y2="44" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-                            <line x1="40" y1="20" x2="40" y2="52" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
-                            <!-- SPC color bands hint -->
-                            <rect x="6" y="24" width="12" height="6" rx="1" fill="rgba(255,224,102,0.45)"/>
-                            <rect x="22" y="28" width="16" height="5" rx="1" fill="rgba(255,160,64,0.45)"/>
-                            <rect x="42" y="22" width="16" height="6" rx="1" fill="rgba(102,204,102,0.45)"/>
-                        </svg>
-                    </div>
-                    <h2>Maps</h2>
-                    <p>SPC outlooks, radar, temperature, and wind on an interactive map</p>
-                </a>
+        <!-- ===================================================
+             VIEW: HOME
+             =================================================== -->
+        <section id="view-home" class="view">
+            <div class="hero-section fade-in">
+                <h2>Ephrata Weather</h2>
+                <p class="subtitle">Real-time weather data</p>
+                <div class="nav-cards">
+                    <a href="#current" class="nav-card glass" data-view="current">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <circle cx="32" cy="20" r="10" fill="rgba(255,220,100,0.8)"/>
+                                <path d="M16 38 Q32 28 48 38 Q52 42 48 46 L16 46 Q12 42 16 38Z" fill="rgba(255,255,255,0.6)"/>
+                                <line x1="28" y1="50" x2="26" y2="58" stroke="rgba(100,180,255,0.6)" stroke-width="2" stroke-linecap="round"/>
+                                <line x1="36" y1="50" x2="34" y2="58" stroke="rgba(100,180,255,0.6)" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <h3>Current Conditions</h3>
+                        <p>Live weather, hourly forecast, air quality, and pollen data</p>
+                    </a>
+                    <a href="#forecast" class="nav-card glass" data-view="forecast">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <rect x="10" y="10" width="44" height="44" rx="8" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+                                <line x1="10" y1="24" x2="54" y2="24" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                                <circle cx="22" cy="34" r="3" fill="rgba(255,220,100,0.7)"/>
+                                <circle cx="32" cy="34" r="3" fill="rgba(200,210,225,0.7)"/>
+                                <circle cx="42" cy="34" r="3" fill="rgba(100,180,255,0.7)"/>
+                                <circle cx="22" cy="46" r="3" fill="rgba(200,210,225,0.7)"/>
+                                <circle cx="32" cy="46" r="3" fill="rgba(255,220,100,0.7)"/>
+                                <circle cx="42" cy="46" r="3" fill="rgba(200,210,225,0.7)"/>
+                            </svg>
+                        </div>
+                        <h3>10-Day Forecast</h3>
+                        <p>Extended forecast with highs, lows, and precipitation chances</p>
+                    </a>
+                    <a href="#maps" class="nav-card glass" data-view="maps">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <polygon points="4 14 4 52 20 44 40 52 60 44 60 12 40 20 20 12 4 14" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.35)" stroke-width="1.5" stroke-linejoin="round"/>
+                                <line x1="20" y1="12" x2="20" y2="44" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+                                <line x1="40" y1="20" x2="40" y2="52" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+                                <rect x="6" y="24" width="12" height="6" rx="1" fill="rgba(255,224,102,0.45)"/>
+                                <rect x="22" y="28" width="16" height="5" rx="1" fill="rgba(255,160,64,0.45)"/>
+                                <rect x="42" y="22" width="16" height="6" rx="1" fill="rgba(102,204,102,0.45)"/>
+                            </svg>
+                        </div>
+                        <h3>Maps</h3>
+                        <p>SPC outlooks, radar, temperature, and wind on an interactive map</p>
+                    </a>
+                </div>
             </div>
-        </div>
-    </div>
+        </section>
+
+        <!-- ===================================================
+             VIEW: CURRENT CONDITIONS
+             =================================================== -->
+        <section id="view-current" class="view">
+            <!-- Weather Alerts Banner -->
+            <div id="alerts-container" style="display:none;margin-bottom:16px;"></div>
+
+            <!-- Current Conditions Hero -->
+            <div class="current-hero glass-static fade-in" id="current-hero" style="margin-bottom:24px;">
+                <div>
+                    <div class="temp-display" id="current-temp">
+                        <span class="loading-shimmer loading-placeholder" style="display:inline-block;width:140px;height:60px;"></span>
+                    </div>
+                    <div class="condition-text" id="current-condition">Loading conditions...</div>
+                    <div class="feels-like" id="feels-like"></div>
+                    <div class="hi-lo" id="hi-lo"></div>
+                </div>
+                <div class="icon-wrapper" id="current-icon"></div>
+            </div>
+
+            <!-- Hourly Forecast -->
+            <h3 class="section-title">Hourly Forecast</h3>
+            <div class="glass-static" style="margin-bottom:24px;">
+                <div class="hourly-strip" id="hourly-strip">
+                    <div class="loading-shimmer loading-placeholder" style="width:100%;height:100px;"></div>
+                </div>
+            </div>
+
+            <!-- Details Cards -->
+            <div class="cards-grid cards-grid-3" id="detail-cards" style="margin-bottom:24px;">
+                <div class="card glass" id="card-wind">
+                    <div class="card-header">
+                        <span class="card-title">Wind</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
+                    </div>
+                    <div class="card-value" id="wind-speed">--<span class="unit"> mph</span></div>
+                    <div class="card-detail" id="wind-detail">-- gusts</div>
+                </div>
+                <div class="card glass" id="card-humidity">
+                    <div class="card-header">
+                        <span class="card-title">Humidity</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+                    </div>
+                    <div class="card-value" id="humidity-value">--<span class="unit">%</span></div>
+                    <div class="card-detail" id="dewpoint-detail">Dew point: --</div>
+                </div>
+                <div class="card glass" id="card-uv">
+                    <div class="card-header">
+                        <span class="card-title">UV Index</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    </div>
+                    <div class="card-value" id="uv-value">--</div>
+                    <div class="card-detail" id="uv-detail">--</div>
+                </div>
+                <div class="card glass" id="card-pressure">
+                    <div class="card-header">
+                        <span class="card-title">Pressure</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <div class="card-value" id="pressure-value">--<span class="unit"> inHg</span></div>
+                    <div class="card-detail" id="pressure-detail"></div>
+                </div>
+                <div class="card glass" id="card-clouds">
+                    <div class="card-header">
+                        <span class="card-title">Cloud Cover</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+                    </div>
+                    <div class="card-value" id="cloud-value">--<span class="unit">%</span></div>
+                    <div class="card-detail" id="cloud-detail"></div>
+                </div>
+            </div>
+
+            <!-- Air Quality -->
+            <h3 class="section-title">Air Quality</h3>
+            <div class="card glass-static" style="margin-bottom:24px;" id="aqi-card">
+                <div class="card-header">
+                    <span class="card-title">Air Quality Index</span>
+                    <span class="badge" id="aqi-badge">Loading</span>
+                </div>
+                <div class="card-value" id="aqi-value">--</div>
+                <div class="aqi-bar">
+                    <div class="aqi-marker" id="aqi-marker" style="left:0%"></div>
+                </div>
+                <div class="aqi-labels">
+                    <span>Good</span><span>Moderate</span><span>Unhealthy</span><span>Very Unhealthy</span><span>Hazardous</span>
+                </div>
+                <div class="card-detail" id="aqi-detail" style="margin-top:12px;"></div>
+            </div>
+
+            <!-- Pollen -->
+            <h3 class="section-title">Pollen</h3>
+            <div class="card glass-static" style="margin-bottom:24px;" id="pollen-card">
+                <div class="pollen-grid" id="pollen-grid">
+                    <div class="pollen-item"><div class="label">Tree</div><div class="level" id="pollen-tree">--</div></div>
+                    <div class="pollen-item"><div class="label">Grass</div><div class="level" id="pollen-grass">--</div></div>
+                    <div class="pollen-item"><div class="label">Weed</div><div class="level" id="pollen-weed">--</div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================
+             VIEW: 10-DAY FORECAST
+             =================================================== -->
+        <section id="view-forecast" class="view">
+            <h3 class="section-title">10-Day Forecast</h3>
+            <div class="glass-static fade-in" id="forecast-container">
+                <div class="forecast-list" id="forecast-list">
+                    <div class="loading-shimmer loading-placeholder" style="width:100%;height:500px;"></div>
+                </div>
+            </div>
+            <!-- Expanded Day Detail -->
+            <div id="day-detail" class="card glass-static fade-in" style="margin-top:24px;display:none;padding:28px;">
+                <div class="card-header">
+                    <span class="card-title" id="detail-day-name">--</span>
+                    <span class="badge" id="detail-date">--</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:24px;margin:16px 0;flex-wrap:wrap;">
+                    <div id="detail-icon" style="width:80px;height:80px;flex-shrink:0;"></div>
+                    <div>
+                        <div style="font-size:1.1rem;font-weight:500;" id="detail-condition">--</div>
+                        <div style="font-size:2rem;font-weight:300;margin-top:4px;" id="detail-temps">--</div>
+                    </div>
+                </div>
+                <hr class="divider">
+                <div class="cards-grid cards-grid-3" style="margin-top:16px;">
+                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Precipitation</div><div style="font-size:1.1rem;font-weight:500;" id="detail-precip">--</div></div>
+                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Wind</div><div style="font-size:1.1rem;font-weight:500;" id="detail-wind">--</div></div>
+                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Humidity</div><div style="font-size:1.1rem;font-weight:500;" id="detail-humidity">--</div></div>
+                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">UV Index</div><div style="font-size:1.1rem;font-weight:500;" id="detail-uv">--</div></div>
+                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunrise</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunrise">--</div></div>
+                    <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunset</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunset">--</div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================================================
+             VIEW: MAPS
+             =================================================== -->
+        <section id="view-maps" class="view">
+            <!-- Map Controls Panel -->
+            <div class="map-controls-panel glass-static" style="margin-bottom:14px;">
+                <div class="layer-row">
+                    <span class="layer-label">Layer:</span>
+                    <button class="layer-btn active" data-layer="spc" onclick="switchLayer('spc')">SPC Outlook</button>
+                    <button class="layer-btn" data-layer="radar" onclick="switchLayer('radar')">Radar</button>
+                    <button class="layer-btn" data-layer="temperature" onclick="switchLayer('temperature')">Temperature</button>
+                    <button class="layer-btn" data-layer="wind" onclick="switchLayer('wind')">Wind Speed</button>
+                </div>
+                <!-- SPC Sub-Controls -->
+                <div class="spc-controls visible" id="spc-controls">
+                    <div class="ctrl-row">
+                        <span class="ctrl-label">Day:</span>
+                        <button class="day-btn active" data-day="1" onclick="selectDay(1)">Day 1</button>
+                        <button class="day-btn" data-day="2" onclick="selectDay(2)">Day 2</button>
+                        <button class="day-btn" data-day="3" onclick="selectDay(3)">Day 3</button>
+                        <button class="day-btn" data-day="4" onclick="selectDay(4)">Day 4</button>
+                        <button class="day-btn" data-day="5" onclick="selectDay(5)">Day 5</button>
+                        <button class="day-btn" data-day="6" onclick="selectDay(6)">Day 6</button>
+                        <button class="day-btn" data-day="7" onclick="selectDay(7)">Day 7</button>
+                        <button class="day-btn" data-day="8" onclick="selectDay(8)">Day 8</button>
+                    </div>
+                    <div class="ctrl-row" id="type-row">
+                        <span class="ctrl-label">Type:</span>
+                    </div>
+                </div>
+                <!-- Radar Sub-Controls -->
+                <div class="radar-controls" id="radar-controls">
+                    <div class="timeline-row">
+                        <button id="play-btn" onclick="toggleRadarPlay()">&#9654; Play</button>
+                        <input type="range" id="timeline-slider" min="0" max="0" value="0" oninput="onTimelineChange(this.value)">
+                        <span class="radar-ts" id="radar-ts">--</span>
+                        <button onclick="refreshRadar()">&#x21bb; Refresh</button>
+                    </div>
+                    <div class="opacity-row">
+                        <span>Opacity:</span>
+                        <input type="range" min="0" max="100" value="70" oninput="setRadarOpacity(this.value)">
+                    </div>
+                </div>
+                <!-- OWM Sub-Controls -->
+                <div class="owm-controls" id="owm-controls">
+                    <span style="font-size:0.8rem;color:var(--text-secondary);">
+                        <svg style="vertical-align:middle;margin-right:4px;" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        Click the map to see exact values
+                    </span>
+                    <span>Opacity:</span>
+                    <input type="range" min="0" max="100" value="70" oninput="setOWMOpacity(this.value)" id="owm-opacity">
+                </div>
+                <div class="owm-key-warn" id="owm-key-warn">
+                    &#9888; OpenWeatherMap API key not set. Add your key to <code>js/config.js</code> as <code>OWM_API_KEY</code>.
+                </div>
+            </div>
+
+            <!-- Map -->
+            <div class="map-wrapper glass-static">
+                <div id="map"></div>
+                <div class="spc-legend visible" id="spc-legend">
+                    <div class="legend-title" id="legend-title">Categorical Risk</div>
+                    <div id="legend-items"></div>
+                </div>
+                <div class="map-loading" id="map-loading">
+                    <div class="spinner"></div>
+                    <p id="loading-msg">Loading map...</p>
+                </div>
+            </div>
+        </section>
+
+    </div><!-- end app-container -->
+
+    <!-- ===================================================
+         SCRIPTS
+         =================================================== -->
     <script src="js/config.js"></script>
     <script src="js/location.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/weather-api.js"></script>
+    <!-- Signal to page scripts that they're running inside the SPA -->
+    <script>var _SPA_MODE = true;</script>
+    <script src="js/current.js"></script>
+    <script src="js/forecast.js"></script>
+
     <script>
-        LocationManager.init().then(loc => {
-            const el = document.getElementById('location-name');
-            if (el) el.textContent = loc.name;
+    // ============================================================
+    // SPA ROUTER
+    // ============================================================
+    const VALID_VIEWS = ['home', 'current', 'forecast', 'maps'];
+    const viewInited = {};
+    let currentViewId = null;
+
+    function getViewFromHash() {
+        const h = window.location.hash.replace('#', '').trim();
+        return VALID_VIEWS.includes(h) ? h : 'home';
+    }
+
+    function updateNavActive(viewId) {
+        document.querySelectorAll('.nav-link').forEach(a => {
+            a.classList.toggle('active', a.dataset.view === viewId);
         });
+    }
+
+    async function showView(viewId) {
+        if (!VALID_VIEWS.includes(viewId)) viewId = 'home';
+
+        // Hide all views
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        // Show requested view
+        const el = document.getElementById('view-' + viewId);
+        if (el) el.classList.add('active');
+
+        updateNavActive(viewId);
+        currentViewId = viewId;
+
+        // Update page title
+        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: '10-Day Forecast', maps: 'Maps' };
+        document.title = (titles[viewId] || 'Ephrata Weather') + ' – Ephrata Weather';
+
+        // Init view if not already done
+        if (!viewInited[viewId]) {
+            viewInited[viewId] = true;
+            await initViewData(viewId);
+        } else if (viewId === 'maps') {
+            // Map needs a resize when its container becomes visible
+            if (window._spaMap) setTimeout(() => window._spaMap.resize(), 50);
+        }
+    }
+
+    async function initViewData(viewId) {
+        const loc = LocationManager.getCurrent();
+
+        if (viewId === 'current') {
+            // Reset loading states
+            document.getElementById('current-temp').innerHTML =
+                '<span class="loading-shimmer loading-placeholder" style="display:inline-block;width:140px;height:60px;"></span>';
+            document.getElementById('current-condition').textContent = 'Loading conditions...';
+            await initCurrentView(loc.lat, loc.lng);
+
+        } else if (viewId === 'forecast') {
+            document.getElementById('forecast-list').innerHTML =
+                '<div class="loading-shimmer loading-placeholder" style="width:100%;height:500px;"></div>';
+            await initForecastView(loc.lat, loc.lng);
+
+        } else if (viewId === 'maps') {
+            await initMapsView();
+        }
+    }
+
+    // Nav link clicks — intercept and use hash routing
+    document.querySelectorAll('.nav-link[data-view], .nav-card[data-view]').forEach(el => {
+        el.addEventListener('click', e => {
+            // href is already set to #view so hashchange fires; just let it propagate
+            // but also immediately show the view for snappiness
+            const view = el.dataset.view;
+            if (view) {
+                e.preventDefault();
+                window.location.hash = view;
+            }
+        });
+    });
+
+    window.addEventListener('hashchange', () => {
+        showView(getViewFromHash());
+    });
+
+    // ============================================================
+    // MAPS VIEW LOGIC (ported from maps.html)
+    // ============================================================
+    let map = null;
+    let currentLayer = 'spc';
+    let currentDay = 1;
+    let currentType = 'cat';
+    let firstSymbolLayerId = undefined;
+    let radarFrames = [];
+    let rainviewerHost = '';
+    let radarPlaying = false;
+    let currentFrameIdx = 0;
+
+    const SPC_URLS = {
+        1: {
+            cat:  'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson',
+            torn: 'https://www.spc.noaa.gov/products/outlook/day1otlk_torn.nolyr.geojson',
+            wind: 'https://www.spc.noaa.gov/products/outlook/day1otlk_wind.nolyr.geojson',
+            hail: 'https://www.spc.noaa.gov/products/outlook/day1otlk_hail.nolyr.geojson',
+        },
+        2: {
+            cat:  'https://www.spc.noaa.gov/products/outlook/day2otlk_cat.nolyr.geojson',
+            torn: 'https://www.spc.noaa.gov/products/outlook/day2otlk_torn.nolyr.geojson',
+            wind: 'https://www.spc.noaa.gov/products/outlook/day2otlk_wind.nolyr.geojson',
+            hail: 'https://www.spc.noaa.gov/products/outlook/day2otlk_hail.nolyr.geojson',
+        },
+        3: {
+            cat:  'https://www.spc.noaa.gov/products/outlook/day3otlk.nolyr.geojson',
+            prob: 'https://www.spc.noaa.gov/products/outlook/day3otlk_prob.nolyr.geojson',
+        },
+        4: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day4prob.nolyr.geojson' },
+        5: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day5prob.nolyr.geojson' },
+        6: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day6prob.nolyr.geojson' },
+        7: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day7prob.nolyr.geojson' },
+        8: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day8prob.nolyr.geojson' },
+    };
+
+    const DAY_TYPES = {
+        1: [{ key:'cat', label:'Categorical' }, { key:'torn', label:'Tornado' }, { key:'wind', label:'Wind' }, { key:'hail', label:'Hail' }],
+        2: [{ key:'cat', label:'Categorical' }, { key:'torn', label:'Tornado' }, { key:'wind', label:'Wind' }, { key:'hail', label:'Hail' }],
+        3: [{ key:'cat', label:'Categorical' }, { key:'prob', label:'Probability' }],
+        4: [{ key:'prob', label:'Probability' }],
+        5: [{ key:'prob', label:'Probability' }],
+        6: [{ key:'prob', label:'Probability' }],
+        7: [{ key:'prob', label:'Probability' }],
+        8: [{ key:'prob', label:'Probability' }],
+    };
+
+    const CAT_LEGEND = [
+        { fill: 'rgba(192,232,192,0.55)', stroke: '#96D896', label: 'Thunderstorm' },
+        { fill: 'rgba(102,204,102,0.55)', stroke: '#44BB44', label: 'Marginal' },
+        { fill: 'rgba(255,224,102,0.55)', stroke: '#DDBB00', label: 'Slight' },
+        { fill: 'rgba(255,160,64,0.55)',  stroke: '#CC7700', label: 'Enhanced' },
+        { fill: 'rgba(255,96,96,0.55)',   stroke: '#CC2222', label: 'Moderate' },
+        { fill: 'rgba(255,64,255,0.55)',  stroke: '#CC00CC', label: 'High' },
+    ];
+    const PROB_LEGEND = [
+        { fill: 'rgba(100,0,180,0.65)',  stroke: '#7700CC', label: 'Cond. High (cig3)' },
+        { fill: 'rgba(220,30,30,0.62)',  stroke: '#BB1111', label: 'Cond. Moderate (cig2)' },
+        { fill: 'rgba(255,140,0,0.58)',  stroke: '#CC7000', label: 'Cond. Low (cig1)' },
+        { fill: 'rgba(100,0,180,0.60)',  stroke: '#6600CC', label: '60%+' },
+        { fill: 'rgba(160,0,200,0.58)',  stroke: '#9900BB', label: '45%+' },
+        { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
+        { fill: 'rgba(255,140,0,0.55)',  stroke: '#CC7000', label: '15%+' },
+        { fill: 'rgba(255,220,0,0.55)',  stroke: '#CCAA00', label: '10%+' },
+        { fill: 'rgba(100,200,60,0.55)', stroke: '#55AA00', label: '5%+' },
+        { fill: 'rgba(80,180,80,0.50)',  stroke: '#339933', label: '2%+' },
+    ];
+
+    const CAT_FILL_EXPR = ['match', ['upcase', ['coalesce', ['get', 'LABEL'], '']],
+        'TSTM', 'rgba(192,232,192,0.55)', 'MRGL', 'rgba(102,204,102,0.55)',
+        'SLGT', 'rgba(255,224,102,0.55)', 'ENH',  'rgba(255,160,64,0.55)',
+        'MDT',  'rgba(255,96,96,0.55)',   'HIGH', 'rgba(255,64,255,0.55)',
+        'rgba(0,0,0,0)'];
+    const CAT_LINE_EXPR = ['match', ['upcase', ['coalesce', ['get', 'LABEL'], '']],
+        'TSTM', '#96D896', 'MRGL', '#44BB44', 'SLGT', '#DDBB00',
+        'ENH',  '#CC7700', 'MDT',  '#CC2222', 'HIGH', '#CC00CC',
+        'rgba(0,0,0,0)'];
+
+    const PROB_FILL_EXPR = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(100,0,180,0.65)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(220,30,30,0.62)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], 'rgba(255,140,0,0.58)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], 'rgba(180,0,180,0.22)',
+        ['step', ['coalesce', ['to-number', ['get', 'LABEL']], 0],
+            'rgba(0,0,0,0)',
+            2,  'rgba(80,180,80,0.50)',  5,  'rgba(100,200,60,0.55)',
+            10, 'rgba(255,220,0,0.55)',  15, 'rgba(255,140,0,0.55)',
+            30, 'rgba(220,30,30,0.58)', 45, 'rgba(160,0,200,0.58)',
+            60, 'rgba(100,0,180,0.60)'
+        ]
+    ];
+    const PROB_LINE_EXPR = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], '#7700CC',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], '#BB1111',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], '#CC7000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], '#AA00AA',
+        ['step', ['coalesce', ['to-number', ['get', 'LABEL']], 0],
+            'rgba(0,0,0,0)',
+            2,  '#339933', 5,  '#55AA00', 10, '#CCAA00',
+            15, '#CC7000', 30, '#BB1111', 45, '#8800AA', 60, '#6600BB'
+        ]
+    ];
+
+    function updateSPCLegend(type) {
+        document.getElementById('spc-legend').classList.add('visible');
+        document.getElementById('legend-title').textContent = type === 'cat' ? 'Categorical Risk' : 'Probability';
+        const data = type === 'cat' ? CAT_LEGEND : PROB_LEGEND;
+        document.getElementById('legend-items').innerHTML = data.map(e =>
+            `<div class="legend-row"><div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};"></div><span>${e.label}</span></div>`
+        ).join('');
+    }
+    function hideSPCLegend() { document.getElementById('spc-legend').classList.remove('visible'); }
+
+    function removeLayer(id) { if (map && map.getLayer(id))  map.removeLayer(id); }
+    function removeSource(id){ if (map && map.getSource(id)) map.removeSource(id); }
+    function clearSPCLayers()   { removeLayer('spc-fill'); removeLayer('spc-line'); removeSource('spc-data'); }
+    function clearRadarLayers() { removeLayer('radar-layer'); removeSource('radar-source'); }
+    function clearOWMLayers()   { removeLayer('owm-layer'); removeSource('owm-source'); }
+
+    async function fetchSPCGeoJSON(url) {
+        try {
+            const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
+            if (r.ok) return r.json();
+            throw new Error('HTTP ' + r.status);
+        } catch (e) {
+            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+            const r = await fetch(proxy, { cache: 'no-store' });
+            if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
+            return r.json();
+        }
+    }
+
+    async function loadSPCLayer(day, type) {
+        const url = SPC_URLS[day]?.[type];
+        if (!url) { clearSPCLayers(); hideSPCLegend(); return; }
+        showLoading('Loading SPC Day ' + day + ' outlook…');
+        try {
+            const data = await fetchSPCGeoJSON(url);
+            clearSPCLayers();
+            map.addSource('spc-data', { type: 'geojson', data });
+            const isCat = (type === 'cat');
+            map.addLayer({ id: 'spc-fill', type: 'fill', source: 'spc-data',
+                paint: { 'fill-color': isCat ? CAT_FILL_EXPR : PROB_FILL_EXPR, 'fill-antialias': true }
+            }, firstSymbolLayerId);
+            map.addLayer({ id: 'spc-line', type: 'line', source: 'spc-data',
+                paint: { 'line-color': isCat ? CAT_LINE_EXPR : PROB_LINE_EXPR, 'line-width': 1.2 }
+            }, firstSymbolLayerId);
+            updateSPCLegend(type);
+        } catch (e) {
+            console.error('SPC fetch error:', e);
+            clearSPCLayers(); hideSPCLegend();
+        } finally { hideLoading(); }
+    }
+
+    async function loadRadarData() {
+        showLoading('Loading radar data...');
+        try {
+            const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+            const data = await resp.json();
+            rainviewerHost = data.host;
+            const past    = data.radar?.past    || [];
+            const nowcast = data.radar?.nowcast || [];
+            radarFrames = [...past, ...nowcast];
+            const slider = document.getElementById('timeline-slider');
+            slider.max   = radarFrames.length - 1;
+            slider.value = radarFrames.length - 1;
+            showRadarFrame(radarFrames.length - 1);
+        } catch (e) { console.error('Radar error:', e); hideLoading(); }
+    }
+
+    function showRadarFrame(idx) {
+        clearRadarLayers();
+        if (!radarFrames[idx]) { hideLoading(); return; }
+        currentFrameIdx = idx;
+        const frame = radarFrames[idx];
+        const tileUrl = `${rainviewerHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+        map.addSource('radar-source', { type: 'raster', tiles: [tileUrl], tileSize: 256, attribution: 'RainViewer' });
+        map.addLayer({ id: 'radar-layer', type: 'raster', source: 'radar-source',
+            paint: { 'raster-opacity': currentRadarOpacity }
+        }, firstSymbolLayerId);
+        const ts = new Date(frame.time * 1000);
+        const tsEl = document.getElementById('radar-ts');
+        if (tsEl) tsEl.textContent = ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        document.getElementById('timeline-slider').value = idx;
+        hideLoading();
+    }
+
+    let currentRadarOpacity = 0.7;
+    function setRadarOpacity(val) {
+        currentRadarOpacity = val / 100;
+        if (map && map.getLayer('radar-layer')) map.setPaintProperty('radar-layer', 'raster-opacity', currentRadarOpacity);
+    }
+
+    let radarInterval = null;
+    function toggleRadarPlay() {
+        const btn = document.getElementById('play-btn');
+        if (radarPlaying) {
+            clearInterval(radarInterval); radarPlaying = false; btn.innerHTML = '&#9654; Play';
+        } else {
+            radarPlaying = true; btn.innerHTML = '&#9646;&#9646; Pause';
+            radarInterval = setInterval(() => { const next = (currentFrameIdx + 1) % radarFrames.length; showRadarFrame(next); }, 500);
+        }
+    }
+    function onTimelineChange(val) {
+        if (radarPlaying) { clearInterval(radarInterval); radarPlaying = false; document.getElementById('play-btn').innerHTML = '&#9654; Play'; }
+        showRadarFrame(parseInt(val));
+    }
+    function refreshRadar() { if (radarPlaying) toggleRadarPlay(); loadRadarData(); }
+
+    let currentOWMOpacity = 0.7;
+    function loadOWMLayer(type) {
+        const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
+        const warn = document.getElementById('owm-key-warn');
+        if (!key || key === 'YOUR_OWM_API_KEY_HERE') { warn.classList.add('visible'); clearOWMLayers(); return; }
+        warn.classList.remove('visible');
+        clearSPCLayers(); clearRadarLayers(); clearOWMLayers(); hideSPCLegend();
+        const layerName = type === 'temperature' ? 'temp_new' : 'wind_new';
+        map.addSource('owm-source', { type: 'raster',
+            tiles: [`https://tile.openweathermap.org/map/${layerName}/{z}/{x}/{y}.png?appid=${key}`],
+            tileSize: 256, attribution: '&copy; <a href="https://openweathermap.org">OpenWeatherMap</a>'
+        });
+        map.addLayer({ id: 'owm-layer', type: 'raster', source: 'owm-source',
+            paint: { 'raster-opacity': currentOWMOpacity }
+        }, firstSymbolLayerId);
+    }
+    function setOWMOpacity(val) {
+        currentOWMOpacity = val / 100;
+        if (map && map.getLayer('owm-layer')) map.setPaintProperty('owm-layer', 'raster-opacity', currentOWMOpacity);
+    }
+
+    async function handleOWMClick(e) {
+        if (currentLayer !== 'temperature' && currentLayer !== 'wind') return;
+        const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
+        if (!key || key === 'YOUR_OWM_API_KEY_HERE') return;
+        const { lat, lng } = e.lngLat;
+        try {
+            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${key}&units=imperial`;
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error('OWM API error ' + resp.status);
+            const data = await resp.json();
+            const cityName = data.name || 'This location';
+            const temp = data.main?.temp != null ? Math.round(data.main.temp) + '°F' : '--';
+            const feelsLike = data.main?.feels_like != null ? Math.round(data.main.feels_like) + '°F' : '--';
+            const windSpeed = data.wind?.speed != null ? Math.round(data.wind.speed) + ' mph' : '--';
+            const windGust  = data.wind?.gust  != null ? Math.round(data.wind.gust)  + ' mph' : null;
+            const windDir   = data.wind?.deg   != null ? degToCardinal(data.wind.deg) : '--';
+            const humidity  = data.main?.humidity != null ? data.main.humidity + '%' : '--';
+            let html = `<div class="popup-title">${cityName}</div>`;
+            if (currentLayer === 'temperature') {
+                html += `<div class="popup-stat"><span class="popup-key">Temperature</span><span class="popup-val">${temp}</span></div>
+                         <div class="popup-stat"><span class="popup-key">Feels Like</span><span class="popup-val">${feelsLike}</span></div>
+                         <div class="popup-stat"><span class="popup-key">Humidity</span><span class="popup-val">${humidity}</span></div>`;
+            } else {
+                html += `<div class="popup-stat"><span class="popup-key">Wind Speed</span><span class="popup-val">${windSpeed}</span></div>
+                         ${windGust ? `<div class="popup-stat"><span class="popup-key">Gusts</span><span class="popup-val">${windGust}</span></div>` : ''}
+                         <div class="popup-stat"><span class="popup-key">Direction</span><span class="popup-val">${windDir}</span></div>`;
+            }
+            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' }).setLngLat(e.lngLat).setHTML(html).addTo(map);
+        } catch (err) { console.error('OWM click error:', err); }
+    }
+    function degToCardinal(deg) {
+        const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+        return dirs[Math.round(deg / 22.5) % 16];
+    }
+
+    function switchLayer(layer) {
+        currentLayer = layer;
+        document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
+        document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
+        document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
+        document.getElementById('owm-controls').classList.toggle('visible', layer === 'temperature' || layer === 'wind');
+        clearSPCLayers(); clearRadarLayers(); clearOWMLayers(); hideSPCLegend();
+        if (radarPlaying) toggleRadarPlay();
+        if (layer === 'spc') loadSPCLayer(currentDay, currentType);
+        else if (layer === 'radar') loadRadarData();
+        else if (layer === 'temperature' || layer === 'wind') loadOWMLayer(layer);
+    }
+
+    function selectDay(day) {
+        currentDay = day;
+        document.querySelectorAll('.day-btn').forEach(btn => btn.classList.toggle('active', parseInt(btn.dataset.day) === day));
+        buildTypeButtons(day);
+    }
+    function buildTypeButtons(day) {
+        const types = DAY_TYPES[day] || [];
+        const typeRow = document.getElementById('type-row');
+        typeRow.innerHTML = '<span class="ctrl-label">Type:</span>';
+        currentType = types[0]?.key || 'cat';
+        types.forEach((t, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'type-btn' + (i === 0 ? ' active' : '');
+            btn.dataset.type = t.key;
+            btn.textContent = t.label;
+            btn.onclick = () => selectType(t.key);
+            typeRow.appendChild(btn);
+        });
+        if (currentLayer === 'spc') loadSPCLayer(day, currentType);
+    }
+    function selectType(type) {
+        currentType = type;
+        document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type));
+        if (currentLayer === 'spc') loadSPCLayer(currentDay, currentType);
+    }
+
+    function showLoading(msg) {
+        const el = document.getElementById('map-loading');
+        el.style.display = 'flex';
+        const msgEl = document.getElementById('loading-msg');
+        if (msgEl) msgEl.textContent = msg || 'Loading...';
+    }
+    function hideLoading() { document.getElementById('map-loading').style.display = 'none'; }
+
+    async function initMapsView() {
+        if (map) { map.resize(); return; }
+        const loc = LocationManager.getCurrent();
+        mapboxgl.accessToken = CONFIG.MAPBOX_ACCESS_TOKEN;
+        map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/dark-v11',
+            center: [loc.lng, loc.lat],
+            zoom: 5,
+            projection: 'mercator'
+        });
+        window._spaMap = map;
+        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+        map.on('load', () => {
+            const styleLayers = map.getStyle().layers;
+            for (const layer of styleLayers) {
+                if (layer.type === 'symbol') { firstSymbolLayerId = layer.id; break; }
+            }
+            buildTypeButtons(1);
+            map.on('click', handleOWMClick);
+        });
+    }
+
+    // ============================================================
+    // BOOTSTRAP
+    // ============================================================
+    (async function () {
+        const loc = await LocationManager.init();
+        const nameEl = document.getElementById('location-name');
+        if (nameEl) nameEl.textContent = loc.name;
+
+        // Show initial view based on hash (default: home)
+        await showView(getViewFromHash());
+    })();
     </script>
 </body>
 </html>

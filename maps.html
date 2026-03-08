@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maps - Ephrata Weather</title>
+    <!-- Redirect to the SPA with the correct hash -->
+    <script>window.location.replace('index.html#maps');</script>
     <link rel="stylesheet" href="css/style.css">
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
@@ -514,6 +516,10 @@
     let currentFrameIdx = 0;
 
     // ---- SPC URL Map ----
+    // SPC recently updated some products — conditional outlooks now use
+    // labels "cig1"/"cig2"/"cig3" instead of "SIGN" hatching.
+    // The categorical URLs remain unchanged; prob/torn/wind/hail files
+    // now include the conditional probability polygons.
     const SPC_URLS = {
         1: {
             cat:  'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson',
@@ -573,6 +579,9 @@
         { fill: 'rgba(255,64,255,0.55)',  stroke: '#CC00CC', label: 'High' },
     ];
     const PROB_LEGEND = [
+        { fill: 'rgba(100,0,180,0.65)',  stroke: '#7700CC', label: 'Cond. High (cig3)' },
+        { fill: 'rgba(220,30,30,0.62)',  stroke: '#BB1111', label: 'Cond. Moderate (cig2)' },
+        { fill: 'rgba(255,140,0,0.58)',  stroke: '#CC7000', label: 'Cond. Low (cig1)' },
         { fill: 'rgba(100,0,180,0.60)',  stroke: '#6600CC', label: '60%+' },
         { fill: 'rgba(160,0,200,0.58)',  stroke: '#9900BB', label: '45%+' },
         { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
@@ -603,28 +612,45 @@
         'rgba(0,0,0,0)'
     ];
 
-    // Probability: step on the numeric LABEL value.
-    // Non-numeric values (e.g. "SIGN" hatching) convert to 0 → transparent.
-    const PROB_NUM = ['coalesce', ['to-number', ['get', 'LABEL']], 0];
-    const PROB_FILL_EXPR = ['step', PROB_NUM,
-        'rgba(0,0,0,0)',
-        2,  'rgba(80,180,80,0.50)',
-        5,  'rgba(100,200,60,0.55)',
-        10, 'rgba(255,220,0,0.55)',
-        15, 'rgba(255,140,0,0.55)',
-        30, 'rgba(220,30,30,0.58)',
-        45, 'rgba(160,0,200,0.58)',
-        60, 'rgba(100,0,180,0.60)'
+    // Probability: handles both legacy numeric labels (2, 5, 10 … 60) AND
+    // the newer SPC conditional-probability labels cig1/cig2/cig3 that
+    // replaced the old "SIGN" hatching polygons.
+    //   cig1 ≈ lowest conditional threshold  (~10 %)
+    //   cig2 ≈ medium conditional threshold  (~30 %)
+    //   cig3 ≈ highest conditional threshold (~60 %)
+    const PROB_FILL_EXPR = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(100,0,180,0.65)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(220,30,30,0.62)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], 'rgba(255,140,0,0.58)',
+        // Legacy "SIGN" hatching — render as a semi-transparent overlay
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], 'rgba(180,0,180,0.22)',
+        // Numeric probability labels via step expression
+        ['step', ['coalesce', ['to-number', ['get', 'LABEL']], 0],
+            'rgba(0,0,0,0)',
+            2,  'rgba(80,180,80,0.50)',
+            5,  'rgba(100,200,60,0.55)',
+            10, 'rgba(255,220,0,0.55)',
+            15, 'rgba(255,140,0,0.55)',
+            30, 'rgba(220,30,30,0.58)',
+            45, 'rgba(160,0,200,0.58)',
+            60, 'rgba(100,0,180,0.60)'
+        ]
     ];
-    const PROB_LINE_EXPR = ['step', PROB_NUM,
-        'rgba(0,0,0,0)',
-        2,  '#339933',
-        5,  '#55AA00',
-        10, '#CCAA00',
-        15, '#CC7000',
-        30, '#BB1111',
-        45, '#8800AA',
-        60, '#6600BB'
+    const PROB_LINE_EXPR = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], '#7700CC',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], '#BB1111',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], '#CC7000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], '#AA00AA',
+        ['step', ['coalesce', ['to-number', ['get', 'LABEL']], 0],
+            'rgba(0,0,0,0)',
+            2,  '#339933',
+            5,  '#55AA00',
+            10, '#CCAA00',
+            15, '#CC7000',
+            30, '#BB1111',
+            45, '#8800AA',
+            60, '#6600BB'
+        ]
     ];
 
     // ---- Legend Helpers ----
@@ -662,6 +688,22 @@
         removeSource('owm-source');
     }
 
+    // ---- SPC fetch helper with CORS fallback ----
+    async function fetchSPCGeoJSON(url) {
+        // Try direct first (SPC serves CORS headers but can occasionally fail)
+        try {
+            const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
+            if (r.ok) return r.json();
+            throw new Error('HTTP ' + r.status);
+        } catch (e) {
+            // CORS proxy fallback
+            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+            const r = await fetch(proxy, { cache: 'no-store' });
+            if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
+            return r.json();
+        }
+    }
+
     // ---- SPC Outlook ----
     async function loadSPCLayer(day, type) {
         const url = SPC_URLS[day]?.[type];
@@ -669,9 +711,7 @@
 
         showLoading('Loading SPC Day ' + day + ' outlook…');
         try {
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            const data = await resp.json();
+            const data = await fetchSPCGeoJSON(url);
 
             clearSPCLayers();
 

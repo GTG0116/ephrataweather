@@ -1048,3 +1048,145 @@ body {
 /* --- Utility --- */
 .section-title {
     font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.badge {
+    padding: 5px 14px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 100px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.badge-good   { background: rgba(76,175,80,0.2);  border-color: rgba(76,175,80,0.4);  color: #81C784; }
+.badge-warn   { background: rgba(255,152,0,0.18); border-color: rgba(255,152,0,0.38); color: #FFB74D; }
+.badge-danger { background: rgba(244,67,54,0.18); border-color: rgba(244,67,54,0.38); color: #EF9A9A; }
+
+.divider {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin: 16px 0;
+}
+
+.fade-in {
+    animation: fadeIn 0.4s ease both;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   MOBILE / RESPONSIVE OVERRIDES
+   ============================================ */
+
+/* --- Scrollable nav tab bar (mobile) ---
+   The nav bar becomes a horizontally scrollable strip so all tabs
+   remain accessible without wrapping or overflowing off-screen. */
+.nav-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;        /* Firefox */
+    flex-wrap: nowrap;
+    width: 100%;
+    /* keeps fit-content behavior on desktop */
+    max-width: 100%;
+}
+.nav-bar::-webkit-scrollbar { display: none; }
+
+.nav-link {
+    white-space: nowrap;   /* prevent text wrapping inside a tab */
+    flex-shrink: 0;
+}
+
+/* --- Header --- */
+@media (max-width: 540px) {
+    .app-header {
+        padding: 10px 14px;
+        gap: 8px;
+    }
+    .app-header h1 {
+        font-size: 1.1rem;
+    }
+    .app-header .location {
+        font-size: 0.8rem;
+    }
+    .badge {
+        font-size: 0.7rem;
+        padding: 4px 10px;
+    }
+    .nav-link {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+        gap: 5px;
+    }
+    .nav-link svg {
+        width: 15px;
+        height: 15px;
+    }
+}
+
+/* --- Current conditions hero ---  */
+@media (max-width: 540px) {
+    .current-hero {
+        padding: 24px 20px;
+        flex-direction: column-reverse;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .current-hero .temp-display {
+        font-size: 3.6rem;
+    }
+    .current-hero .icon-wrapper {
+        width: 72px;
+        height: 72px;
+    }
+}
+
+/* --- 10-Day forecast row ---
+   On narrow screens hide the condition-brief column and shrink columns. */
+@media (max-width: 540px) {
+    .forecast-row {
+        grid-template-columns: 68px 36px 1fr 48px 52px;
+        padding: 12px 14px;
+        gap: 6px;
+        font-size: 0.85rem;
+    }
+    .forecast-row .condition-brief { display: none; }
+    .forecast-row .day { font-size: 0.85rem; }
+}
+
+@media (max-width: 360px) {
+    .forecast-row {
+        grid-template-columns: 58px 30px 1fr 44px 46px;
+        padding: 10px 10px;
+        gap: 4px;
+        font-size: 0.78rem;
+    }
+}
+
+/* --- Cards grid --- */
+@media (max-width: 540px) {
+    .cards-grid-3 {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .card {
+        padding: 16px;
+    }
+    .card-value {
+        font-size: 2rem;
+    }
+}
+
+/* --- App container padding on very small screens --- */
+@media (max-width: 400px) {
+    .app-container {
+        padding: 12px;
+    }
+}

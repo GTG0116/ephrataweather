@@ -2,15 +2,14 @@
 // CURRENT CONDITIONS PAGE LOGIC
 // ============================================
 
-(async function () {
-        // Initialize location (geolocation on first visit, then stored)
-    const loc = await LocationManager.init();
-    const lat = loc.lat;
-    const lng = loc.lng;
- 
-    // Update location display
-    const nameEl = document.getElementById('location-name');
-    if (nameEl) nameEl.textContent = loc.name;
+// initCurrentView can be called by the SPA router or by a standalone page.
+// Pass lat/lng directly, or omit to use LocationManager.getCurrent().
+async function initCurrentView(lat, lng) {
+    if (lat == null || lng == null) {
+        const loc = LocationManager.getCurrent();
+        lat = loc.lat;
+        lng = loc.lng;
+    }
 
     // Request notification permission early
     if ('Notification' in window && Notification.permission === 'default') {
@@ -68,9 +67,20 @@
     }
 
     // Update timestamp
-    document.getElementById('last-updated').textContent =
+    const tsEl = document.getElementById('last-updated');
+    if (tsEl) tsEl.textContent =
         'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-})();
+}
+
+// Auto-run on standalone page (not loaded inside the SPA)
+if (typeof _SPA_MODE === 'undefined') {
+    (async function () {
+        const loc = await LocationManager.init();
+        const nameEl = document.getElementById('location-name');
+        if (nameEl) nameEl.textContent = loc.name;
+        await initCurrentView(loc.lat, loc.lng);
+    })();
+}
 
 // ---- Alerts ----
 function renderAlerts(data) {
