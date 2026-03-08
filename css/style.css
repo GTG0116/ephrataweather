@@ -128,7 +128,7 @@ body {
 .app-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: calc(20px + env(safe-area-inset-top, 0px)) 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    padding: calc(36px + env(safe-area-inset-top, 0px)) 20px calc(20px + env(safe-area-inset-bottom, 0px));
     min-height: 100vh;
 }
  
