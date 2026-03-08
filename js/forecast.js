@@ -313,6 +313,11 @@ function renderForecast(data) {
     renderForecastCharts(forecastDays);
 }
 
+function closeDayDetail() {
+    const detail = document.getElementById('day-detail');
+    if (detail) detail.style.display = 'none';
+}
+
 function showDayDetail(index) {
     const day = forecastDays[index];
     if (!day) return;
@@ -364,18 +369,26 @@ function showDayDetail(index) {
     if (windDir != null) windText += ` ${WeatherAPI.windDirection(windDir)}`;
     document.getElementById('detail-wind').textContent = windText;
 
-    // Humidity
+    // Humidity — hide when NWS (data is null)
     const humidity = day.relativeHumidity || day.avgHumidity;
+    const humidityRow = document.getElementById('detail-humidity-row');
+    if (humidityRow) humidityRow.style.display = humidity != null ? '' : 'none';
     document.getElementById('detail-humidity').textContent =
         humidity != null ? `${Math.round(humidity)}%` : 'N/A';
 
-    // UV
+    // UV — hide when NWS (always null)
     const uv = day.uvIndex || day.maxUvIndex;
+    const uvRow = document.getElementById('detail-uv-row');
+    if (uvRow) uvRow.style.display = uv != null ? '' : 'none';
     document.getElementById('detail-uv').textContent = uv != null ? uv : 'N/A';
 
-    // Sunrise/Sunset
+    // Sunrise/Sunset — hide when NWS (always null)
     const sunrise = day.sunrise;
     const sunset = day.sunset;
+    const sunriseRow = document.getElementById('detail-sunrise-row');
+    const sunsetRow = document.getElementById('detail-sunset-row');
+    if (sunriseRow) sunriseRow.style.display = sunrise ? '' : 'none';
+    if (sunsetRow) sunsetRow.style.display = sunset ? '' : 'none';
     document.getElementById('detail-sunrise').textContent =
         sunrise ? new Date(sunrise).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'N/A';
     document.getElementById('detail-sunset').textContent =

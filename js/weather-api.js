@@ -50,12 +50,12 @@ function _nwsCardinalToDeg(dir) {
     return map[String(dir).toUpperCase().trim()] ?? 0;
 }
 
-// Parse NWS wind speed string like "10 mph" → number
+// Parse NWS wind speed string like "10 mph" or "10.5 mph" → number (preserves decimals)
 function _nwsWindSpeed(str) {
     if (str == null) return null;
     if (typeof str === 'number') return str;
-    const m = String(str).match(/(\d+)/);
-    return m ? parseInt(m[1]) : null;
+    const m = String(str).match(/(\d+\.?\d*)/);
+    return m ? parseFloat(m[1]) : null;
 }
 
 // NWS grid points cache (avoids redundant /points requests)
