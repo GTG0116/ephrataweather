@@ -455,6 +455,7 @@ body {
     font-size: 0.8rem;
     color: var(--accent-blue);
     text-align: right;
+    white-space: nowrap;  /* prevent raindrop icon + % from wrapping on mobile */
 }
  
 .forecast-row .temp-bar-wrapper {
@@ -1098,6 +1099,55 @@ body {
     to   { opacity: 1; transform: translateY(0); }
 }
 
+/* --- Data Source Toggle --- */
+.source-toggle {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    flex-shrink: 0;
+}
+.source-btn {
+    padding: 4px 10px;
+    background: none;
+    border: none;
+    border-radius: calc(var(--radius-sm) - 2px);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition-smooth);
+    white-space: nowrap;
+}
+.source-btn.active {
+    background: rgba(100,180,255,0.2);
+    color: #8dd4ff;
+    border: 1px solid rgba(100,180,255,0.3);
+}
+.source-btn:hover:not(.active) {
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.08);
+}
+
+/* --- SPC Day Sections --- */
+.spc-day-section {
+    margin-bottom: 20px;
+}
+.spc-day-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
 /* ============================================
    MOBILE / RESPONSIVE OVERRIDES
    ============================================ */
@@ -1200,14 +1250,15 @@ body {
 }
 
 /* --- App container padding on mobile --- */
+/* Preserve safe-area-inset-top so Dynamic Island / notch doesn't cover the header */
 @media (max-width: 640px) {
     .app-container {
-        padding: 8px;
+        padding: calc(8px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
     }
 }
 @media (max-width: 400px) {
     .app-container {
-        padding: 6px;
+        padding: calc(6px + env(safe-area-inset-top, 0px)) 6px calc(6px + env(safe-area-inset-bottom, 0px)) calc(6px + env(safe-area-inset-left, 0px));
     }
 }
 

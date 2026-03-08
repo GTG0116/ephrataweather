@@ -9,8 +9,11 @@ async function initForecastView(lat, lng) {
         lng = loc.lng;
     }
 
+    const isNWS = WeatherAPI.getDataSource() === 'nws';
     try {
-        const data = await WeatherAPI.getDailyForecast(lat, lng, 10);
+        const data = isNWS
+            ? await WeatherAPI.getNWSDailyForecast(lat, lng, 10)
+            : await WeatherAPI.getDailyForecast(lat, lng, 10);
         renderForecast(data);
     } catch (err) {
         document.getElementById('forecast-list').innerHTML =
@@ -59,6 +62,7 @@ function _drawForecastChart(metric, days) {
 
     const W = svg.clientWidth || 700;
     const isTemp = metric === 'temp';
+    const isWind = metric === 'wind';
     const H = isTemp ? 180 : 140;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('height', H);
@@ -68,6 +72,74 @@ function _drawForecastChart(metric, days) {
     const plotH = H - PAD_T - PAD_B;
     const n = days.length;
     const barW = plotW / n;
+
+    if (isWind) {
+        // Wind speed line chart
+        const vals = days.map(d => d.maxWind?.speed?.value ?? null);
+        const filtered = vals.filter(v => v != null);
+        if (filtered.length < 2) { svg.innerHTML = ''; return; }
+
+        let minV = Math.min(...filtered);
+        let maxV = Math.max(...filtered);
+        const spread = maxV - minV || 1;
+        minV = Math.max(0, minV - spread * 0.1);
+        maxV += spread * 0.15;
+
+        const xOf = (i) => PAD_L + (i / (n - 1)) * plotW;
+        const yOf = (v) => PAD_T + plotH - ((v - minV) / (maxV - minV)) * plotH;
+
+        // Y-axis grid + labels
+        let yLabels = '';
+        for (let t = 0; t <= 4; t++) {
+            const v = minV + (maxV - minV) * (t / 4);
+            const y = yOf(v);
+            yLabels += `<line x1="${PAD_L}" y1="${y}" x2="${PAD_L + plotW}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                        <text x="${PAD_L - 5}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.45)" font-size="9.5">${Math.round(v)}</text>`;
+        }
+
+        // X-axis labels
+        let xLabels = '';
+        days.forEach((d, i) => {
+            const x = xOf(i);
+            const dateStr = d.displayDate || d.interval?.startTime;
+            const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
+            xLabels += `<text x="${x}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
+        });
+
+        // Build area + line path
+        const points = vals.map((v, i) => v != null ? { x: xOf(i), y: yOf(v) } : null).filter(Boolean);
+        let linePath = '', areaPath = '';
+        points.forEach((p, i) => {
+            if (i === 0) { linePath += `M${p.x},${p.y}`; areaPath += `M${p.x},${PAD_T + plotH} L${p.x},${p.y}`; }
+            else { linePath += ` L${p.x},${p.y}`; areaPath += ` L${p.x},${p.y}`; }
+        });
+        if (points.length) areaPath += ` L${points[points.length-1].x},${PAD_T + plotH} Z`;
+
+        // Dots + labels
+        let dots = '';
+        days.forEach((d, i) => {
+            const v = vals[i];
+            if (v != null) {
+                dots += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                         <text x="${xOf(i)}" y="${yOf(v) - 7}" text-anchor="middle" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(v)}</text>`;
+            }
+        });
+
+        svg.innerHTML = `
+            <defs>
+                <linearGradient id="fg_wind" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#42A5F5" stop-opacity="0.3"/>
+                    <stop offset="100%" stop-color="#42A5F5" stop-opacity="0"/>
+                </linearGradient>
+            </defs>
+            ${yLabels}${xLabels}
+            <path d="${areaPath}" fill="url(#fg_wind)"/>
+            <path d="${linePath}" fill="none" stroke="#42A5F5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            ${dots}
+            <text x="${PAD_L - 5}" y="${PAD_T - 6}" text-anchor="end" fill="rgba(255,255,255,0.3)" font-size="8">mph</text>
+        `;
+        return;
+    }
 
     if (isTemp) {
         // Temperature band chart: shaded area between lo and hi, line for each

@@ -36,13 +36,17 @@ async function initCurrentView(lat, lng) {
         _syncLocationsToSW().catch(() => {});
     }
 
+    // Determine data source (google/open-meteo or nws)
+    const dataSource = WeatherAPI.getDataSource();
+    const isNWS = dataSource === 'nws';
+
     // Fetch weather data in parallel
     const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult] = await Promise.allSettled([
-        WeatherAPI.getCurrentConditions(lat, lng),
-        WeatherAPI.getHourlyForecast(lat, lng, 24),
+        isNWS ? WeatherAPI.getNWSCurrentConditions(lat, lng) : WeatherAPI.getCurrentConditions(lat, lng),
+        isNWS ? WeatherAPI.getNWSHourlyForecast(lat, lng, 24) : WeatherAPI.getHourlyForecast(lat, lng, 24),
         // Pull a few days so hourly day/night selection can use
         // each hour's date-specific sunrise/sunset window.
-        WeatherAPI.getDailyForecast(lat, lng, 3),
+        isNWS ? WeatherAPI.getNWSDailyForecast(lat, lng, 3) : WeatherAPI.getDailyForecast(lat, lng, 3),
         WeatherAPI.getAirQuality(lat, lng),
         WeatherAPI.getPollen(lat, lng)
     ]);
@@ -600,7 +604,7 @@ function renderHourlyForecast(data, forecastDays) {
                 <span class="time">${time}</span>
                 <div style="width:36px;height:36px;">${iconSvg}</div>
                 <span class="temp">${temp}&deg;</span>
-                ${precipStr ? `<span class="precip">${precipStr}</span>` : ''}
+                ${precipStr ? `<span class="precip" style="display:flex;align-items:center;gap:2px;white-space:nowrap;"><svg width="9" height="9" viewBox="0 0 24 24" fill="rgba(100,180,255,0.85)" style="flex-shrink:0;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>${precipStr}</span>` : ''}
             </div>
         `;
     }).join('');
