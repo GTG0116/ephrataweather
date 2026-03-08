@@ -2,13 +2,12 @@
 // 10-DAY FORECAST PAGE LOGIC
 // ============================================
 
-(async function () {
-    const loc = await LocationManager.init();
-    const lat = loc.lat;
-    const lng = loc.lng;
- 
-    const nameEl = document.getElementById('location-name');
-    if (nameEl) nameEl.textContent = loc.name;
+async function initForecastView(lat, lng) {
+    if (lat == null || lng == null) {
+        const loc = LocationManager.getCurrent();
+        lat = loc.lat;
+        lng = loc.lng;
+    }
 
     try {
         const data = await WeatherAPI.getDailyForecast(lat, lng, 10);
@@ -19,9 +18,20 @@
         console.error('Forecast error:', err);
     }
 
-    document.getElementById('last-updated').textContent =
+    const tsEl = document.getElementById('last-updated');
+    if (tsEl) tsEl.textContent =
         'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-})();
+}
+
+// Auto-run on standalone page
+if (typeof _SPA_MODE === 'undefined') {
+    (async function () {
+        const loc = await LocationManager.init();
+        const nameEl = document.getElementById('location-name');
+        if (nameEl) nameEl.textContent = loc.name;
+        await initForecastView(loc.lat, loc.lng);
+    })();
+}
 
 // Store forecast data for detail view
 let forecastDays = [];

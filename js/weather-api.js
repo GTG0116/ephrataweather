@@ -44,8 +44,6 @@ function _wmoCondition(code) {
 async function _googleGet(endpoint, params) {
     const qp = new URLSearchParams(params);
     qp.set('key', CONFIG.GOOGLE_WEATHER_API_KEY);
-    // Cache-buster: ensures a fresh response for every location/reload
-    qp.set('_cb', Date.now());
     const url = `${CONFIG.GOOGLE_WEATHER_BASE}/${endpoint}?${qp}`;
     const resp = await fetch(url, { cache: 'no-store' });
     if (!resp.ok) throw new Error(`Google API ${resp.status}`);
