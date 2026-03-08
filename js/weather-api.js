@@ -147,7 +147,10 @@ const WeatherAPI = {
                     speed: h.wind?.speed?.value,
                     direction: h.wind?.direction?.degrees
                 },
-                relativeHumidity: h.relativeHumidity
+                relativeHumidity: h.relativeHumidity,
+                pressure: h.airPressure?.meanSeaLevelMillibars != null
+                    ? { meanSeaLevelMillibars: h.airPressure.meanSeaLevelMillibars }
+                    : null
             }));
             return { forecastHours };
         } catch (e) {
@@ -156,7 +159,7 @@ const WeatherAPI = {
 
         const params = new URLSearchParams({
             latitude: lat, longitude: lng,
-            hourly: 'temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m,relative_humidity_2m',
+            hourly: 'temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m,relative_humidity_2m,pressure_msl',
             temperature_unit: 'fahrenheit',
             wind_speed_unit: 'mph',
             timezone: 'auto',
@@ -180,7 +183,10 @@ const WeatherAPI = {
                 weatherCondition: { type: cond.type, description: { text: cond.description } },
                 precipitation: { probability: h.precipitation_probability[i] },
                 wind: { speed: h.wind_speed_10m[i], direction: h.wind_direction_10m[i] },
-                relativeHumidity: h.relative_humidity_2m?.[i]
+                relativeHumidity: h.relative_humidity_2m?.[i],
+                pressure: h.pressure_msl?.[i] != null
+                    ? { meanSeaLevelMillibars: h.pressure_msl[i] }
+                    : null
             });
         }
         return { forecastHours };

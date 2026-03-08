@@ -3,6 +3,9 @@
 // ============================================
 
 const WeatherIcons = {
+    _uid: 0,
+    _id() { return 'wi' + (++this._uid); },
+
     // Generate an animated SVG icon by condition code
     get(conditionCode, size = 64) {
         const s = size;
@@ -50,8 +53,10 @@ const WeatherIcons = {
         if (!text) return this.get('default', sz);
         const t = text.toUpperCase().replace(/\s+/g, '_');
 
-        // Try direct match first
-        if (this._iconMap[t]) return this.get(t, sz);
+        // Try direct match first (for non-clear conditions, night doesn't change icon)
+        if (this._iconMap[t] && !['CLEAR','MOSTLY_CLEAR','SUNNY','PARTLY_CLOUDY'].includes(t)) {
+            return this.get(t, sz);
+        }
 
         // Keyword matching
         if (t.includes('THUNDER')) return this.get(t.includes('HEAVY') ? 'HEAVY_THUNDERSTORM' : 'THUNDERSTORM', sz);
@@ -66,11 +71,17 @@ const WeatherIcons = {
         if (t.includes('FOG') || t.includes('MIST') || t.includes('HAZE')) return this.get('FOG', sz);
         if (t.includes('OVERCAST')) return this.get('OVERCAST', sz);
         if (t.includes('CLOUDY') && t.includes('MOST')) return this.get('MOSTLY_CLOUDY', sz);
-        if (t.includes('CLOUDY') && t.includes('PART')) return this.get('PARTLY_CLOUDY', sz);
+        if (t.includes('CLOUDY') && t.includes('PART')) {
+            return isNight ? this._partlyCloudyNight(sz) : this.get('PARTLY_CLOUDY', sz);
+        }
         if (t.includes('CLOUD')) return this.get('CLOUDY', sz);
         if (t.includes('WIND')) return this.get('WIND', sz);
-        if (t.includes('CLEAR') || t.includes('SUNNY') || t.includes('FAIR')) {
+        if (t.includes('CLEAR') || t.includes('SUNNY') || t.includes('FAIR') ||
+            t === 'CLEAR' || t === 'MOSTLY_CLEAR' || t === 'SUNNY') {
             return isNight ? this._clearNight(sz) : this.get('CLEAR', sz);
+        }
+        if (t === 'PARTLY_CLOUDY') {
+            return isNight ? this._partlyCloudyNight(sz) : this.get('PARTLY_CLOUDY', sz);
         }
         return this.get('default', sz);
     },
@@ -98,9 +109,10 @@ const WeatherIcons = {
     // ---- Individual icon SVG generators ----
 
     _sunny(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <radialGradient id="sunGrad" cx="50%" cy="50%">
+                <radialGradient id="${id}sg" cx="50%" cy="50%">
                     <stop offset="0%" stop-color="#FFEB3B"/>
                     <stop offset="100%" stop-color="#FFB300"/>
                 </radialGradient>
@@ -111,21 +123,22 @@ const WeatherIcons = {
                     `<line x1="50" y1="18" x2="50" y2="8" stroke="#FFCA28" stroke-width="4" stroke-linecap="round" transform="rotate(${a} 50 50)"/>`
                 ).join('')}
             </g>
-            <circle cx="50" cy="50" r="22" fill="url(#sunGrad)">
+            <circle cx="50" cy="50" r="22" fill="url(#${id}sg)">
                 <animate attributeName="r" values="22;24;22" dur="6s" repeatCount="indefinite"/>
             </circle>
         </svg>`;
     },
 
     _clearNight(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <radialGradient id="moonGrad" cx="40%" cy="40%">
+                <radialGradient id="${id}mg" cx="40%" cy="40%">
                     <stop offset="0%" stop-color="#FFF9C4"/>
                     <stop offset="100%" stop-color="#CFD8DC"/>
                 </radialGradient>
             </defs>
-            <circle cx="45" cy="45" r="20" fill="url(#moonGrad)"/>
+            <circle cx="45" cy="45" r="20" fill="url(#${id}mg)"/>
             <circle cx="55" cy="38" r="16" fill="#1a1a3e"/>
             ${[{x:72,y:25,d:0.3},{x:80,y:50,d:0.7},{x:65,y:70,d:1.1},{x:30,y:22,d:1.5},{x:20,y:65,d:0.1}].map(star =>
                 `<circle cx="${star.x}" cy="${star.y}" r="1.2" fill="#FFF9C4">
@@ -136,13 +149,14 @@ const WeatherIcons = {
     },
 
     _partlyCloudy(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <radialGradient id="pcSunGrad" cx="50%" cy="50%" r="50%">
+                <radialGradient id="${id}sg" cx="50%" cy="50%" r="50%">
                     <stop offset="0%" stop-color="#FFE066"/>
                     <stop offset="100%" stop-color="#FFB300"/>
                 </radialGradient>
-                <linearGradient id="pcCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(255,255,255,0.95)"/>
                     <stop offset="100%" stop-color="rgba(220,225,230,0.9)"/>
                 </linearGradient>
@@ -157,31 +171,65 @@ const WeatherIcons = {
                         </line>`
                     ).join('')}
                 </g>
-                <circle r="16" fill="url(#pcSunGrad)">
+                <circle r="16" fill="url(#${id}sg)">
                     <animate attributeName="r" values="16;17;16" dur="4s" repeatCount="indefinite"/>
                 </circle>
             </g>
             <!-- Cloud in front -->
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="6s" repeatCount="indefinite"/>
-                <ellipse cx="55" cy="62" rx="30" ry="14" fill="url(#pcCloudGrad)"/>
+                <ellipse cx="55" cy="62" rx="30" ry="14" fill="url(#${id}cg)"/>
                 <ellipse cx="42" cy="55" rx="18" ry="14" fill="rgba(255,255,255,0.95)"/>
                 <ellipse cx="65" cy="56" rx="16" ry="12" fill="rgba(245,245,245,0.95)"/>
             </g>
         </svg>`;
     },
 
-    _cloudy(s) {
+    _partlyCloudyNight(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <radialGradient id="${id}mg" cx="40%" cy="40%">
+                    <stop offset="0%" stop-color="#FFF9C4"/>
+                    <stop offset="100%" stop-color="#B0BEC5"/>
+                </radialGradient>
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(200,210,230,0.95)"/>
+                    <stop offset="100%" stop-color="rgba(160,175,200,0.9)"/>
+                </linearGradient>
+            </defs>
+            <!-- Moon behind cloud -->
+            <g transform="translate(62,32)">
+                <circle r="16" fill="url(#${id}mg)"/>
+                <circle cx="8" cy="-6" r="12" fill="#1a1a3e"/>
+            </g>
+            ${[{x:75,y:18,d:0.4},{x:82,y:38,d:1.0}].map(star =>
+                `<circle cx="${star.x}" cy="${star.y}" r="1" fill="#FFF9C4">
+                    <animate attributeName="opacity" values="0.2;0.9;0.2" dur="2s" begin="${star.d}s" repeatCount="indefinite"/>
+                </circle>`
+            ).join('')}
+            <!-- Cloud in front -->
+            <g>
+                <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="8s" repeatCount="indefinite"/>
+                <ellipse cx="50" cy="65" rx="32" ry="15" fill="url(#${id}cg)"/>
+                <ellipse cx="38" cy="57" rx="19" ry="14" fill="rgba(190,200,220,0.95)"/>
+                <ellipse cx="62" cy="59" rx="17" ry="13" fill="rgba(180,190,215,0.95)"/>
+            </g>
+        </svg>`;
+    },
+
+    _cloudy(s) {
+        const id = this._id();
+        return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
+            <defs>
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(220,225,230,0.95)"/>
                     <stop offset="100%" stop-color="rgba(180,190,200,0.9)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;3,0;0,0" dur="12s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="55" rx="34" ry="18" fill="url(#cloudGrad)"/>
+                <ellipse cx="50" cy="55" rx="34" ry="18" fill="url(#${id}cg)"/>
                 <ellipse cx="35" cy="48" rx="20" ry="15" fill="rgba(240,240,245,0.95)"/>
                 <ellipse cx="65" cy="52" rx="18" ry="13" fill="rgba(230,235,240,0.92)"/>
             </g>
@@ -189,9 +237,10 @@ const WeatherIcons = {
     },
 
     _overcast(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="ocGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}og" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(190,200,210,0.95)"/>
                     <stop offset="100%" stop-color="rgba(150,160,175,0.9)"/>
                 </linearGradient>
@@ -203,7 +252,7 @@ const WeatherIcons = {
             </g>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;-2,1;0,0" dur="9s" repeatCount="indefinite"/>
-                <ellipse cx="58" cy="55" rx="30" ry="15" fill="url(#ocGrad)"/>
+                <ellipse cx="58" cy="55" rx="30" ry="15" fill="url(#${id}og)"/>
                 <ellipse cx="48" cy="47" rx="18" ry="14" fill="rgba(195,205,215,0.95)"/>
                 <ellipse cx="68" cy="49" rx="15" ry="12" fill="rgba(185,195,210,0.9)"/>
             </g>
@@ -228,16 +277,17 @@ const WeatherIcons = {
     // --- Rain icons: cloud with vertical drops falling DOWN only ---
 
     _lightRain(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="lrCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(180,190,205,0.9)"/>
                     <stop offset="100%" stop-color="rgba(150,160,180,0.85)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#lrCloudGrad)"/>
+                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#${id}cg)"/>
                 <ellipse cx="40" cy="24" rx="16" ry="12" fill="rgba(185,195,210,0.9)"/>
                 <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(175,185,200,0.9)"/>
             </g>
@@ -252,16 +302,17 @@ const WeatherIcons = {
     },
 
     _rain(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="rCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(160,170,190,0.9)"/>
                     <stop offset="100%" stop-color="rgba(130,140,165,0.85)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#rCloudGrad)"/>
+                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#${id}cg)"/>
                 <ellipse cx="40" cy="24" rx="16" ry="12" fill="rgba(185,195,210,0.9)"/>
                 <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(175,185,200,0.9)"/>
             </g>
@@ -276,16 +327,17 @@ const WeatherIcons = {
     },
 
     _heavyRain(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="hrCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(130,140,165,0.95)"/>
                     <stop offset="100%" stop-color="rgba(100,110,140,0.9)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="6s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="24" rx="32" ry="16" fill="url(#hrCloudGrad)"/>
+                <ellipse cx="50" cy="24" rx="32" ry="16" fill="url(#${id}cg)"/>
                 <ellipse cx="36" cy="16" rx="18" ry="14" fill="rgba(140,150,175,0.95)"/>
                 <ellipse cx="64" cy="18" rx="16" ry="13" fill="rgba(125,135,160,0.95)"/>
             </g>
@@ -302,17 +354,18 @@ const WeatherIcons = {
     // --- Snow icons: SVG-drawn snowflakes ---
 
     _snow(s) {
+        const id = this._id();
         const flakes = [{x:38,y:48,r:6,d:0},{x:54,y:50,r:5,d:0.7},{x:64,y:46,r:5.5,d:1.4},{x:46,y:52,r:4.5,d:2.1}];
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="sCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(220,230,240,0.95)"/>
                     <stop offset="100%" stop-color="rgba(190,200,215,0.9)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="8s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="26" rx="28" ry="14" fill="url(#sCloudGrad)"/>
+                <ellipse cx="50" cy="26" rx="28" ry="14" fill="url(#${id}cg)"/>
                 <ellipse cx="40" cy="20" rx="16" ry="12" fill="rgba(195,205,220,0.9)"/>
                 <ellipse cx="60" cy="22" rx="14" ry="11" fill="rgba(185,195,210,0.9)"/>
             </g>
@@ -328,17 +381,18 @@ const WeatherIcons = {
     },
 
     _lightSnow(s) {
+        const id = this._id();
         const flakes = [{x:42,y:50,r:5,d:0},{x:58,y:48,r:4.5,d:1.2}];
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="lsCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(230,235,245,0.95)"/>
                     <stop offset="100%" stop-color="rgba(200,210,225,0.9)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="8s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="30" rx="26" ry="13" fill="url(#lsCloudGrad)"/>
+                <ellipse cx="50" cy="30" rx="26" ry="13" fill="url(#${id}cg)"/>
                 <ellipse cx="42" cy="24" rx="14" ry="11" fill="rgba(205,212,225,0.9)"/>
                 <ellipse cx="58" cy="26" rx="13" ry="10" fill="rgba(195,205,218,0.9)"/>
             </g>
@@ -354,20 +408,21 @@ const WeatherIcons = {
     },
 
     _heavySnow(s) {
+        const id = this._id();
         const flakes = [
             {x:32,y:44,r:6,d:0}, {x:42,y:46,r:5.5,d:0.4}, {x:52,y:42,r:6,d:0.8},
             {x:62,y:44,r:5,d:0.3}, {x:48,y:48,r:5,d:1.2}, {x:38,y:50,r:4.5,d:1.6}
         ];
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="hsCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(200,210,225,0.95)"/>
                     <stop offset="100%" stop-color="rgba(170,180,200,0.9)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="22" rx="30" ry="15" fill="url(#hsCloudGrad)"/>
+                <ellipse cx="50" cy="22" rx="30" ry="15" fill="url(#${id}cg)"/>
                 <ellipse cx="38" cy="14" rx="17" ry="13" fill="rgba(175,185,205,0.95)"/>
                 <ellipse cx="62" cy="16" rx="15" ry="12" fill="rgba(160,170,195,0.95)"/>
             </g>
@@ -383,16 +438,17 @@ const WeatherIcons = {
     },
 
     _sleet(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="slCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(200,210,225,0.9)"/>
                     <stop offset="100%" stop-color="rgba(170,185,205,0.85)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#slCloudGrad)"/>
+                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#${id}cg)"/>
                 <ellipse cx="40" cy="24" rx="16" ry="12" fill="rgba(175,185,205,0.9)"/>
                 <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(165,175,195,0.9)"/>
             </g>
@@ -415,16 +471,17 @@ const WeatherIcons = {
     },
 
     _freezingRain(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="frCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(170,185,210,0.9)"/>
                     <stop offset="100%" stop-color="rgba(140,160,190,0.85)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="7s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#frCloudGrad)"/>
+                <ellipse cx="50" cy="30" rx="28" ry="14" fill="url(#${id}cg)"/>
                 <ellipse cx="40" cy="24" rx="16" ry="12" fill="rgba(170,185,210,0.9)"/>
                 <ellipse cx="60" cy="26" rx="14" ry="11" fill="rgba(160,175,200,0.9)"/>
             </g>
@@ -443,16 +500,17 @@ const WeatherIcons = {
     },
 
     _thunderstorm(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="tsCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(120,130,160,0.95)"/>
                     <stop offset="100%" stop-color="rgba(80,90,120,0.9)"/>
                 </linearGradient>
             </defs>
             <g>
                 <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="6s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="28" rx="32" ry="16" fill="url(#tsCloudGrad)"/>
+                <ellipse cx="50" cy="28" rx="32" ry="16" fill="url(#${id}cg)"/>
                 <ellipse cx="36" cy="20" rx="18" ry="14" fill="rgba(130,140,170,0.95)"/>
                 <ellipse cx="64" cy="22" rx="16" ry="13" fill="rgba(110,120,155,0.95)"/>
             </g>
@@ -470,15 +528,16 @@ const WeatherIcons = {
     },
 
     _heavyThunderstorm(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="htsCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(90,100,135,0.95)"/>
                     <stop offset="100%" stop-color="rgba(60,70,100,0.9)"/>
                 </linearGradient>
             </defs>
             <g>
-                <ellipse cx="50" cy="24" rx="34" ry="17" fill="url(#htsCloudGrad)"/>
+                <ellipse cx="50" cy="24" rx="34" ry="17" fill="url(#${id}cg)"/>
                 <ellipse cx="34" cy="16" rx="19" ry="14" fill="rgba(100,110,145,0.95)"/>
                 <ellipse cx="66" cy="18" rx="17" ry="13" fill="rgba(85,95,130,0.95)"/>
             </g>
@@ -499,15 +558,16 @@ const WeatherIcons = {
     },
 
     _wind(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="windGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <linearGradient id="${id}wg" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stop-color="rgba(150,200,255,0.4)"/>
                     <stop offset="100%" stop-color="rgba(100,180,255,0.1)"/>
                 </linearGradient>
             </defs>
             ${[{y:35,len:60,d:0},{y:50,len:45,d:1.2},{y:65,len:70,d:0.6}].map(line =>
-                `<path d="M${20} ${line.y} Q${20 + line.len * 0.4} ${line.y - 12} ${20 + line.len} ${line.y}" fill="none" stroke="url(#windGrad)" stroke-width="6" stroke-linecap="round">
+                `<path d="M${20} ${line.y} Q${20 + line.len * 0.4} ${line.y - 12} ${20 + line.len} ${line.y}" fill="none" stroke="url(#${id}wg)" stroke-width="6" stroke-linecap="round">
                     <animate attributeName="d" values="
                         M20 ${line.y} Q${20 + line.len * 0.4} ${line.y - 12} ${20 + line.len} ${line.y};
                         M20 ${line.y} Q${20 + line.len * 0.6} ${line.y + 8} ${20 + line.len} ${line.y};
@@ -520,24 +580,25 @@ const WeatherIcons = {
     },
 
     _hail(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
             <defs>
-                <linearGradient id="hailCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
                     <stop offset="0%" stop-color="rgba(140,150,180,0.95)"/>
                     <stop offset="100%" stop-color="rgba(100,110,145,0.9)"/>
                 </linearGradient>
-                <radialGradient id="hailStone" cx="40%" cy="35%">
+                <radialGradient id="${id}hs" cx="40%" cy="35%">
                     <stop offset="0%" stop-color="rgba(220,235,255,0.9)"/>
                     <stop offset="100%" stop-color="rgba(180,200,230,0.7)"/>
                 </radialGradient>
             </defs>
             <g>
-                <ellipse cx="50" cy="28" rx="30" ry="15" fill="url(#hailCloudGrad)"/>
+                <ellipse cx="50" cy="28" rx="30" ry="15" fill="url(#${id}cg)"/>
                 <ellipse cx="38" cy="20" rx="17" ry="13" fill="rgba(150,160,190,0.95)"/>
                 <ellipse cx="62" cy="22" rx="15" ry="12" fill="rgba(130,140,170,0.95)"/>
             </g>
             ${[{x:36,d:0},{x:50,d:0.4},{x:64,d:0.8},{x:42,d:1.2},{x:56,d:0.6}].map(stone =>
-                `<circle cx="${stone.x}" cy="48" r="3.5" fill="url(#hailStone)" stroke="rgba(180,200,230,0.5)" stroke-width="0.5">
+                `<circle cx="${stone.x}" cy="48" r="3.5" fill="url(#${id}hs)" stroke="rgba(180,200,230,0.5)" stroke-width="0.5">
                     <animate attributeName="cy" values="48;88" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
                     <animate attributeName="opacity" values="0.9;0" dur="1s" begin="${stone.d}s" repeatCount="indefinite"/>
                 </circle>`

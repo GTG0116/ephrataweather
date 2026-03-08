@@ -154,6 +154,44 @@
         .owm-key-warn.visible { display: block; }
         .layer-notice { font-size: 0.78rem; color: var(--text-muted); padding: 4px 0; }
 
+        /* ---- SPC Image Gallery ---- */
+        .spc-img-card {
+            border-radius: 8px;
+            overflow: hidden;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.2s, border-color 0.2s;
+            cursor: zoom-in;
+        }
+        .spc-img-card:hover { transform: scale(1.015); border-color: rgba(100,180,255,0.4); }
+        .spc-img-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            padding: 8px 10px 6px;
+        }
+
+        /* ---- Hourly Charts ---- */
+        .chart-tab {
+            padding: 6px 14px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 500;
+            font-family: inherit;
+            transition: all var(--transition-smooth);
+        }
+        .chart-tab:hover { background: rgba(255,255,255,0.13); color: var(--text-secondary); }
+        .chart-tab.active { background: rgba(100,180,255,0.2); border-color: rgba(100,180,255,0.4); color: #8dd4ff; }
+
+        /* ---- Image zoom overlay ---- */
+        #img-zoom-overlay.open { display: flex !important; }
+
         @media (max-width: 640px) {
             .map-wrapper { height: calc(100vh - 370px); min-height: 360px; }
             .hero-section { padding: 32px 16px 36px; }
@@ -162,6 +200,7 @@
         }
         @media (max-width: 400px) {
             .layer-btn, .day-btn, .type-btn { padding: 5px 9px; font-size: 0.75rem; }
+            .chart-tab { padding: 5px 9px; font-size: 0.73rem; }
         }
     </style>
 </head>
@@ -276,10 +315,21 @@
 
             <!-- Hourly Forecast -->
             <h3 class="section-title">Hourly Forecast</h3>
-            <div class="glass-static" style="margin-bottom:24px;">
+            <div class="glass-static" style="margin-bottom:16px;">
                 <div class="hourly-strip" id="hourly-strip">
                     <div class="loading-shimmer loading-placeholder" style="width:100%;height:100px;"></div>
                 </div>
+            </div>
+
+            <!-- Hourly Charts -->
+            <div id="hourly-charts-container" class="glass-static fade-in" style="display:none;margin-bottom:24px;padding:16px 16px 8px;">
+                <div class="chart-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                    <button class="chart-tab active" data-metric="temp" onclick="switchHourlyChart('temp')">Temperature</button>
+                    <button class="chart-tab" data-metric="wind" onclick="switchHourlyChart('wind')">Wind Speed</button>
+                    <button class="chart-tab" data-metric="pressure" onclick="switchHourlyChart('pressure')">Pressure</button>
+                    <button class="chart-tab" data-metric="precip" onclick="switchHourlyChart('precip')">Precip Chance</button>
+                </div>
+                <svg id="hourly-chart-svg" width="100%" height="160" style="display:block;overflow:visible;"></svg>
             </div>
 
             <!-- Details Cards -->
@@ -394,10 +444,12 @@
              =================================================== -->
         <section id="view-maps" class="view">
             <!-- Map Controls Panel -->
+            <!-- Layer selector -->
             <div class="map-controls-panel glass-static" style="margin-bottom:14px;">
                 <div class="layer-row">
-                    <span class="layer-label">Layer:</span>
+                    <span class="layer-label">View:</span>
                     <button class="layer-btn active" data-layer="spc" onclick="switchLayer('spc')">SPC Outlook</button>
+                    <button class="layer-btn" data-layer="satellite" onclick="switchLayer('satellite')">Satellite</button>
                     <button class="layer-btn" data-layer="radar" onclick="switchLayer('radar')">Radar</button>
                     <button class="layer-btn" data-layer="temperature" onclick="switchLayer('temperature')">Temperature</button>
                     <button class="layer-btn" data-layer="wind" onclick="switchLayer('wind')">Wind Speed</button>
@@ -405,8 +457,9 @@
                 <!-- SPC Sub-Controls -->
                 <div class="spc-controls visible" id="spc-controls">
                     <div class="ctrl-row">
-                        <span class="ctrl-label">Day:</span>
-                        <button class="day-btn active" data-day="1" onclick="selectDay(1)">Day 1</button>
+                        <span class="ctrl-label">Filter:</span>
+                        <button class="day-btn active" data-day="0" onclick="selectDay(0)">All Days</button>
+                        <button class="day-btn" data-day="1" onclick="selectDay(1)">Day 1</button>
                         <button class="day-btn" data-day="2" onclick="selectDay(2)">Day 2</button>
                         <button class="day-btn" data-day="3" onclick="selectDay(3)">Day 3</button>
                         <button class="day-btn" data-day="4" onclick="selectDay(4)">Day 4</button>
@@ -415,8 +468,15 @@
                         <button class="day-btn" data-day="7" onclick="selectDay(7)">Day 7</button>
                         <button class="day-btn" data-day="8" onclick="selectDay(8)">Day 8</button>
                     </div>
-                    <div class="ctrl-row" id="type-row">
-                        <span class="ctrl-label">Type:</span>
+                </div>
+                <!-- Satellite Sub-Controls -->
+                <div class="spc-controls" id="satellite-controls">
+                    <div class="ctrl-row">
+                        <span class="ctrl-label">Band:</span>
+                        <button class="day-btn active" data-band="geocolor" onclick="selectSatBand('geocolor')">GeoColor</button>
+                        <button class="day-btn" data-band="visible" onclick="selectSatBand('visible')">Visible</button>
+                        <button class="day-btn" data-band="infrared" onclick="selectSatBand('infrared')">Infrared</button>
+                        <button class="day-btn" data-band="watervapor" onclick="selectSatBand('watervapor')">Water Vapor</button>
                     </div>
                 </div>
                 <!-- Radar Sub-Controls -->
@@ -446,8 +506,28 @@
                 </div>
             </div>
 
-            <!-- Map -->
-            <div class="map-wrapper glass-static">
+            <!-- SPC Outlook Image Gallery -->
+            <div id="spc-image-view" class="glass-static" style="padding:16px;">
+                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
+                    Images from NOAA Storm Prediction Center &mdash; click any image to zoom in.
+                </p>
+                <div id="spc-img-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
+            </div>
+
+            <!-- Satellite Image View -->
+            <div id="satellite-image-view" class="glass-static" style="display:none;padding:16px;">
+                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
+                    GOES-East CONUS satellite imagery &mdash; click to zoom &bull;
+                    <span id="sat-timestamp" style="color:var(--text-secondary);">Images refresh every ~5 min from NOAA.</span>
+                </p>
+                <div id="sat-img-wrap" style="text-align:center;">
+                    <img id="sat-main-img" src="" alt="Satellite" style="max-width:100%;border-radius:8px;cursor:zoom-in;"
+                         onclick="openImageZoom(this.src, this.alt)" />
+                </div>
+            </div>
+
+            <!-- Map (for Radar / Temperature / Wind) -->
+            <div class="map-wrapper glass-static" id="map-view-wrap" style="display:none;">
                 <div id="map"></div>
                 <div class="spc-legend visible" id="spc-legend">
                     <div class="legend-title" id="legend-title">Categorical Risk</div>
@@ -458,9 +538,20 @@
                     <p id="loading-msg">Loading map...</p>
                 </div>
             </div>
+
         </section>
 
     </div><!-- end app-container -->
+
+    <!-- Image Zoom Overlay (fixed, outside normal flow) -->
+    <div id="img-zoom-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:zoom-out;align-items:center;justify-content:center;"
+         onclick="closeImageZoom(event)">
+        <button onclick="event.stopPropagation();document.getElementById('img-zoom-overlay').style.display='none';document.body.style.overflow='';" style="position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:1.4rem;width:40px;height:40px;border-radius:50%;cursor:pointer;line-height:1;z-index:10000;">&times;</button>
+        <div style="max-width:95vw;max-height:92vh;text-align:center;" onclick="event.stopPropagation()">
+            <img id="zoom-img" src="" alt="" style="max-width:95vw;max-height:84vh;object-fit:contain;border-radius:6px;">
+            <div id="zoom-caption" style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:10px;"></div>
+        </div>
+    </div>
 
     <!-- ===================================================
          SCRIPTS
@@ -561,7 +652,7 @@
     // ============================================================
     let map = null;
     let currentLayer = 'spc';
-    let currentDay = 1;
+    let currentDay = 0;  // 0 = show all days
     let currentType = 'cat';
     let firstSymbolLayerId = undefined;
     let radarFrames = [];
@@ -822,74 +913,177 @@
         return dirs[Math.round(deg / 22.5) % 16];
     }
 
+    // ============================================================
+    // SPC IMAGE GALLERY
+    // ============================================================
+
+    const SPC_IMAGES = {
+        1: [
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.gif',           label: 'Day 1 – Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_torn.gif',  label: 'Day 1 – Tornado' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_wind.gif',  label: 'Day 1 – Wind' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day1probotlk_hail.gif',  label: 'Day 1 – Hail' },
+        ],
+        2: [
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.gif',           label: 'Day 2 – Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_torn.gif',  label: 'Day 2 – Tornado' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_wind.gif',  label: 'Day 2 – Wind' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day2probotlk_hail.gif',  label: 'Day 2 – Hail' },
+        ],
+        3: [
+            { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.gif',           label: 'Day 3 – Categorical' },
+            { url: 'https://www.spc.noaa.gov/products/outlook/day3prob.gif',           label: 'Day 3 – Probability' },
+        ],
+        4: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day4prob.gif',      label: 'Day 4 – Probability' }],
+        5: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day5prob.gif',      label: 'Day 5 – Probability' }],
+        6: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day6prob.gif',      label: 'Day 6 – Probability' }],
+        7: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day7prob.gif',      label: 'Day 7 – Probability' }],
+        8: [{ url: 'https://www.spc.noaa.gov/products/expprobotlk/day8prob.gif',      label: 'Day 8 – Probability' }],
+    };
+
+    function renderSPCImages(filterDay) {
+        const grid = document.getElementById('spc-img-grid');
+        if (!grid) return;
+        let imgs;
+        if (!filterDay || filterDay === 0) {
+            imgs = Object.values(SPC_IMAGES).flat();
+        } else {
+            imgs = SPC_IMAGES[filterDay] || [];
+        }
+        const ts = Date.now();
+        grid.innerHTML = imgs.map(img => `
+            <div class="spc-img-card" onclick="openImageZoom('${img.url}?cb=${ts}', '${img.label}')" title="Click to zoom">
+                <div class="spc-img-label">${img.label}</div>
+                <img src="${img.url}?cb=${ts}" alt="${img.label}"
+                     style="width:100%;border-radius:6px;display:block;cursor:zoom-in;"
+                     loading="lazy"
+                     onerror="this.parentElement.style.display='none'">
+            </div>
+        `).join('');
+    }
+
+    // ============================================================
+    // SATELLITE VIEWER
+    // ============================================================
+    const SAT_BANDS = {
+        geocolor:   { url: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/CONUS/GEOCOLOR/1250x750.jpg', label: 'GeoColor (True Color)' },
+        visible:    { url: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/CONUS/02/1250x750.jpg',       label: 'Visible (Band 2)' },
+        infrared:   { url: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/CONUS/13/1250x750.jpg',       label: 'Clean Longwave IR (Band 13)' },
+        watervapor: { url: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/CONUS/09/1250x750.jpg',       label: 'Mid-Level Water Vapor (Band 9)' },
+    };
+    let currentSatBand = 'geocolor';
+
+    function selectSatBand(band) {
+        currentSatBand = band;
+        document.querySelectorAll('#satellite-controls .day-btn').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.band === band));
+        loadSatelliteImage(band);
+    }
+
+    function loadSatelliteImage(band) {
+        const info = SAT_BANDS[band];
+        if (!info) return;
+        const img = document.getElementById('sat-main-img');
+        if (!img) return;
+        img.alt = info.label;
+        // Cache-bust so we always get the latest
+        img.src = info.url + '?cb=' + Date.now();
+        img.title = 'Click to zoom – ' + info.label;
+    }
+
+    // ============================================================
+    // IMAGE ZOOM OVERLAY
+    // ============================================================
+    function openImageZoom(src, caption) {
+        const overlay = document.getElementById('img-zoom-overlay');
+        document.getElementById('zoom-img').src = src;
+        document.getElementById('zoom-caption').textContent = caption || '';
+        overlay.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    function closeImageZoom(e) {
+        // Only close if clicking directly on the overlay background
+        if (e && e.target && e.target.id !== 'img-zoom-overlay') return;
+        const overlay = document.getElementById('img-zoom-overlay');
+        overlay.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    // ESC to close
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            const overlay = document.getElementById('img-zoom-overlay');
+            if (overlay) { overlay.style.display = 'none'; document.body.style.overflow = ''; }
+        }
+    });
+
+    function _showSPCView()       { document.getElementById('spc-image-view').style.display = ''; document.getElementById('satellite-image-view').style.display = 'none'; document.getElementById('map-view-wrap').style.display = 'none'; }
+    function _showSatelliteView() { document.getElementById('spc-image-view').style.display = 'none'; document.getElementById('satellite-image-view').style.display = ''; document.getElementById('map-view-wrap').style.display = 'none'; }
+    function _showMapView()       { document.getElementById('spc-image-view').style.display = 'none'; document.getElementById('satellite-image-view').style.display = 'none'; document.getElementById('map-view-wrap').style.display = ''; }
+
     function switchLayer(layer) {
         currentLayer = layer;
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
+        document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
         document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
         document.getElementById('owm-controls').classList.toggle('visible', layer === 'temperature' || layer === 'wind');
-        clearSPCLayers(); clearRadarLayers(); clearOWMLayers(); hideSPCLegend();
+
         if (radarPlaying) toggleRadarPlay();
-        if (layer === 'spc') loadSPCLayer(currentDay, currentType);
-        else if (layer === 'radar') loadRadarData();
-        else if (layer === 'temperature' || layer === 'wind') loadOWMLayer(layer);
+
+        if (layer === 'spc') {
+            _showSPCView();
+            renderSPCImages(currentDay);
+        } else if (layer === 'satellite') {
+            _showSatelliteView();
+            loadSatelliteImage(currentSatBand);
+        } else {
+            _showMapView();
+            clearSPCLayers(); clearRadarLayers(); clearOWMLayers(); hideSPCLegend();
+            if (layer === 'radar') loadRadarData();
+            else if (layer === 'temperature' || layer === 'wind') loadOWMLayer(layer);
+            // ensure map is sized
+            if (map) setTimeout(() => map.resize(), 50);
+        }
     }
 
     function selectDay(day) {
         currentDay = day;
-        document.querySelectorAll('.day-btn').forEach(btn => btn.classList.toggle('active', parseInt(btn.dataset.day) === day));
-        buildTypeButtons(day);
-    }
-    function buildTypeButtons(day) {
-        const types = DAY_TYPES[day] || [];
-        const typeRow = document.getElementById('type-row');
-        typeRow.innerHTML = '<span class="ctrl-label">Type:</span>';
-        currentType = types[0]?.key || 'cat';
-        types.forEach((t, i) => {
-            const btn = document.createElement('button');
-            btn.className = 'type-btn' + (i === 0 ? ' active' : '');
-            btn.dataset.type = t.key;
-            btn.textContent = t.label;
-            btn.onclick = () => selectType(t.key);
-            typeRow.appendChild(btn);
-        });
-        if (currentLayer === 'spc') loadSPCLayer(day, currentType);
-    }
-    function selectType(type) {
-        currentType = type;
-        document.querySelectorAll('.type-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type));
-        if (currentLayer === 'spc') loadSPCLayer(currentDay, currentType);
+        document.querySelectorAll('.day-btn[data-day]').forEach(btn => btn.classList.toggle('active', parseInt(btn.dataset.day) === day));
+        if (currentLayer === 'spc') renderSPCImages(day);
     }
 
     function showLoading(msg) {
         const el = document.getElementById('map-loading');
-        el.style.display = 'flex';
-        const msgEl = document.getElementById('loading-msg');
-        if (msgEl) msgEl.textContent = msg || 'Loading...';
+        if (el) { el.style.display = 'flex'; const m = document.getElementById('loading-msg'); if (m) m.textContent = msg || 'Loading...'; }
     }
-    function hideLoading() { document.getElementById('map-loading').style.display = 'none'; }
+    function hideLoading() { const el = document.getElementById('map-loading'); if (el) el.style.display = 'none'; }
 
     async function initMapsView() {
-        if (map) { map.resize(); return; }
-        const loc = LocationManager.getCurrent();
-        mapboxgl.accessToken = CONFIG.MAPBOX_ACCESS_TOKEN;
-        map = new mapboxgl.Map({
-            container: 'map',
-            style: 'mapbox://styles/mapbox/dark-v11',
-            center: [loc.lng, loc.lat],
-            zoom: 5,
-            projection: 'mercator'
-        });
-        window._spaMap = map;
-        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-        map.on('load', () => {
-            const styleLayers = map.getStyle().layers;
-            for (const layer of styleLayers) {
-                if (layer.type === 'symbol') { firstSymbolLayerId = layer.id; break; }
-            }
-            buildTypeButtons(1);
-            map.on('click', handleOWMClick);
-        });
+        // Show SPC images right away (no map needed)
+        _showSPCView();
+        renderSPCImages(0);
+
+        // Lazy-init the Mapbox map only when user switches to a map layer
+        if (!map) {
+            const loc = LocationManager.getCurrent();
+            mapboxgl.accessToken = CONFIG.MAPBOX_ACCESS_TOKEN;
+            map = new mapboxgl.Map({
+                container: 'map',
+                style: 'mapbox://styles/mapbox/dark-v11',
+                center: [loc.lng, loc.lat],
+                zoom: 5,
+                projection: 'mercator'
+            });
+            window._spaMap = map;
+            map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+            map.on('load', () => {
+                const styleLayers = map.getStyle().layers;
+                for (const layer of styleLayers) {
+                    if (layer.type === 'symbol') { firstSymbolLayerId = layer.id; break; }
+                }
+                map.on('click', handleOWMClick);
+            });
+        }
     }
 
     // ============================================================
