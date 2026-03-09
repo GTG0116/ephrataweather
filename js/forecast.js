@@ -297,8 +297,11 @@ function renderForecast(data) {
             <div class="forecast-row fade-in" style="animation-delay:${i * 50}ms;cursor:pointer;" onclick="showDayDetail(${i})">
                 <span class="day ${isToday ? 'today' : ''}">${dayName}</span>
                 <div style="width:32px;height:32px;">${iconSvg}</div>
-                <div class="temp-bar-wrapper">
-                    <div class="temp-bar" style="left:${barLeft}%;width:${barWidth}%;"></div>
+                <div class="temp-bar-col">
+                    <div class="temp-bar-wrapper">
+                        <div class="temp-bar" style="left:${barLeft}%;width:${barWidth}%;"></div>
+                    </div>
+                    <span class="condition-brief">${condText}</span>
                 </div>
                 <span class="temp-lo">${lo != null ? WeatherAPI.formatTemp(lo) + '\u00B0' : '--'}</span>
                 <span class="temp-hi">${hi != null ? WeatherAPI.formatTemp(hi) + '\u00B0' : '--'}</span>
