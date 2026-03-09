@@ -89,6 +89,7 @@ async function initCurrentView(lat, lng) {
     if (pollenResult.status === 'fulfilled') {
         renderPollen(pollenResult.value);
     } else {
+        renderPollen({});  // sets all pollen levels to "None"
         console.error('Pollen error:', pollenResult.reason);
     }
 
@@ -765,6 +766,12 @@ function renderAirQuality(data) {
 }
 
 function renderPollen(data) {
+    // Default all pollen elements to "None" before processing
+    ['pollen-tree', 'pollen-grass', 'pollen-weed'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = 'None'; el.className = 'level pollen-low'; }
+    });
+
     // Handle both possible response structures from the Pollen API
     const days = data.dailyInfo || [];
     if (days.length === 0) return;
@@ -791,7 +798,7 @@ function renderPollen(data) {
             else if (v <= 4) level = 'High';
             else level = 'Very High';
         }
-        if (!level) level = 'N/A';
+        if (!level) level = 'None';
 
         let elId = null;
         if (code === 'TREE' || displayName.includes('tree')) elId = 'pollen-tree';

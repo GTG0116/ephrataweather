@@ -458,6 +458,14 @@ body {
     white-space: nowrap;  /* prevent raindrop icon + % from wrapping on mobile */
 }
  
+.forecast-row .temp-bar-col {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    justify-content: center;
+    min-width: 0;
+}
+
 .forecast-row .temp-bar-wrapper {
     position: relative;
     height: 6px;
@@ -486,9 +494,12 @@ body {
 }
  
 .forecast-row .condition-brief {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     color: var(--text-secondary);
-    text-align: right;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
  
 /* --- Forecast Charts --- */

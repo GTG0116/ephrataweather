@@ -50,11 +50,16 @@ function _nwsCardinalToDeg(dir) {
     return map[String(dir).toUpperCase().trim()] ?? 0;
 }
 
-// Parse NWS wind speed string like "10 mph" or "10.5 mph" → number (preserves decimals)
+// Parse NWS wind speed string like "10 mph", "10.5 mph", or "10 to 15 mph" → number
+// For ranges, returns the higher value (max wind speed)
 function _nwsWindSpeed(str) {
     if (str == null) return null;
     if (typeof str === 'number') return str;
-    const m = String(str).match(/(\d+\.?\d*)/);
+    const s = String(str);
+    // Handle ranges like "10 to 15 mph" — take the higher value
+    const range = s.match(/(\d+\.?\d*)\s+to\s+(\d+\.?\d*)/i);
+    if (range) return parseFloat(range[2]);
+    const m = s.match(/(\d+\.?\d*)/);
     return m ? parseFloat(m[1]) : null;
 }
 
@@ -106,6 +111,42 @@ const WMO_CODES = {
 
 function _wmoCondition(code) {
     return WMO_CODES[code] || { type: 'PARTLY_CLOUDY', description: 'Unknown' };
+}
+
+// Fetch sunrise/sunset times for day/night logic — tries Google first, then Open-Meteo
+async function _fetchSunTimes(lat, lng, days) {
+    try {
+        const raw = await _googleGet('forecast/days:lookup', {
+            'location.latitude': lat,
+            'location.longitude': lng,
+            'unitsSystem': 'IMPERIAL',
+            'days': days,
+            'pageSize': days
+        });
+        return (raw.forecastDays || []).map(day => ({
+            displayDate: _googleDateToString(day.displayDate),
+            sunrise: day.sunEvents?.sunriseTime,
+            sunset: day.sunEvents?.sunsetTime
+        }));
+    } catch (e) {
+        console.warn('Google sun times failed, falling back to Open-Meteo:', e.message);
+    }
+    // Fallback: Open-Meteo (free, no key needed)
+    const params = new URLSearchParams({
+        latitude: lat, longitude: lng,
+        daily: 'sunrise,sunset',
+        timezone: 'auto',
+        forecast_days: Math.min(days, 16)
+    });
+    const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    const d = data.daily;
+    return (d.time || []).map((t, i) => ({
+        displayDate: t,
+        sunrise: d.sunrise[i],
+        sunset: d.sunset[i]
+    }));
 }
 
 // --- Google Weather API helper (GET with query params) ---
@@ -502,9 +543,15 @@ const WeatherAPI = {
     // === NWS Daily Forecast ===
     async getNWSDailyForecast(lat, lng, days = 10) {
         const points = await _getNWSPoints(lat, lng);
-        const resp = await fetch(points.forecast, {
-            headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
-        });
+
+        // Fetch NWS forecast periods and sunrise/sunset times in parallel
+        const [resp, sunTimes] = await Promise.all([
+            fetch(points.forecast, {
+                headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
+            }),
+            _fetchSunTimes(lat, lng, days).catch(() => [])
+        ]);
+
         if (!resp.ok) throw new Error(`NWS daily forecast ${resp.status}`);
         const data = await resp.json();
         const periods = data.properties?.periods || [];
@@ -515,6 +562,9 @@ const WeatherAPI = {
             if (!p.isDaytime) continue; // pair day + night
             const night = periods[i + 1]; // immediately following night period
             const dateStr = p.startTime?.split('T')[0];
+
+            // Merge sunrise/sunset from Google/Open-Meteo for day/night icon logic
+            const sun = sunTimes.find(s => s.displayDate === dateStr);
 
             forecastDays.push({
                 displayDate: dateStr,
@@ -537,8 +587,8 @@ const WeatherAPI = {
                 avgHumidity: p.relativeHumidity?.value ?? null,
                 uvIndex: null,
                 maxUvIndex: null,
-                sunrise: null,
-                sunset: null
+                sunrise: sun?.sunrise ?? null,
+                sunset: sun?.sunset ?? null
             });
         }
         return { forecastDays };
