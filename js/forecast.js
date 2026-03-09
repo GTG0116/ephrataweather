@@ -316,6 +316,39 @@ function renderForecast(data) {
     renderForecastCharts(forecastDays);
 }
 
+
+function _buildDayDescription(day) {
+    const cond = day.weatherCondition?.description?.text
+        || (day.weatherCondition?.type || '').replace(/_/g, ' ').toLowerCase()
+        || 'conditions';
+
+    const hi = day.maxTemperature?.degrees;
+    const lo = day.minTemperature?.degrees;
+    const tempText = hi != null && lo != null
+        ? `High near ${WeatherAPI.formatTemp(hi)}° and low around ${WeatherAPI.formatTemp(lo)}°.`
+        : hi != null
+            ? `High near ${WeatherAPI.formatTemp(hi)}°.`
+            : lo != null
+                ? `Low around ${WeatherAPI.formatTemp(lo)}°.`
+                : 'Temperature details are limited for this period.';
+
+    const precipChance = day.precipitation?.probability;
+    const precipAmount = day.precipitation?.qpf?.millimeters;
+    let precipText = '';
+    if (precipChance != null) {
+        precipText = ` Precipitation chance is around ${Math.round(precipChance)}%.`;
+        if (precipAmount != null && precipAmount > 0) precipText += ` Expected rainfall is about ${(precipAmount / 25.4).toFixed(2)} inches.`;
+    }
+
+    const windSpeed = day.wind?.speed?.value || day.maxWind?.speed?.value;
+    const windDir = day.wind?.direction || day.maxWind?.direction;
+    const windText = windSpeed != null
+        ? ` Winds near ${Math.round(windSpeed)} mph${windDir != null ? ` from the ${WeatherAPI.windDirection(windDir)}` : ''}.`
+        : '';
+
+    return `${cond.charAt(0).toUpperCase() + cond.slice(1)}. ${tempText}${precipText}${windText}`.replace(/\s+/g, ' ').trim();
+}
+
 function closeDayDetail() {
     const detail = document.getElementById('day-detail');
     if (detail) detail.style.display = 'none';
@@ -347,6 +380,8 @@ function showDayDetail(index) {
     const condType = day.weatherCondition?.type || '';
     const condText = day.weatherCondition?.description?.text || condType.replace(/_/g, ' ');
     document.getElementById('detail-condition').textContent = condText;
+    const descriptionEl = document.getElementById('detail-description');
+    if (descriptionEl) descriptionEl.textContent = _buildDayDescription(day);
 
     const hi = day.maxTemperature?.degrees;
     const lo = day.minTemperature?.degrees;

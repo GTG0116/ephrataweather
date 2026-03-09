@@ -534,6 +534,7 @@
                         <div style="font-size:2rem;font-weight:300;margin-top:4px;" id="detail-temps">--</div>
                     </div>
                 </div>
+                <div id="detail-description">--</div>
                 <hr class="divider">
                 <div class="cards-grid cards-grid-3" style="margin-top:16px;">
                     <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Precipitation</div><div style="font-size:1.1rem;font-weight:500;" id="detail-precip">--</div></div>
@@ -592,6 +593,14 @@
                     </span>
                     <span>Opacity:</span>
                     <input type="range" min="0" max="100" value="70" oninput="setOWMOpacity(this.value)" id="owm-opacity">
+                </div>
+                <div class="spc-controls" id="basemap-controls">
+                    <div class="ctrl-row">
+                        <span class="ctrl-label">Basemap:</span>
+                        <button class="type-btn active" data-basemap="streets" onclick="setBaseMapStyle('streets')">Streets</button>
+                        <button class="type-btn" data-basemap="satellite-streets" onclick="setBaseMapStyle('satellite-streets')">Satellite + Streets</button>
+                        <button class="type-btn" data-basemap="outdoors" onclick="setBaseMapStyle('outdoors')">Outdoors</button>
+                    </div>
                 </div>
                 <div class="owm-key-warn" id="owm-key-warn">
                     &#9888; OpenWeatherMap API key not set. Add your key to <code>js/config.js</code> as <code>OWM_API_KEY</code>.
@@ -797,6 +806,12 @@
     let currentDay = 0;  // 0 = show all days
     let currentType = 'cat';
     let firstSymbolLayerId = undefined;
+    let currentBasemap = 'streets';
+    const BASEMAP_STYLES = {
+        streets: 'mapbox://styles/mapbox/streets-v12',
+        'satellite-streets': 'mapbox://styles/mapbox/satellite-streets-v12',
+        outdoors: 'mapbox://styles/mapbox/outdoors-v12'
+    };
 
 
     const SPC_URLS = {
@@ -1122,12 +1137,36 @@
     function _showRadarView()     { _hideAllViews(); document.getElementById('radar-image-view').style.display = ''; }
     function _showMapView()       { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; }
 
+
+    function setBaseMapStyle(styleKey) {
+        if (!BASEMAP_STYLES[styleKey]) return;
+        currentBasemap = styleKey;
+        document.querySelectorAll('#basemap-controls [data-basemap]').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.basemap === styleKey));
+
+        if (!map) return;
+
+        map.setStyle(BASEMAP_STYLES[styleKey]);
+        map.once('styledata', () => {
+            const styleLayers = map.getStyle().layers || [];
+            firstSymbolLayerId = undefined;
+            for (const layer of styleLayers) {
+                if (layer.type === 'symbol') { firstSymbolLayerId = layer.id; break; }
+            }
+            map.off('click', handleOWMClick);
+            map.on('click', handleOWMClick);
+            if (currentLayer === 'temperature' || currentLayer === 'wind' || currentLayer === 'clouds') loadOWMLayer(currentLayer);
+        });
+    }
+
     function switchLayer(layer) {
         currentLayer = layer;
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
         document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
-        document.getElementById('owm-controls').classList.toggle('visible', layer === 'temperature' || layer === 'wind' || layer === 'clouds');
+        const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
+        document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
+        document.getElementById('basemap-controls').classList.toggle('visible', mapLayer);
 
         if (layer === 'spc') {
             _showSPCView();
@@ -1165,7 +1204,7 @@
             mapboxgl.accessToken = CONFIG.MAPBOX_ACCESS_TOKEN;
             map = new mapboxgl.Map({
                 container: 'map',
-                style: 'mapbox://styles/mapbox/dark-v11',
+                style: BASEMAP_STYLES[currentBasemap],
                 center: [loc.lng, loc.lat],
                 zoom: 5,
                 projection: 'mercator'

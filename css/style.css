@@ -343,6 +343,12 @@ body {
     letter-spacing: 0.05em;
 }
 
+.hpop-icon {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
 .hpop-temp {
     font-size: 1.5rem;
     font-weight: 300;
@@ -1270,6 +1276,32 @@ body {
 @media (max-width: 400px) {
     .app-container {
         padding: calc(6px + env(safe-area-inset-top, 0px)) 6px calc(6px + env(safe-area-inset-bottom, 0px)) calc(6px + env(safe-area-inset-left, 0px));
+    }
+}
+
+
+#detail-description {
+    margin-top: 14px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+@media (max-width: 920px) {
+    .alert-modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .alert-modal {
+        width: 100%;
+        max-height: min(88vh, 760px);
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    .alert-modal-main {
+        -webkit-overflow-scrolling: touch;
     }
 }
 

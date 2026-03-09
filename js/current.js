@@ -372,6 +372,7 @@ function sendAlertNotifications(byLocation) {
 
 // ---- Hourly detail popup ----
 let _hourlyData = [];
+let _hourlyForecastDays = [];
 
 function showHourlyDetail(idx) {
     const h = _hourlyData[idx];
@@ -393,6 +394,11 @@ function showHourlyDetail(idx) {
     const windSpeed = h.wind?.speed;
     const windDir = h.wind?.direction != null ? WeatherAPI.windDirection(h.wind.direction) : null;
     const humidity = h.relativeHumidity;
+    const condType = h.weatherCondition?.type || '';
+    const tsMs = Date.parse(h.interval?.startTime || h.displayDateTime || '');
+    const dayForHour = _dayForTimestamp(tsMs, _hourlyForecastDays);
+    const hourNight = _isTimestampNight(tsMs, dayForHour);
+    const iconSvg = WeatherIcons.fromText(condType, hourNight);
 
     const rows = [];
     if (feelsLike) rows.push(`<div class="hpop-row"><span class="hpop-key">Feels Like</span><span>${feelsLike}</span></div>`);
@@ -406,6 +412,7 @@ function showHourlyDetail(idx) {
     popup.innerHTML = `
         <div class="hpop-header">
             <span class="hpop-time">${time}</span>
+            <div class="hpop-icon" aria-hidden="true">${iconSvg}</div>
             <span class="hpop-temp">${temp}°</span>
             <button class="hpop-close" onclick="document.getElementById('hourly-detail-popup').remove()">&#x2715;</button>
         </div>
@@ -578,6 +585,7 @@ function renderCurrentConditions(data, dailyData) {
 function renderHourlyForecast(data, forecastDays) {
     const strip = document.getElementById('hourly-strip');
     _hourlyData = data.forecastHours || [];
+    _hourlyForecastDays = forecastDays || [];
 
     if (_hourlyData.length === 0) {
         strip.innerHTML = '<div class="error-message">No hourly data available</div>';
