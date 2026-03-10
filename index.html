@@ -291,15 +291,14 @@
                 Current
             </a>
             <a href="#forecast" class="nav-link" data-view="forecast">
-                <!-- Calendar icon for 10-day forecast -->
+                <!-- Calendar icon for forecast -->
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                     <rect x="3" y="4" width="18" height="18" rx="2"/>
                     <line x1="3" y1="10" x2="21" y2="10"/>
                     <line x1="8" y1="2" x2="8" y2="6"/>
                     <line x1="16" y1="2" x2="16" y2="6"/>
-                    <text x="12" y="19" text-anchor="middle" fill="currentColor" stroke="none" font-size="6" font-weight="700">10</text>
                 </svg>
-                10-Day
+                Forecast
             </a>
             <a href="#maps" class="nav-link" data-view="maps">
                 <!-- Radar sweep icon for maps -->
@@ -390,6 +389,8 @@
              VIEW: CURRENT CONDITIONS
              =================================================== -->
         <section id="view-current" class="view">
+            <!-- SPC Severe Weather Outlook Banner (shown when marginal+ risk at current location) -->
+            <div id="spc-banner-container" style="display:none;"></div>
             <!-- Weather Alerts Banner -->
             <div id="alerts-container" style="display:none;margin-bottom:16px;"></div>
 
@@ -501,7 +502,7 @@
              VIEW: 10-DAY FORECAST
              =================================================== -->
         <section id="view-forecast" class="view">
-            <h3 class="section-title">10-Day Forecast</h3>
+            <h3 class="section-title" id="forecast-section-title">10-Day Forecast</h3>
             <div class="glass-static fade-in" id="forecast-container">
                 <div class="forecast-list" id="forecast-list">
                     <div class="loading-shimmer loading-placeholder" style="width:100%;height:500px;"></div>
@@ -749,7 +750,8 @@
         currentViewId = viewId;
 
         // Update page title
-        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: '10-Day Forecast', maps: 'Maps' };
+        const forecastTitle = WeatherAPI.getDataSource() === 'nws' ? '7-Day Forecast' : '10-Day Forecast';
+        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: forecastTitle, maps: 'Maps' };
         document.title = (titles[viewId] || 'Ephrata Weather') + ' – Ephrata Weather';
 
         // Init view if not already done
