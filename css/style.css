@@ -697,6 +697,56 @@ body {
     display: block;
 }
  
+/* --- Alert Subtype Badges --- */
+.alert-subtype-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 4px 0 4px 32px;
+    border: 1px solid transparent;
+}
+
+/* TORNADO EMERGENCY / FLASH FLOOD EMERGENCY — deep magenta/purple */
+.subtype-emergency {
+    background: rgba(180, 0, 180, 0.22);
+    border-color: rgba(220, 80, 220, 0.6);
+    color: #f080f0;
+}
+
+/* PDS Tornado Warning / EDS Severe Thunderstorm — bright purple */
+.subtype-pds {
+    background: rgba(120, 0, 220, 0.22);
+    border-color: rgba(160, 80, 255, 0.6);
+    color: #c880ff;
+}
+
+/* Tornado Observed / Flash Flood Observed — bright red */
+.subtype-observed {
+    background: rgba(220, 0, 0, 0.22);
+    border-color: rgba(255, 80, 80, 0.6);
+    color: #ff7070;
+}
+
+/* Considerable Severe Thunderstorm — orange */
+.subtype-considerable {
+    background: rgba(200, 100, 0, 0.22);
+    border-color: rgba(255, 160, 40, 0.6);
+    color: #ffaa44;
+}
+
+/* Thunderstorm wind/hail details line */
+.alert-tstm-details {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #ffcc66;
+    padding-left: 32px;
+    margin-top: 3px;
+}
+
 /* --- SPC Outlooks --- */
 .spc-outlook-grid {
     display: grid;
@@ -1287,33 +1337,6 @@ body {
     line-height: 1.6;
 }
 
-@media (max-width: 920px) {
-    .alert-modal-overlay {
-        align-items: flex-end;
-        padding: 0;
-    }
-
-    .alert-modal {
-        width: 100%;
-        max-height: min(88vh, 760px);
-        border-bottom-left-radius: 0;
-        border-bottom-right-radius: 0;
-        /* On mobile, make the whole modal scrollable so both text + map are accessible */
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .alert-modal-main {
-        overflow-y: visible; /* parent handles scroll on mobile */
-        flex-shrink: 0;
-        /* add padding-right so content isn't hidden behind close button */
-        padding-right: 56px;
-    }
-}
-
-
 .alert-modal-overlay {
     position: fixed;
     inset: 0;
@@ -1393,7 +1416,28 @@ body {
 }
 
 @media (max-width: 920px) {
-    .alert-modal { grid-template-columns: 1fr; }
+    .alert-modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+    .alert-modal {
+        grid-template-columns: 1fr;
+        width: 100%;
+        max-height: min(88vh, 760px);
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        /* Make the whole modal scroll on mobile so text + map are both accessible */
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        display: flex;
+        flex-direction: column;
+    }
+    .alert-modal-main {
+        overflow-y: visible; /* parent handles scroll on mobile */
+        flex-shrink: 0;
+        padding-right: 56px; /* avoid overlap with the fixed close button */
+    }
     .alert-modal-map {
         min-height: 280px;
         flex-shrink: 0;
