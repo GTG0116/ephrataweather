@@ -261,6 +261,18 @@ function renderForecast(data) {
     const list = document.getElementById('forecast-list');
     forecastDays = data.forecastDays || [];
 
+    // Update the forecast section title to reflect how many days are available
+    const isNWS = WeatherAPI.getDataSource() === 'nws';
+    const titleEl = document.getElementById('forecast-section-title');
+    if (titleEl) {
+        titleEl.textContent = isNWS ? '7-Day Forecast' : '10-Day Forecast';
+    }
+    // Also update the SPA page title
+    const titles = { forecast: isNWS ? '7-Day Forecast' : '10-Day Forecast' };
+    if (document.title.includes('Forecast')) {
+        document.title = titles.forecast + ' – Ephrata Weather';
+    }
+
     if (forecastDays.length === 0) {
         list.innerHTML = '<div class="error-message" style="margin:24px;">No forecast data available</div>';
         return;

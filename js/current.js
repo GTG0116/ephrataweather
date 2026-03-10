@@ -123,7 +123,12 @@ function _formatAlertTime(ts) {
     if (!ts) return 'N/A';
     const d = new Date(ts);
     if (isNaN(d)) return 'N/A';
-    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    // Use the device's local timezone explicitly so times always reflect where the user is
+    return d.toLocaleString('en-US', {
+        month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    });
 }
 
 function _alertClass(alert) {
@@ -168,6 +173,13 @@ async function loadAndRenderAlerts(lat, lng) {
     const currentAlerts = byLocation.find((x) => x.location.isCurrent)?.alerts || [];
     renderAlerts(currentAlerts);
     sendAlertNotifications(byLocation);
+
+    // Check SPC Day 1 outlook for severe weather risk at current location
+    try {
+        await loadAndRenderSPCOutlook(lat, lng);
+    } catch (err) {
+        console.warn('SPC outlook error:', err);
+    }
 }
 
 function renderAlerts(alerts) {
@@ -291,7 +303,10 @@ function _drawAlertMap(alert) {
             const loc = LocationManager.getCurrent();
             _alertMap.easeTo({ center: [loc.lng, loc.lat], zoom: 7, duration: 0 });
         }
-        setTimeout(() => _alertMap.resize(), 30);
+        // Resize immediately and again after a delay to handle mobile layout settling
+        _alertMap.resize();
+        setTimeout(() => _alertMap.resize(), 100);
+        setTimeout(() => _alertMap.resize(), 400);
     };
 
     if (_alertMap.loaded()) loadOrUpdate();
@@ -368,6 +383,138 @@ function sendAlertNotifications(byLocation) {
     });
 
     localStorage.setItem(notifiedKey, JSON.stringify(Array.from(notified).slice(-200)));
+}
+
+// ---- SPC Outlook Severe Weather Risk ----
+
+// Risk level ordering (TSTM is not severe enough to trigger a banner)
+const _SPC_RISK_ORDER = ['TSTM', 'MRGL', 'SLGT', 'ENH', 'MDT', 'HIGH'];
+const _SPC_RISK_LABELS = {
+    MRGL: 'Marginal', SLGT: 'Slight', ENH: 'Enhanced', MDT: 'Moderate', HIGH: 'High'
+};
+// CSS class suffix mirrors stylesheet .spc-risk-* names
+const _SPC_RISK_CLASS = { MRGL: 'mrgl', SLGT: 'slgt', ENH: 'enh', MDT: 'mdt', HIGH: 'high' };
+
+// Ray-casting point-in-polygon (GeoJSON ring coords are [lng, lat])
+function _raycastPoly(lngLat, ring) {
+    const [px, py] = lngLat;
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i];
+        const [xj, yj] = ring[j];
+        if (((yi > py) !== (yj > py)) && (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+function _pointInSPCGeometry(lng, lat, geometry) {
+    if (!geometry) return false;
+    const pt = [lng, lat];
+    if (geometry.type === 'Polygon') {
+        return _raycastPoly(pt, geometry.coordinates[0]);
+    }
+    if (geometry.type === 'MultiPolygon') {
+        return geometry.coordinates.some(poly => _raycastPoly(pt, poly[0]));
+    }
+    return false;
+}
+
+async function loadAndRenderSPCOutlook(lat, lng) {
+    const container = document.getElementById('spc-banner-container');
+    if (!container) return;
+
+    const SPC_CAT_URL = 'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson';
+    let data;
+    try {
+        const resp = await fetch(SPC_CAT_URL, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('SPC ' + resp.status);
+        data = await resp.json();
+    } catch (e) {
+        // CORS fallback
+        try {
+            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(SPC_CAT_URL);
+            const resp2 = await fetch(proxy, { cache: 'no-store' });
+            if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
+            data = await resp2.json();
+        } catch (e2) {
+            console.warn('SPC outlook unavailable:', e2.message);
+            return;
+        }
+    }
+
+    const features = (data.features || []);
+    let highestRisk = null;
+
+    for (const feature of features) {
+        const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
+        const riskIdx = _SPC_RISK_ORDER.indexOf(label);
+        if (riskIdx < 1) continue; // skip TSTM and unknowns
+        if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
+            if (!highestRisk || riskIdx > _SPC_RISK_ORDER.indexOf(highestRisk)) {
+                highestRisk = label;
+            }
+        }
+    }
+
+    if (highestRisk) {
+        renderSPCBanner(highestRisk);
+        sendSPCNotification(highestRisk);
+    } else {
+        container.style.display = 'none';
+        container.innerHTML = '';
+    }
+}
+
+function renderSPCBanner(risk) {
+    const container = document.getElementById('spc-banner-container');
+    if (!container) return;
+    const label = _SPC_RISK_LABELS[risk] || risk;
+    const cls = _SPC_RISK_CLASS[risk] || 'mrgl';
+    container.style.display = 'block';
+    container.innerHTML = `
+        <button type="button" class="spc-risk-banner spc-risk-${cls} fade-in"
+                onclick="navigateToSPCMaps()"
+                title="Tap to view SPC Outlook maps">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" style="flex-shrink:0;">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span><strong>${label} Risk</strong> of Severe Weather – Day 1 SPC Outlook. Tap to view maps.</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" style="flex-shrink:0;">
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        </button>
+    `;
+}
+
+function navigateToSPCMaps() {
+    window.location.hash = '#maps';
+    if (typeof showView === 'function') showView('maps');
+}
+
+function sendSPCNotification(risk) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const today = new Date().toISOString().split('T')[0];
+    const noteKey = `spc-${today}-${risk}`;
+    const storageKey = 'ephrata_spc_notified';
+    const notified = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
+    if (notified.has(noteKey)) return;
+
+    const label = _SPC_RISK_LABELS[risk] || risk;
+    new Notification('SPC Severe Weather Outlook', {
+        body: `${label} Risk of severe weather is forecast for your area today. Tap to view the SPC outlook.`,
+        icon: 'data:image/svg+xml,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF9800">' +
+            '<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'
+        ),
+        tag: noteKey
+    });
+    notified.add(noteKey);
+    localStorage.setItem(storageKey, JSON.stringify(Array.from(notified).slice(-60)));
 }
 
 // ---- Hourly detail popup ----

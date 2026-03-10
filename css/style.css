@@ -1298,10 +1298,18 @@ body {
         max-height: min(88vh, 760px);
         border-bottom-left-radius: 0;
         border-bottom-right-radius: 0;
+        /* On mobile, make the whole modal scrollable so both text + map are accessible */
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        display: flex;
+        flex-direction: column;
     }
 
     .alert-modal-main {
-        -webkit-overflow-scrolling: touch;
+        overflow-y: visible; /* parent handles scroll on mobile */
+        flex-shrink: 0;
+        /* add padding-right so content isn't hidden behind close button */
+        padding-right: 56px;
     }
 }
 
@@ -1327,11 +1335,13 @@ body {
     border: 1px solid rgba(255,255,255,0.14);
     border-radius: var(--radius-lg);
     background: #11182e;
+    position: relative; /* needed so the absolute close button is positioned relative to the modal */
 }
 
 .alert-modal-main {
     padding: 18px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .alert-modal-title {
@@ -1361,18 +1371,98 @@ body {
 
 .alert-modal-close {
     position: absolute;
-    top: 22px;
-    right: 24px;
+    top: 14px;
+    right: 14px;
     border: none;
-    background: rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.2);
     color: #fff;
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     cursor: pointer;
+    z-index: 10;
+    font-size: 1.1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* Ensure it's always above the grid content */
+    pointer-events: auto;
+    touch-action: manipulation;
 }
 
 @media (max-width: 920px) {
     .alert-modal { grid-template-columns: 1fr; }
-    .alert-modal-map { min-height: 260px; border-left: none; border-top: 1px solid rgba(255,255,255,0.1); }
+    .alert-modal-map {
+        min-height: 280px;
+        flex-shrink: 0;
+        border-left: none;
+        border-top: 1px solid rgba(255,255,255,0.1);
+    }
+}
+
+/* --- SPC Severe Weather Risk Banners --- */
+.spc-risk-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+    transition: all var(--transition-smooth);
+    color: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.spc-risk-banner:hover { transform: translateY(-1px); }
+
+.spc-risk-banner span {
+    flex: 1;
+    color: inherit;
+    line-height: 1.4;
+}
+
+.spc-risk-banner strong { font-weight: 700; }
+
+/* Marginal: green */
+.spc-risk-mrgl {
+    background: rgba(68,187,68,0.15);
+    border-color: rgba(68,187,68,0.45);
+    color: #66CC66;
+}
+
+/* Slight: yellow */
+.spc-risk-slgt {
+    background: rgba(221,187,0,0.15);
+    border-color: rgba(221,187,0,0.45);
+    color: #FFE066;
+}
+
+/* Enhanced: orange */
+.spc-risk-enh {
+    background: rgba(204,119,0,0.15);
+    border-color: rgba(204,119,0,0.45);
+    color: #FFA040;
+}
+
+/* Moderate: red */
+.spc-risk-mdt {
+    background: rgba(204,34,34,0.15);
+    border-color: rgba(204,34,34,0.45);
+    color: #FF6060;
+}
+
+/* High: pink/magenta */
+.spc-risk-high {
+    background: rgba(204,0,204,0.15);
+    border-color: rgba(204,0,204,0.45);
+    color: #FF40FF;
 }
