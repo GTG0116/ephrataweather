@@ -71,13 +71,23 @@ async function checkAndNotifyAlerts() {
                 const expiresText = _formatTime(props.expires);
                 const eventName = props.event || 'Alert';
                 const severity = (props.severity || '').toLowerCase();
+                const params = props.parameters || {};
+
+                // Determine alert subtype for enhanced notification body
+                const subtypeLabel = _swAlertSubtype(eventName, props.headline || '', props.description || '', params);
+                const tstmDetails = _swTstmDetails(eventName, props.description || '', params);
+
+                const bodyParts = [eventName];
+                if (subtypeLabel) bodyParts.push(`\u26A0\uFE0F ${subtypeLabel}`);
+                if (tstmDetails) bodyParts.push(tstmDetails);
+                bodyParts.push(`Expires: ${expiresText}`);
 
                 await self.registration.showNotification(`Weather Alert \u2022 ${loc.name}`, {
-                    body: `${eventName} \u2014 Expires ${expiresText}`,
+                    body: bodyParts.join('\n'),
                     icon: '/IMG_0912.png',
                     badge: '/IMG_0912.png',
                     tag: noteKey,
-                    requireInteraction: severity === 'extreme' || severity === 'severe',
+                    requireInteraction: severity === 'extreme' || severity === 'severe' || !!subtypeLabel,
                     data: { url: '/' }
                 });
 
@@ -97,7 +107,55 @@ function _formatTime(ts) {
     if (!ts) return 'N/A';
     const d = new Date(ts);
     if (isNaN(d)) return 'N/A';
-    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+}
+
+// Returns a short subtype label string or null
+function _swAlertSubtype(event, headline, desc, params) {
+    const ev = event.toLowerCase();
+    const hl = headline.toUpperCase();
+    const d = desc.toUpperCase();
+
+    if (ev.includes('tornado warning')) {
+        if (d.includes('TORNADO EMERGENCY') || hl.includes('TORNADO EMERGENCY')) return 'TORNADO EMERGENCY';
+        const detection = (params.tornadoDetection?.[0] || '').toUpperCase();
+        if (detection.includes('PARTICULARLY DANGEROUS') || d.includes('PARTICULARLY DANGEROUS SITUATION')) return 'PARTICULARLY DANGEROUS SITUATION';
+        if (detection === 'OBSERVED') return 'TORNADO OBSERVED';
+    }
+    if (ev.includes('flash flood warning')) {
+        if (d.includes('FLASH FLOOD EMERGENCY') || hl.includes('FLASH FLOOD EMERGENCY')) return 'FLASH FLOOD EMERGENCY';
+        if ((params.flashFloodDetection?.[0] || '').toUpperCase() === 'OBSERVED') return 'FLASH FLOOD OBSERVED';
+    }
+    if (ev.includes('severe thunderstorm warning')) {
+        const threat = (params.thunderstormDamageThreat?.[0] || '').toUpperCase();
+        if (threat === 'EXTREME') return 'EXTREMELY DANGEROUS SITUATION';
+        if (threat === 'DESTRUCTIVE') return 'DESTRUCTIVE';
+        if (threat === 'CONSIDERABLE') return 'CONSIDERABLE';
+    }
+    return null;
+}
+
+// Returns wind/hail detail string or null for severe thunderstorm warnings
+function _swTstmDetails(event, desc, params) {
+    if (!event.toLowerCase().includes('severe thunderstorm warning')) return null;
+    const parts = [];
+    let wind = null;
+    let hail = null;
+    if (params.maxWindGust?.[0]) {
+        wind = params.maxWindGust[0].toString().replace(/mph/i, '').trim() + ' mph';
+    } else {
+        const m = desc.match(/WIND[S]?\.{2,3}(\d+)\s*MPH/i) || desc.match(/WINDS?\s+UP\s+TO\s+(\d+)\s*MPH/i);
+        if (m) wind = m[1] + ' mph';
+    }
+    if (params.maxHailSize?.[0]) {
+        hail = params.maxHailSize[0].toString().replace(/in(ch(es)?)?/i, '').trim() + '"';
+    } else {
+        const m = desc.match(/HAIL\.{2,3}(\d+\.?\d*)\s*IN/i) || desc.match(/HAIL\s+UP\s+TO\s+(\d+\.?\d*)\s*IN/i);
+        if (m) hail = m[1] + '"';
+    }
+    if (wind) parts.push(`Wind: ${wind}`);
+    if (hail) parts.push(`Hail: ${hail}`);
+    return parts.length ? parts.join(' • ') : null;
 }
 
 // ---- IndexedDB helpers ----

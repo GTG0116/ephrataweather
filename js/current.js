@@ -112,6 +112,9 @@ if (typeof _SPA_MODE === 'undefined') {
 // ---- Alerts ----
 let _renderedAlerts = [];
 let _alertMap = null;
+// Timezone of the currently-viewed location (IANA string, e.g. "America/Chicago").
+// Set when alerts are loaded so times are shown in the location's local timezone.
+let _locationTimeZone = null;
 
 function _escapeHtml(str) {
     return String(str || '').replace(/[&<>"']/g, (ch) => ({
@@ -123,12 +126,104 @@ function _formatAlertTime(ts) {
     if (!ts) return 'N/A';
     const d = new Date(ts);
     if (isNaN(d)) return 'N/A';
-    // Use the device's local timezone explicitly so times always reflect where the user is
+    // Use the location's timezone so Midwest alerts show Central time, etc.
+    const tz = _locationTimeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
     return d.toLocaleString('en-US', {
         month: 'short', day: 'numeric',
         hour: 'numeric', minute: '2-digit',
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        timeZoneName: 'short',
+        timeZone: tz
     });
+}
+
+// ---- Alert subtype classification ----
+// Returns an object { type, label, colorClass } or null for standard alerts.
+function _alertSubtype(alert) {
+    const event = (alert.event || '').toLowerCase();
+    const headline = (alert.headline || '').toUpperCase();
+    const desc = (alert.description || '').toUpperCase();
+    const params = alert.parameters || {};
+
+    if (event.includes('tornado warning')) {
+        // Tornado Emergency takes highest priority
+        if (desc.includes('TORNADO EMERGENCY') || headline.includes('TORNADO EMERGENCY')) {
+            return { type: 'tornado_emergency', label: 'TORNADO EMERGENCY', colorClass: 'subtype-emergency' };
+        }
+        const detection = (params.tornadoDetection?.[0] || '').toUpperCase();
+        // PDS Tornado Warning
+        if (detection.includes('PARTICULARLY DANGEROUS') || desc.includes('PARTICULARLY DANGEROUS SITUATION')) {
+            return { type: 'pds_tornado', label: 'PARTICULARLY DANGEROUS SITUATION', colorClass: 'subtype-pds' };
+        }
+        // Observed tornado
+        if (detection === 'OBSERVED') {
+            return { type: 'tornado_observed', label: 'TORNADO OBSERVED', colorClass: 'subtype-observed' };
+        }
+        return null;
+    }
+
+    if (event.includes('flash flood warning')) {
+        // Flash Flood Emergency
+        if (desc.includes('FLASH FLOOD EMERGENCY') || headline.includes('FLASH FLOOD EMERGENCY')) {
+            return { type: 'flash_flood_emergency', label: 'FLASH FLOOD EMERGENCY', colorClass: 'subtype-emergency' };
+        }
+        const detection = (params.flashFloodDetection?.[0] || '').toUpperCase();
+        if (detection === 'OBSERVED') {
+            return { type: 'flash_flood_observed', label: 'FLASH FLOOD OBSERVED', colorClass: 'subtype-observed' };
+        }
+        return null;
+    }
+
+    if (event.includes('severe thunderstorm warning')) {
+        const threat = (params.thunderstormDamageThreat?.[0] || '').toUpperCase();
+        // EXTREME = EDS (Extremely Dangerous Situation) — highest SVR tier
+        if (threat === 'EXTREME') {
+            return { type: 'eds_tstm', label: 'EXTREMELY DANGEROUS SITUATION', colorClass: 'subtype-pds' };
+        }
+        // DESTRUCTIVE — rare, ≥80 mph winds or ≥2.5" hail
+        if (threat === 'DESTRUCTIVE') {
+            return { type: 'destructive_tstm', label: 'DESTRUCTIVE', colorClass: 'subtype-emergency' };
+        }
+        // CONSIDERABLE — 70-79 mph winds or 1.75-2.49" hail
+        if (threat === 'CONSIDERABLE') {
+            return { type: 'considerable_tstm', label: 'CONSIDERABLE', colorClass: 'subtype-considerable' };
+        }
+        return null;
+    }
+
+    return null;
+}
+
+// ---- Extract wind/hail details from Severe Thunderstorm Warnings ----
+function _extractSevereThunderstormDetails(alert) {
+    const event = (alert.event || '').toLowerCase();
+    if (!event.includes('severe thunderstorm warning')) return null;
+
+    const params = alert.parameters || {};
+    const desc = alert.description || '';
+
+    // Try structured NWS parameters first
+    let wind = null;
+    let hail = null;
+
+    if (params.maxWindGust?.[0]) {
+        wind = params.maxWindGust[0].toString().replace(/mph/i, '').trim() + ' mph';
+    } else {
+        const m = desc.match(/WIND[S]?\.{2,3}(\d+)\s*MPH/i)
+               || desc.match(/WINDS?\s+UP\s+TO\s+(\d+)\s*MPH/i)
+               || desc.match(/(\d+)\s*MPH\s+WIND/i);
+        if (m) wind = m[1] + ' mph';
+    }
+
+    if (params.maxHailSize?.[0]) {
+        hail = params.maxHailSize[0].toString().replace(/in(ch(es)?)?/i, '').trim() + '"';
+    } else {
+        const m = desc.match(/HAIL\.{2,3}(\d+\.?\d*)\s*IN/i)
+               || desc.match(/HAIL\s+UP\s+TO\s+(\d+\.?\d*)\s*IN/i)
+               || desc.match(/(\d+\.?\d*)\s*INCH\s+HAIL/i);
+        if (m) hail = m[1] + '"';
+    }
+
+    return (wind || hail) ? { wind, hail } : null;
 }
 
 function _alertClass(alert) {
@@ -154,6 +249,9 @@ function _dedupeLocations(locations) {
 }
 
 async function loadAndRenderAlerts(lat, lng) {
+    // Fetch location timezone so alert times display in the location's local time
+    WeatherAPI.getLocationTimeZone(lat, lng).then(tz => { _locationTimeZone = tz; }).catch(() => {});
+
     const currentLoc = LocationManager.getCurrent();
     const favorites = LocationManager.getFavorites() || [];
     const locations = _dedupeLocations([
@@ -205,12 +303,28 @@ function renderAlerts(alerts) {
             <line x1="12" y1="17" x2="12.01" y2="17"/>
         </svg>`;
 
+        const subtype = _alertSubtype(alert);
+        const subtypeBadge = subtype
+            ? `<span class="alert-subtype-badge ${subtype.colorClass}">${_escapeHtml(subtype.label)}</span>`
+            : '';
+
+        const tstmDetails = _extractSevereThunderstormDetails(alert);
+        let tstmRow = '';
+        if (tstmDetails) {
+            const parts = [];
+            if (tstmDetails.wind) parts.push(`Wind: ${_escapeHtml(tstmDetails.wind)}`);
+            if (tstmDetails.hail) parts.push(`Hail: ${_escapeHtml(tstmDetails.hail)}`);
+            if (parts.length) tstmRow = `<div class="alert-tstm-details">${parts.join(' &nbsp;•&nbsp; ')}</div>`;
+        }
+
         return `
             <button type="button" class="alert-banner ${_alertClass(alert)} fade-in" style="animation-delay:${i * 80}ms" onclick="openAlertDetail(${i})">
                 <div class="alert-header">
                     ${iconSvg}
                     <span class="alert-title">${headline}</span>
                 </div>
+                ${subtypeBadge}
+                ${tstmRow}
                 <div class="alert-detail">${excerpt}${hasMore ? '…' : ''}</div>
                 <div class="alert-time">Areas: ${area}</div>
                 <div class="alert-time">Expires: ${_formatAlertTime(alert.expires)}</div>
@@ -231,6 +345,35 @@ function openAlertDetail(index) {
 
     titleEl.textContent = alert.headline || alert.event || 'Weather Alert';
     metaEl.textContent = `Effective: ${_formatAlertTime(alert.onset || alert.effective)} • Expires: ${_formatAlertTime(alert.expires)} • Areas: ${alert.areaDesc || 'N/A'}`;
+
+    // Inject subtype badge and thunderstorm details below the meta line
+    const existingExtra = document.getElementById('alert-modal-extra');
+    if (existingExtra) existingExtra.remove();
+    const subtype = _alertSubtype(alert);
+    const tstmDetails = _extractSevereThunderstormDetails(alert);
+    if (subtype || tstmDetails) {
+        const extraEl = document.createElement('div');
+        extraEl.id = 'alert-modal-extra';
+        extraEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;';
+        if (subtype) {
+            const badge = document.createElement('span');
+            badge.className = `alert-subtype-badge ${subtype.colorClass}`;
+            badge.textContent = subtype.label;
+            extraEl.appendChild(badge);
+        }
+        if (tstmDetails) {
+            const parts = [];
+            if (tstmDetails.wind) parts.push(`Wind: ${tstmDetails.wind}`);
+            if (tstmDetails.hail) parts.push(`Hail: ${tstmDetails.hail}`);
+            if (parts.length) {
+                const detailSpan = document.createElement('span');
+                detailSpan.className = 'alert-tstm-details';
+                detailSpan.textContent = parts.join('  •  ');
+                extraEl.appendChild(detailSpan);
+            }
+        }
+        metaEl.insertAdjacentElement('afterend', extraEl);
+    }
 
     const parts = [alert.description, alert.instruction].filter(Boolean);
     bodyEl.textContent = parts.length ? parts.join('\n\n') : 'No additional text provided by NWS.';
@@ -372,8 +515,21 @@ function sendAlertNotifications(byLocation) {
             if (notified.has(noteKey)) return;
 
             const expiresText = _formatAlertTime(alert.expires);
+            const subtype = _alertSubtype(alert);
+            const tstmDetails = _extractSevereThunderstormDetails(alert);
+
+            let bodyParts = [alert.event || 'Alert'];
+            if (subtype) bodyParts.push(`\u26A0\uFE0F ${subtype.label}`);
+            if (tstmDetails) {
+                const d = [];
+                if (tstmDetails.wind) d.push(`Wind: ${tstmDetails.wind}`);
+                if (tstmDetails.hail) d.push(`Hail: ${tstmDetails.hail}`);
+                if (d.length) bodyParts.push(d.join(' • '));
+            }
+            bodyParts.push(`Expires: ${expiresText}`);
+
             new Notification(`Weather Alert • ${location.name}`, {
-                body: `${alert.event || 'Alert'} — Expires ${expiresText}`,
+                body: bodyParts.join('\n'),
                 icon: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF9800"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'),
                 tag: noteKey,
                 requireInteraction: true

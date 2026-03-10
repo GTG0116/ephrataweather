@@ -492,11 +492,24 @@ const WeatherAPI = {
                 areaDesc: p.areaDesc || '',
                 sender: p.senderName || '',
                 geometry: feature.geometry || null,
+                parameters: p.parameters || {},
                 raw: feature
             };
         });
 
         return { alerts };
+    },
+
+    // === Location Timezone (from NWS /points) ===
+    // Returns an IANA timezone string like "America/Chicago" for a lat/lng.
+    // Used to format alert times in the location's local timezone.
+    async getLocationTimeZone(lat, lng) {
+        try {
+            const points = await _getNWSPoints(lat, lng);
+            return points.timeZone || null;
+        } catch (e) {
+            return null;
+        }
     },
 
     // === Data Source Preference ===
@@ -505,9 +518,17 @@ const WeatherAPI = {
 
     // === NWS Current Conditions ===
     async getNWSCurrentConditions(lat, lng) {
-        const [points, omWind] = await Promise.all([
+        const [points, omWind, uvIndex] = await Promise.all([
             _getNWSPoints(lat, lng),
-            _fetchOpenMeteoWindCurrent(lat, lng).catch(() => null)
+            _fetchOpenMeteoWindCurrent(lat, lng).catch(() => null),
+            // NWS does not provide UV index — supplement from Open-Meteo
+            (async () => {
+                const p = new URLSearchParams({ latitude: lat, longitude: lng, current: 'uv_index', timezone: 'auto' });
+                const r = await fetch(`https://api.open-meteo.com/v1/forecast?${p}`, { cache: 'no-store' });
+                if (!r.ok) return null;
+                const d = await r.json();
+                return d.current?.uv_index ?? null;
+            })().catch(() => null)
         ]);
         // Fetch observation station list
         const stResp = await fetch(points.observationStations, {
@@ -549,7 +570,7 @@ const WeatherAPI = {
             wind,
             relativeHumidity: obs.relativeHumidity?.value,
             dewPoint: { degrees: toF(obs.dewpoint?.value) },
-            uvIndex: null,
+            uvIndex: uvIndex,
             visibility: { distance: obs.visibility?.value },
             pressure: { meanSeaLevelMillibars: pressMb },
             cloudCover: topLayer ? _nwsCloudAmount(topLayer.amount) : null,
