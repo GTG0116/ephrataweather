@@ -597,7 +597,8 @@
                 <div class="spc-controls" id="basemap-controls">
                     <div class="ctrl-row">
                         <span class="ctrl-label">Basemap:</span>
-                        <button class="type-btn active" data-basemap="streets" onclick="setBaseMapStyle('streets')">Streets</button>
+                        <button class="type-btn active" data-basemap="dark" onclick="setBaseMapStyle('dark')">Dark</button>
+                        <button class="type-btn" data-basemap="streets" onclick="setBaseMapStyle('streets')">Streets</button>
                         <button class="type-btn" data-basemap="satellite-streets" onclick="setBaseMapStyle('satellite-streets')">Satellite + Streets</button>
                         <button class="type-btn" data-basemap="outdoors" onclick="setBaseMapStyle('outdoors')">Outdoors</button>
                     </div>
@@ -806,8 +807,9 @@
     let currentDay = 0;  // 0 = show all days
     let currentType = 'cat';
     let firstSymbolLayerId = undefined;
-    let currentBasemap = 'streets';
+    let currentBasemap = 'dark';
     const BASEMAP_STYLES = {
+        dark: 'mapbox://styles/mapbox/dark-v11',
         streets: 'mapbox://styles/mapbox/streets-v12',
         'satellite-streets': 'mapbox://styles/mapbox/satellite-streets-v12',
         outdoors: 'mapbox://styles/mapbox/outdoors-v12'

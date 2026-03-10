@@ -7,7 +7,7 @@
 
 // --- Data Source Preference ---
 const _DATA_SOURCE_KEY = 'ephrata_data_source';
-function _getDataSource() { return localStorage.getItem(_DATA_SOURCE_KEY) || 'google'; }
+function _getDataSource() { return localStorage.getItem(_DATA_SOURCE_KEY) || 'nws'; }
 function _setDataSource(src) { localStorage.setItem(_DATA_SOURCE_KEY, src); }
 
 // --- NWS Helpers ---
@@ -75,6 +75,50 @@ async function _getNWSPoints(lat, lng) {
     const data = await resp.json();
     _nwsPointsCache[key] = data.properties;
     return data.properties;
+}
+
+// Fetch hourly wind speed + direction from Open-Meteo (used to supplement NWS data)
+async function _fetchOpenMeteoWindHourly(lat, lng, forecastDays = 3) {
+    const params = new URLSearchParams({
+        latitude: lat, longitude: lng,
+        hourly: 'wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+        wind_speed_unit: 'mph',
+        timezone: 'auto',
+        forecast_days: forecastDays
+    });
+    const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const h = data.hourly;
+    // Build a map from truncated ISO hour string ("2025-06-01T14:00") to wind values
+    const map = {};
+    (h.time || []).forEach((t, i) => {
+        map[t.slice(0, 16)] = {
+            speed: h.wind_speed_10m[i],
+            direction: h.wind_direction_10m[i],
+            gust: h.wind_gusts_10m?.[i] ?? null
+        };
+    });
+    return map;
+}
+
+// Fetch current wind from Open-Meteo
+async function _fetchOpenMeteoWindCurrent(lat, lng) {
+    const params = new URLSearchParams({
+        latitude: lat, longitude: lng,
+        current: 'wind_speed_10m,wind_direction_10m,wind_gusts_10m',
+        wind_speed_unit: 'mph',
+        timezone: 'auto'
+    });
+    const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const c = data.current;
+    return {
+        speed: c.wind_speed_10m,
+        direction: c.wind_direction_10m,
+        gust: c.wind_gusts_10m ?? null
+    };
 }
 
 // WMO Weather Codes for Open-Meteo fallback
@@ -461,7 +505,10 @@ const WeatherAPI = {
 
     // === NWS Current Conditions ===
     async getNWSCurrentConditions(lat, lng) {
-        const points = await _getNWSPoints(lat, lng);
+        const [points, omWind] = await Promise.all([
+            _getNWSPoints(lat, lng),
+            _fetchOpenMeteoWindCurrent(lat, lng).catch(() => null)
+        ]);
         // Fetch observation station list
         const stResp = await fetch(points.observationStations, {
             headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
@@ -480,13 +527,17 @@ const WeatherAPI = {
 
         // Convert SI units to imperial
         const toF = c => c != null ? c * 9 / 5 + 32 : null;
-        const toMph = mps => mps != null ? mps * 2.237 : null;
         const tempF = toF(obs.temperature?.value);
         const feelsRaw = obs.heatIndex?.value ?? obs.windChill?.value;
         const feelsF = feelsRaw != null ? toF(feelsRaw) : tempF;
         const pressMb = obs.barometricPressure?.value != null ? obs.barometricPressure.value / 100 : null;
         const cloudLayers = obs.cloudLayers || [];
         const topLayer = cloudLayers[cloudLayers.length - 1];
+
+        // Use Open-Meteo wind data (accurate) in place of NWS observation wind
+        const wind = omWind
+            ? { speed: { value: omWind.speed }, gust: { value: omWind.gust }, direction: omWind.direction }
+            : { speed: { value: null }, gust: { value: null }, direction: null };
 
         return {
             temperature: { degrees: tempF },
@@ -495,11 +546,7 @@ const WeatherAPI = {
                 type: _nwsConditionType(obs.textDescription),
                 description: { text: obs.textDescription || 'Unknown' }
             },
-            wind: {
-                speed: { value: toMph(obs.windSpeed?.value) },
-                gust: { value: toMph(obs.windGust?.value) },
-                direction: obs.windDirection?.value
-            },
+            wind,
             relativeHumidity: obs.relativeHumidity?.value,
             dewPoint: { degrees: toF(obs.dewpoint?.value) },
             uvIndex: null,
@@ -512,7 +559,10 @@ const WeatherAPI = {
 
     // === NWS Hourly Forecast ===
     async getNWSHourlyForecast(lat, lng, hours = 24) {
-        const points = await _getNWSPoints(lat, lng);
+        const [points, omWindMap] = await Promise.all([
+            _getNWSPoints(lat, lng),
+            _fetchOpenMeteoWindHourly(lat, lng, Math.ceil(hours / 24) + 1).catch(() => null)
+        ]);
         const resp = await fetch(points.forecastHourly, {
             headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
         });
@@ -520,23 +570,27 @@ const WeatherAPI = {
         const data = await resp.json();
         const periods = (data.properties?.periods || []).slice(0, hours);
 
-        const forecastHours = periods.map(p => ({
-            interval: { startTime: p.startTime },
-            displayDateTime: p.startTime,
-            temperature: { degrees: p.temperature }, // NWS hourly is already °F
-            feelsLikeTemperature: { degrees: null },
-            weatherCondition: {
-                type: _nwsConditionType(p.shortForecast),
-                description: { text: p.shortForecast || '' }
-            },
-            precipitation: { probability: p.probabilityOfPrecipitation?.value ?? 0 },
-            wind: {
-                speed: _nwsWindSpeed(p.windSpeed),
-                direction: _nwsCardinalToDeg(p.windDirection)
-            },
-            relativeHumidity: p.relativeHumidity?.value ?? null,
-            pressure: null
-        }));
+        const forecastHours = periods.map(p => {
+            // Look up Open-Meteo wind by matching the hour (first 16 chars of ISO timestamp)
+            const hourKey = p.startTime ? p.startTime.slice(0, 16) : null;
+            const omWind = hourKey && omWindMap ? omWindMap[hourKey] : null;
+            return {
+                interval: { startTime: p.startTime },
+                displayDateTime: p.startTime,
+                temperature: { degrees: p.temperature }, // NWS hourly is already °F
+                feelsLikeTemperature: { degrees: null },
+                weatherCondition: {
+                    type: _nwsConditionType(p.shortForecast),
+                    description: { text: p.shortForecast || '' }
+                },
+                precipitation: { probability: p.probabilityOfPrecipitation?.value ?? 0 },
+                wind: omWind
+                    ? { speed: omWind.speed, direction: omWind.direction }
+                    : { speed: _nwsWindSpeed(p.windSpeed), direction: _nwsCardinalToDeg(p.windDirection) },
+                relativeHumidity: p.relativeHumidity?.value ?? null,
+                pressure: null
+            };
+        });
         return { forecastHours };
     },
 
@@ -544,12 +598,29 @@ const WeatherAPI = {
     async getNWSDailyForecast(lat, lng, days = 10) {
         const points = await _getNWSPoints(lat, lng);
 
-        // Fetch NWS forecast periods and sunrise/sunset times in parallel
-        const [resp, sunTimes] = await Promise.all([
+        // Fetch NWS forecast periods, sunrise/sunset, and Open-Meteo daily wind in parallel
+        const [resp, sunTimes, omDailyRaw] = await Promise.all([
             fetch(points.forecast, {
                 headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
             }),
-            _fetchSunTimes(lat, lng, days).catch(() => [])
+            _fetchSunTimes(lat, lng, days).catch(() => []),
+            (async () => {
+                const params = new URLSearchParams({
+                    latitude: lat, longitude: lng,
+                    daily: 'wind_speed_10m_max,wind_direction_10m_dominant',
+                    wind_speed_unit: 'mph',
+                    timezone: 'auto',
+                    forecast_days: Math.min(days, 16)
+                });
+                const r = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
+                if (!r.ok) return null;
+                const d = await r.json();
+                const map = {};
+                (d.daily?.time || []).forEach((t, i) => {
+                    map[t] = { speed: d.daily.wind_speed_10m_max[i], direction: d.daily.wind_direction_10m_dominant[i] };
+                });
+                return map;
+            })().catch(() => null)
         ]);
 
         if (!resp.ok) throw new Error(`NWS daily forecast ${resp.status}`);
@@ -566,6 +637,7 @@ const WeatherAPI = {
             // Merge sunrise/sunset from Google/Open-Meteo for day/night icon logic
             const sun = sunTimes.find(s => s.displayDate === dateStr);
 
+            const omWind = omDailyRaw ? omDailyRaw[dateStr] : null;
             forecastDays.push({
                 displayDate: dateStr,
                 interval: { startTime: p.startTime },
@@ -579,10 +651,9 @@ const WeatherAPI = {
                     probability: p.probabilityOfPrecipitation?.value ?? 0,
                     qpf: { millimeters: 0 }
                 },
-                maxWind: {
-                    speed: { value: _nwsWindSpeed(p.windSpeed) },
-                    direction: _nwsCardinalToDeg(p.windDirection)
-                },
+                maxWind: omWind
+                    ? { speed: { value: omWind.speed }, direction: omWind.direction }
+                    : { speed: { value: _nwsWindSpeed(p.windSpeed) }, direction: _nwsCardinalToDeg(p.windDirection) },
                 relativeHumidity: p.relativeHumidity?.value ?? null,
                 avgHumidity: p.relativeHumidity?.value ?? null,
                 uvIndex: null,
