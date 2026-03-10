@@ -314,12 +314,66 @@ async function loadAndRenderAlerts(lat, lng) {
     renderAlerts(currentAlerts);
     sendAlertNotifications(byLocation);
 
-    // Check SPC Day 1 outlook for severe weather risk at current location
+    // Check SPC Day 1 severe weather outlook
     try {
         await loadAndRenderSPCOutlook(lat, lng);
     } catch (err) {
         console.warn('SPC outlook error:', err);
     }
+
+    // Check SPC Day 1 fire weather outlook
+    try {
+        await loadAndRenderSPCFireOutlook(lat, lng);
+    } catch (err) {
+        console.warn('SPC fire weather error:', err);
+    }
+
+    // Check WPC Day 1 excessive rainfall outlook
+    try {
+        await loadAndRenderWPCRainfallOutlook(lat, lng);
+    } catch (err) {
+        console.warn('WPC rainfall error:', err);
+    }
+}
+
+function _buildAlertBannerHTML(alert, i) {
+    const headline = _escapeHtml(alert.headline || alert.event || 'Weather Alert');
+    const area = _escapeHtml(alert.areaDesc || 'Your county');
+    const excerpt = _escapeHtml((alert.description || '').slice(0, 180));
+    const hasMore = (alert.description || '').length > 180;
+    const iconSvg = `<svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>`;
+
+    const subtype = _alertSubtype(alert);
+    const subtypeBadge = subtype
+        ? `<span class="alert-subtype-badge ${subtype.colorClass}">${_escapeHtml(subtype.label)}</span>`
+        : '';
+
+    const tstmDetails = _extractSevereThunderstormDetails(alert);
+    let tstmRow = '';
+    if (tstmDetails) {
+        const parts = [];
+        if (tstmDetails.wind) parts.push(`Wind: ${_escapeHtml(tstmDetails.wind)}`);
+        if (tstmDetails.hail) parts.push(`Hail: ${_escapeHtml(tstmDetails.hail)}`);
+        if (parts.length) tstmRow = `<div class="alert-tstm-details">${parts.join(' &nbsp;•&nbsp; ')}</div>`;
+    }
+
+    return `
+        <button type="button" class="alert-banner ${_alertClass(alert)} fade-in" style="animation-delay:${i * 80}ms" onclick="openAlertDetail(${i})">
+            <div class="alert-header">
+                ${iconSvg}
+                <span class="alert-title">${headline}</span>
+            </div>
+            ${subtypeBadge}
+            ${tstmRow}
+            <div class="alert-detail">${excerpt}${hasMore ? '…' : ''}</div>
+            <div class="alert-time">Areas: ${area}</div>
+            <div class="alert-time">Expires: ${_formatAlertTime(alert.expires)}</div>
+        </button>
+    `;
 }
 
 function renderAlerts(alerts) {
@@ -334,45 +388,55 @@ function renderAlerts(alerts) {
     }
 
     container.style.display = 'block';
-    container.innerHTML = _renderedAlerts.map((alert, i) => {
-        const headline = _escapeHtml(alert.headline || alert.event || 'Weather Alert');
-        const area = _escapeHtml(alert.areaDesc || 'Your county');
-        const excerpt = _escapeHtml((alert.description || '').slice(0, 180));
-        const hasMore = (alert.description || '').length > 180;
-        const iconSvg = `<svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>`;
 
-        const subtype = _alertSubtype(alert);
-        const subtypeBadge = subtype
-            ? `<span class="alert-subtype-badge ${subtype.colorClass}">${_escapeHtml(subtype.label)}</span>`
-            : '';
+    // Always show the first (highest-priority) alert
+    let html = _buildAlertBannerHTML(_renderedAlerts[0], 0);
 
-        const tstmDetails = _extractSevereThunderstormDetails(alert);
-        let tstmRow = '';
-        if (tstmDetails) {
-            const parts = [];
-            if (tstmDetails.wind) parts.push(`Wind: ${_escapeHtml(tstmDetails.wind)}`);
-            if (tstmDetails.hail) parts.push(`Hail: ${_escapeHtml(tstmDetails.hail)}`);
-            if (parts.length) tstmRow = `<div class="alert-tstm-details">${parts.join(' &nbsp;•&nbsp; ')}</div>`;
-        }
-
-        return `
-            <button type="button" class="alert-banner ${_alertClass(alert)} fade-in" style="animation-delay:${i * 80}ms" onclick="openAlertDetail(${i})">
-                <div class="alert-header">
-                    ${iconSvg}
-                    <span class="alert-title">${headline}</span>
-                </div>
-                ${subtypeBadge}
-                ${tstmRow}
-                <div class="alert-detail">${excerpt}${hasMore ? '…' : ''}</div>
-                <div class="alert-time">Areas: ${area}</div>
-                <div class="alert-time">Expires: ${_formatAlertTime(alert.expires)}</div>
+    // If there are additional alerts, wrap them in a collapsible section
+    if (_renderedAlerts.length > 1) {
+        const extraCount = _renderedAlerts.length - 1;
+        const extraHtml = _renderedAlerts.slice(1).map((a, i) => _buildAlertBannerHTML(a, i + 1)).join('');
+        html += `
+            <div class="alerts-extra-wrapper" id="alerts-extra" style="display:none;" aria-hidden="true">
+                ${extraHtml}
+            </div>
+            <button type="button" class="alerts-toggle-btn" id="alerts-toggle"
+                    onclick="toggleExtraAlerts()" aria-expanded="false">
+                <svg class="alerts-toggle-chevron" width="14" height="14" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                <span id="alerts-toggle-label">Show ${extraCount} more alert${extraCount > 1 ? 's' : ''}</span>
             </button>
         `;
-    }).join('');
+    }
+
+    container.innerHTML = html;
+}
+
+function toggleExtraAlerts() {
+    const extra = document.getElementById('alerts-extra');
+    const btn = document.getElementById('alerts-toggle');
+    const label = document.getElementById('alerts-toggle-label');
+    const chevron = btn && btn.querySelector('.alerts-toggle-chevron');
+    if (!extra || !btn || !label) return;
+
+    const isExpanded = extra.style.display !== 'none';
+    const extraCount = _renderedAlerts.length - 1;
+
+    if (isExpanded) {
+        extra.style.display = 'none';
+        extra.setAttribute('aria-hidden', 'true');
+        btn.setAttribute('aria-expanded', 'false');
+        label.textContent = `Show ${extraCount} more alert${extraCount > 1 ? 's' : ''}`;
+        if (chevron) chevron.style.transform = '';
+    } else {
+        extra.style.display = 'block';
+        extra.setAttribute('aria-hidden', 'false');
+        btn.setAttribute('aria-expanded', 'true');
+        label.textContent = 'Show fewer alerts';
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+    }
 }
 
 function openAlertDetail(index) {
@@ -481,8 +545,8 @@ function _drawAlertMap(alert) {
             });
         }
 
-        // Add MRMS radar beneath the alert polygon
-        _loadMRMSToAlertMap();
+        // Add IEM NEXRAD radar beneath the alert polygon
+        _loadIEMRadarToAlertMap();
 
         if (alert.geometry && window.turf) {
             const bounds = turf.bbox(sourceData);
@@ -501,33 +565,25 @@ function _drawAlertMap(alert) {
     else _alertMap.once('load', loadOrUpdate);
 }
 
-// ---- MRMS radar layer on the alert map ----
-// Fetches the latest RainViewer radar frame (based on the same MRMS-composite
-// data used throughout the app) and adds it as a raster layer below the alert
-// polygon so operators can see precipitation at a glance.
-async function _loadMRMSToAlertMap() {
+// ---- IEM NEXRAD radar layer on the alert map ----
+// Uses Iowa Environmental Mesonet (IEM) NEXRAD composite tiles — no API
+// fetch required, the URL always serves the latest radar frame.
+function _loadIEMRadarToAlertMap() {
     if (!_alertMap) return;
     try {
-        const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache: 'no-store' });
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const host = data.host;
-        const frames = data.radar?.past || [];
-        if (!frames.length) return;
-        const latest = frames[frames.length - 1];
-        // Scheme 6 = NEXRAD-style colours; smooth=1, snow=1
-        const tileUrl = `${host}${latest.path}/256/{z}/{x}/{y}/6/1_1.png`;
+        // IEM NEXRAD N0Q composite (highest resolution base reflectivity)
+        const tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
 
         if (_alertMap.getSource('alert-mrms')) {
-            // Source exists — just swap to the newest tile URL
+            // Source already exists — update tiles in place
             _alertMap.getSource('alert-mrms').setTiles([tileUrl]);
         } else {
             _alertMap.addSource('alert-mrms', {
                 type: 'raster',
                 tiles: [tileUrl],
                 tileSize: 256,
-                maxzoom: 8,
-                attribution: 'Radar © RainViewer'
+                maxzoom: 10,
+                attribution: 'Radar © <a href="https://mesonet.agron.iastate.edu/">IEM</a>'
             });
             // Insert radar BEFORE the alert-fill layer so it renders underneath
             const beforeId = _alertMap.getLayer('alert-fill') ? 'alert-fill' : undefined;
@@ -542,7 +598,7 @@ async function _loadMRMSToAlertMap() {
             }, beforeId);
         }
     } catch (e) {
-        console.warn('MRMS radar unavailable on alert map:', e);
+        console.warn('IEM radar unavailable on alert map:', e);
     }
 }
 
@@ -761,6 +817,154 @@ function sendSPCNotification(risk) {
     });
     notified.add(noteKey);
     localStorage.setItem(storageKey, JSON.stringify(Array.from(notified).slice(-60)));
+}
+
+// ---- SPC Fire Weather Outlook ----
+
+const _SPC_FIRE_ORDER = ['ELEV', 'CRIT', 'EXTM'];
+const _SPC_FIRE_LABELS = { ELEV: 'Elevated', CRIT: 'Critical', EXTM: 'Extreme' };
+const _SPC_FIRE_CLASS = { ELEV: 'elev', CRIT: 'crit', EXTM: 'extm' };
+
+async function loadAndRenderSPCFireOutlook(lat, lng) {
+    const container = document.getElementById('fire-weather-banner-container');
+    if (!container) return;
+
+    const SPC_FIRE_URL = 'https://www.spc.noaa.gov/products/fire_wx/fwdy1_cat.nolyr.geojson';
+    let data;
+    try {
+        const resp = await fetch(SPC_FIRE_URL, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('SPC fire ' + resp.status);
+        data = await resp.json();
+    } catch (e) {
+        try {
+            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(SPC_FIRE_URL);
+            const resp2 = await fetch(proxy, { cache: 'no-store' });
+            if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
+            data = await resp2.json();
+        } catch (e2) {
+            console.warn('SPC fire weather unavailable:', e2.message);
+            container.style.display = 'none';
+            return;
+        }
+    }
+
+    const features = data.features || [];
+    let highestRisk = null;
+
+    for (const feature of features) {
+        const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
+        const riskIdx = _SPC_FIRE_ORDER.indexOf(label);
+        if (riskIdx < 0) continue;
+        if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
+            if (!highestRisk || riskIdx > _SPC_FIRE_ORDER.indexOf(highestRisk)) {
+                highestRisk = label;
+            }
+        }
+    }
+
+    if (highestRisk) {
+        renderSPCFireBanner(highestRisk);
+    } else {
+        container.style.display = 'none';
+        container.innerHTML = '';
+    }
+}
+
+function renderSPCFireBanner(risk) {
+    const container = document.getElementById('fire-weather-banner-container');
+    if (!container) return;
+    const label = _SPC_FIRE_LABELS[risk] || risk;
+    const cls = _SPC_FIRE_CLASS[risk] || 'elev';
+    container.style.display = 'block';
+    container.innerHTML = `
+        <button type="button" class="spc-fire-banner spc-fire-${cls} fade-in"
+                onclick="navigateToSPCMaps()"
+                title="Tap to view SPC Fire Weather Outlook maps">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;">
+                <path d="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5 0.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
+            </svg>
+            <span><strong>${label} Fire Weather Risk</strong> – Day 1 SPC Fire Outlook. Tap to view maps.</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" style="flex-shrink:0;">
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        </button>
+    `;
+}
+
+// ---- WPC Excessive Rainfall Outlook ----
+
+const _WPC_RAIN_ORDER = ['MRGL', 'SLGT', 'MDT', 'HIGH'];
+const _WPC_RAIN_LABELS = { MRGL: 'Marginal', SLGT: 'Slight', MDT: 'Moderate', HIGH: 'High' };
+const _WPC_RAIN_CLASS = { MRGL: 'mrgl', SLGT: 'slgt', MDT: 'mdt', HIGH: 'high' };
+
+async function loadAndRenderWPCRainfallOutlook(lat, lng) {
+    const container = document.getElementById('wpc-rainfall-banner-container');
+    if (!container) return;
+
+    const WPC_ERO_URL = 'https://www.wpc.ncep.noaa.gov/qpf/94erain.geojson';
+    let data;
+    try {
+        const resp = await fetch(WPC_ERO_URL, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('WPC ERO ' + resp.status);
+        data = await resp.json();
+    } catch (e) {
+        try {
+            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(WPC_ERO_URL);
+            const resp2 = await fetch(proxy, { cache: 'no-store' });
+            if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
+            data = await resp2.json();
+        } catch (e2) {
+            console.warn('WPC rainfall outlook unavailable:', e2.message);
+            container.style.display = 'none';
+            return;
+        }
+    }
+
+    const features = data.features || [];
+    let highestRisk = null;
+
+    for (const feature of features) {
+        const label = (feature.properties?.LABEL || feature.properties?.label ||
+                       feature.properties?.CAT || feature.properties?.cat || '').trim().toUpperCase();
+        const riskIdx = _WPC_RAIN_ORDER.indexOf(label);
+        if (riskIdx < 0) continue;
+        if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
+            if (!highestRisk || riskIdx > _WPC_RAIN_ORDER.indexOf(highestRisk)) {
+                highestRisk = label;
+            }
+        }
+    }
+
+    if (highestRisk) {
+        renderWPCRainfallBanner(highestRisk);
+    } else {
+        container.style.display = 'none';
+        container.innerHTML = '';
+    }
+}
+
+function renderWPCRainfallBanner(risk) {
+    const container = document.getElementById('wpc-rainfall-banner-container');
+    if (!container) return;
+    const label = _WPC_RAIN_LABELS[risk] || risk;
+    const cls = _WPC_RAIN_CLASS[risk] || 'mrgl';
+    container.style.display = 'block';
+    container.innerHTML = `
+        <button type="button" class="wpc-rain-banner wpc-rain-${cls} fade-in"
+                onclick="navigateToSPCMaps()"
+                title="Tap to view WPC Excessive Rainfall Outlook">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+                <path d="M7 17.5l1.5-4h-3zM16.5 17.5L18 13.5h-3zM12 19l1.5-4h-3z"/>
+            </svg>
+            <span><strong>${label} Excessive Rainfall Risk</strong> – Day 1 WPC Outlook. Tap to view maps.</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" style="flex-shrink:0;">
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        </button>
+    `;
 }
 
 // ---- Hourly detail popup ----

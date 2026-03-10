@@ -1510,3 +1510,129 @@ body {
     border-color: rgba(204,0,204,0.45);
     color: #FF40FF;
 }
+
+/* --- SPC Fire Weather Outlook Banners --- */
+.spc-fire-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+    transition: all var(--transition-smooth);
+    color: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.spc-fire-banner:hover { transform: translateY(-1px); }
+.spc-fire-banner span { flex: 1; color: inherit; line-height: 1.4; }
+.spc-fire-banner strong { font-weight: 700; }
+
+/* Elevated: amber/tan */
+.spc-fire-elev {
+    background: rgba(180,120,20,0.15);
+    border-color: rgba(200,150,40,0.45);
+    color: #E8A840;
+}
+/* Critical: deep orange */
+.spc-fire-crit {
+    background: rgba(210,80,10,0.15);
+    border-color: rgba(230,100,20,0.45);
+    color: #FF7030;
+}
+/* Extreme: dark red */
+.spc-fire-extm {
+    background: rgba(200,20,20,0.18);
+    border-color: rgba(220,40,40,0.5);
+    color: #FF4040;
+}
+
+/* --- WPC Excessive Rainfall Outlook Banners --- */
+.wpc-rain-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+    transition: all var(--transition-smooth);
+    color: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.wpc-rain-banner:hover { transform: translateY(-1px); }
+.wpc-rain-banner span { flex: 1; color: inherit; line-height: 1.4; }
+.wpc-rain-banner strong { font-weight: 700; }
+
+/* Marginal: teal/green */
+.wpc-rain-mrgl {
+    background: rgba(0,160,130,0.13);
+    border-color: rgba(0,190,160,0.4);
+    color: #00C8A8;
+}
+/* Slight: yellow-green */
+.wpc-rain-slgt {
+    background: rgba(100,180,20,0.13);
+    border-color: rgba(130,210,30,0.4);
+    color: #90D030;
+}
+/* Moderate: orange */
+.wpc-rain-mdt {
+    background: rgba(220,130,0,0.15);
+    border-color: rgba(240,160,0,0.45);
+    color: #FFB020;
+}
+/* High: red */
+.wpc-rain-high {
+    background: rgba(200,30,30,0.17);
+    border-color: rgba(230,50,50,0.48);
+    color: #FF5050;
+}
+
+/* --- Multi-alert collapse/expand toggle --- */
+.alerts-extra-wrapper {
+    /* Revealed by JS toggle */
+}
+
+.alerts-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all var(--transition-smooth);
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: inherit;
+    margin-top: 4px;
+}
+
+.alerts-toggle-btn:hover {
+    background: rgba(255,255,255,0.09);
+    color: var(--text-primary);
+}
+
+.alerts-toggle-chevron {
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
