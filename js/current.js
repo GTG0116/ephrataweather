@@ -2,9 +2,15 @@
 // CURRENT CONDITIONS PAGE LOGIC
 // ============================================
 
+// Auto-refresh timer handle — cleared and restarted each time the view inits.
+let _autoRefreshTimer = null;
+
 // initCurrentView can be called by the SPA router or by a standalone page.
 // Pass lat/lng directly, or omit to use LocationManager.getCurrent().
 async function initCurrentView(lat, lng) {
+    // Clear any existing auto-refresh timer before starting a new one.
+    if (_autoRefreshTimer) { clearInterval(_autoRefreshTimer); _autoRefreshTimer = null; }
+
     if (lat == null || lng == null) {
         const loc = LocationManager.getCurrent();
         lat = loc.lat;
@@ -94,6 +100,42 @@ async function initCurrentView(lat, lng) {
     }
 
     // Update timestamp
+    const tsEl = document.getElementById('last-updated');
+    if (tsEl) tsEl.textContent =
+        'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+    // Start 1-minute auto-refresh for alerts and current conditions.
+    _autoRefreshTimer = setInterval(() => _autoRefreshCurrent(), 60 * 1000);
+}
+
+// Lightweight periodic refresh: alerts + current conditions + AQI.
+// Runs every minute while the current-conditions view is active.
+async function _autoRefreshCurrent() {
+    const loc = LocationManager.getCurrent();
+    if (!loc?.lat) return;
+
+    const isNWS = WeatherAPI.getDataSource() === 'nws';
+
+    const [currentResult, aqiResult] = await Promise.allSettled([
+        isNWS ? WeatherAPI.getNWSCurrentConditions(loc.lat, loc.lng)
+              : WeatherAPI.getCurrentConditions(loc.lat, loc.lng),
+        WeatherAPI.getAirQuality(loc.lat, loc.lng)
+    ]);
+
+    if (currentResult.status === 'fulfilled') {
+        renderCurrentConditions(currentResult.value, null);
+    }
+    if (aqiResult.status === 'fulfilled') {
+        renderAirQuality(aqiResult.value);
+    }
+
+    try {
+        await loadAndRenderAlerts(loc.lat, loc.lng);
+    } catch (e) { /* silent */ }
+
+    // Also refresh MRMS radar on the open alert map (if any)
+    if (_alertMap) _loadMRMSToAlertMap();
+
     const tsEl = document.getElementById('last-updated');
     if (tsEl) tsEl.textContent =
         'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -439,6 +481,9 @@ function _drawAlertMap(alert) {
             });
         }
 
+        // Add MRMS radar beneath the alert polygon
+        _loadMRMSToAlertMap();
+
         if (alert.geometry && window.turf) {
             const bounds = turf.bbox(sourceData);
             _alertMap.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 30, duration: 0 });
@@ -454,6 +499,51 @@ function _drawAlertMap(alert) {
 
     if (_alertMap.loaded()) loadOrUpdate();
     else _alertMap.once('load', loadOrUpdate);
+}
+
+// ---- MRMS radar layer on the alert map ----
+// Fetches the latest RainViewer radar frame (based on the same MRMS-composite
+// data used throughout the app) and adds it as a raster layer below the alert
+// polygon so operators can see precipitation at a glance.
+async function _loadMRMSToAlertMap() {
+    if (!_alertMap) return;
+    try {
+        const resp = await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache: 'no-store' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const host = data.host;
+        const frames = data.radar?.past || [];
+        if (!frames.length) return;
+        const latest = frames[frames.length - 1];
+        // Scheme 6 = NEXRAD-style colours; smooth=1, snow=1
+        const tileUrl = `${host}${latest.path}/256/{z}/{x}/{y}/6/1_1.png`;
+
+        if (_alertMap.getSource('alert-mrms')) {
+            // Source exists — just swap to the newest tile URL
+            _alertMap.getSource('alert-mrms').setTiles([tileUrl]);
+        } else {
+            _alertMap.addSource('alert-mrms', {
+                type: 'raster',
+                tiles: [tileUrl],
+                tileSize: 256,
+                maxzoom: 8,
+                attribution: 'Radar © RainViewer'
+            });
+            // Insert radar BEFORE the alert-fill layer so it renders underneath
+            const beforeId = _alertMap.getLayer('alert-fill') ? 'alert-fill' : undefined;
+            _alertMap.addLayer({
+                id: 'alert-mrms-layer',
+                type: 'raster',
+                source: 'alert-mrms',
+                paint: {
+                    'raster-opacity': 0.72,
+                    'raster-fade-duration': 300
+                }
+            }, beforeId);
+        }
+    } catch (e) {
+        console.warn('MRMS radar unavailable on alert map:', e);
+    }
 }
 
 // ---- IndexedDB sync for service worker background notifications ----
