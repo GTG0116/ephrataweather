@@ -623,9 +623,9 @@
     //   cig2 ≈ medium conditional threshold  (~30 %)
     //   cig3 ≈ highest conditional threshold (~60 %)
     const PROB_FILL_EXPR = ['case',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(100,0,180,0.65)',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(220,30,30,0.62)',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], 'rgba(255,140,0,0.58)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(119, 0, 204, 0.2)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(187, 17, 17, 0.15)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], 'rgba(204, 112, 0, 0.1)',
         // Legacy "SIGN" hatching — render as a semi-transparent overlay
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], 'rgba(180,0,180,0.22)',
         // Numeric probability labels via step expression
