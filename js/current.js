@@ -8,11 +8,11 @@
 
 // PASTE YOUR CLOUDFLARE WORKER URL HERE
 // Example: 'https://ephrata-push.yoursubdomain.workers.dev'
-const PUSH_SERVER = 'PASTE_YOUR_CLOUDFLARE_WORKER_URL_HERE';
+const PUSH_SERVER = 'https://ephrata-push.gtg0116scratch.workers.dev/';
 
 // PASTE YOUR VAPID PUBLIC KEY HERE
 // Get it by running: npx web-push generate-vapid-keys
-const VAPID_PUBLIC_KEY = 'PASTE_YOUR_VAPID_PUBLIC_KEY_HERE';
+const VAPID_PUBLIC_KEY = '6d61b23d8d734fe79610e0d7613953dd';
 
 /** Convert a URL-safe base64 string to a Uint8Array (required by the browser Push API). */
 function _urlBase64ToUint8Array(base64String) {
