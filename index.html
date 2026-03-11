@@ -921,9 +921,9 @@
         'rgba(0,0,0,0)'];
 
     const PROB_FILL_EXPR = ['case',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(100,0,180,0.65)',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(220,30,30,0.62)',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], 'rgba(255,140,0,0.58)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(0,0,0,0)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(0,0,0,0)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], 'rgba(0,0,0,0)',
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], 'rgba(180,0,180,0.22)',
         ['step', ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
             'rgba(0,0,0,0)',
@@ -959,9 +959,36 @@
     }
     function hideSPCLegend() { document.getElementById('spc-legend').classList.remove('visible'); }
 
+    function addCIGPatterns() {
+        function makePattern(width, height, draw) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            draw(ctx);
+            return ctx.getImageData(0, 0, width, height);
+        }
+        // cig1: single dotted horizontal line
+        map.addImage('cig1-pattern', makePattern(20, 12, ctx => {
+            ctx.strokeStyle = '#CC7000'; ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 4]);
+            ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(20, 6); ctx.stroke();
+        }));
+        // cig2: single solid horizontal line
+        map.addImage('cig2-pattern', makePattern(20, 12, ctx => {
+            ctx.strokeStyle = '#BB1111'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(20, 6); ctx.stroke();
+        }));
+        // cig3: crosshatch — solid horizontal + vertical lines
+        map.addImage('cig3-pattern', makePattern(20, 20, ctx => {
+            ctx.strokeStyle = '#7700CC'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(20, 10); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(10, 20); ctx.stroke();
+        }));
+    }
+
     function removeLayer(id) { if (map && map.getLayer(id))  map.removeLayer(id); }
     function removeSource(id){ if (map && map.getSource(id)) map.removeSource(id); }
-    function clearSPCLayers() { removeLayer('spc-line-cig3-double'); removeLayer('spc-fill'); removeLayer('spc-line'); removeSource('spc-data'); }
+    function clearSPCLayers() { removeLayer('spc-line-cig3-double'); removeLayer('spc-fill-cig1'); removeLayer('spc-fill-cig2'); removeLayer('spc-fill-cig3'); removeLayer('spc-fill'); removeLayer('spc-line'); removeSource('spc-data'); }
     function clearOWMLayers() { removeLayer('owm-layer'); removeSource('owm-source'); }
 
     function normalizeSPCData(data) {
@@ -1016,6 +1043,18 @@
                 }
             }, firstSymbolLayerId);
             if (!isCat) {
+                map.addLayer({ id: 'spc-fill-cig1', type: 'fill', source: 'spc-data',
+                    filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'],
+                    paint: { 'fill-pattern': 'cig1-pattern' }
+                }, firstSymbolLayerId);
+                map.addLayer({ id: 'spc-fill-cig2', type: 'fill', source: 'spc-data',
+                    filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'],
+                    paint: { 'fill-pattern': 'cig2-pattern' }
+                }, firstSymbolLayerId);
+                map.addLayer({ id: 'spc-fill-cig3', type: 'fill', source: 'spc-data',
+                    filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
+                    paint: { 'fill-pattern': 'cig3-pattern' }
+                }, firstSymbolLayerId);
                 map.addLayer({ id: 'spc-line-cig3-double', type: 'line', source: 'spc-data',
                     filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
                     paint: { 'line-color': '#7700CC', 'line-width': 5, 'line-gap-width': 2 }
@@ -1462,6 +1501,7 @@
                 for (const layer of styleLayers) {
                     if (layer.type === 'symbol') { firstSymbolLayerId = layer.id; break; }
                 }
+                addCIGPatterns();
                 map.on('click', handleOWMClick);
             });
         }
