@@ -2,6 +2,51 @@
 // CURRENT CONDITIONS PAGE LOGIC
 // ============================================
 
+// ── Web Push (VAPID) ─────────────────────────────────────────────────────────
+// After deploying the push-server Cloudflare Worker, replace the two placeholders
+// below with your actual values.
+
+// PASTE YOUR CLOUDFLARE WORKER URL HERE
+// Example: 'https://ephrata-push.yoursubdomain.workers.dev'
+const PUSH_SERVER = 'PASTE_YOUR_CLOUDFLARE_WORKER_URL_HERE';
+
+// PASTE YOUR VAPID PUBLIC KEY HERE
+// Get it by running: npx web-push generate-vapid-keys
+const VAPID_PUBLIC_KEY = 'PASTE_YOUR_VAPID_PUBLIC_KEY_HERE';
+
+/** Convert a URL-safe base64 string to a Uint8Array (required by the browser Push API). */
+function _urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+/**
+ * Subscribe this device to web-push and register it with the Worker.
+ * Safe to call multiple times — re-sends an existing subscription if one already exists.
+ */
+async function _subscribeToPush(reg) {
+    try {
+        if (!('PushManager' in window)) return;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: _urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+            });
+        }
+        await fetch(PUSH_SERVER + '/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sub)
+        });
+    } catch (e) {
+        console.warn('Push subscription failed:', e);
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Auto-refresh timer handle — cleared and restarted each time the view inits.
 let _autoRefreshTimer = null;
 
@@ -642,6 +687,8 @@ function _initNotifFlow() {
         // Already permitted — keep SW locations in sync and trigger a check.
         _syncLocationsToSW().then(() => _requestSWAlertCheck()).catch(() => {});
         _registerPeriodicSync();
+        // Re-register push subscription with the Worker in case it was lost.
+        navigator.serviceWorker.ready.then(reg => _subscribeToPush(reg)).catch(() => {});
         return;
     }
 
@@ -690,6 +737,9 @@ function _showNotifBanner() {
             await _syncLocationsToSW();
             await _requestSWAlertCheck();
             _registerPeriodicSync();
+            // Subscribe this device to web-push via the Cloudflare Worker.
+            const reg = await navigator.serviceWorker.ready;
+            await _subscribeToPush(reg);
         }
     });
 }

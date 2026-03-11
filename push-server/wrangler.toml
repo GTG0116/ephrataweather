@@ -1,0 +1,29 @@
+name = "ephrata-push"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Runs every 15 minutes to check for new NWS alerts
+[triggers]
+crons = ["*/15 * * * *"]
+
+# KV namespace for storing push subscriptions
+# After running: wrangler kv namespace create SUBS
+# paste the returned id below
+[[kv_namespaces]]
+binding = "SUBS"
+id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
+
+[vars]
+# Your NWS county/zone code — Ephrata PA is PAZ064
+# Look yours up at: https://alerts.weather.gov
+NWS_ZONE = "PAZ064"
+
+# Must match the "mailto:" address you own
+VAPID_SUBJECT = "mailto:PASTE_YOUR_EMAIL_ADDRESS_HERE"
+
+# Public VAPID key from: npx web-push generate-vapid-keys
+VAPID_PUBLIC_KEY = "PASTE_YOUR_VAPID_PUBLIC_KEY_HERE"
+
+# NOTE: The VAPID private key is stored as a secret (never in this file).
+# Set it once with: wrangler secret put VAPID_PRIVATE_KEY
