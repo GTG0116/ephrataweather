@@ -33,6 +33,18 @@ self.addEventListener('periodicsync', (event) => {
     }
 });
 
+// ---- One-shot Background Sync ----
+// Fires when the browser gets a connectivity opportunity (network restored,
+// OS grants a background slot, etc.).  More broadly supported than
+// periodicSync — works on iOS 16.4+ Home Screen web apps and most Android
+// browsers.  The client page registers the tag when it goes to the
+// background, and the browser fires this event at an appropriate time.
+self.addEventListener('sync', (event) => {
+    if (event.tag === 'weather-alerts') {
+        event.waitUntil(checkAndNotifyAlerts());
+    }
+});
+
 // ---- Push Event (server-sent push OR iOS Web Push via VAPID) ----
 self.addEventListener('push', (event) => {
     event.waitUntil(handlePushEvent(event));

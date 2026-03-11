@@ -578,12 +578,6 @@
                         <button class="day-btn active" data-day="0" onclick="selectDay(0)">All Days</button>
                         <button class="day-btn" data-day="1" onclick="selectDay(1)">Day 1</button>
                         <button class="day-btn" data-day="2" onclick="selectDay(2)">Day 2</button>
-                        <button class="day-btn" data-day="3" onclick="selectDay(3)">Day 3</button>
-                        <button class="day-btn" data-day="4" onclick="selectDay(4)">Day 4</button>
-                        <button class="day-btn" data-day="5" onclick="selectDay(5)">Day 5</button>
-                        <button class="day-btn" data-day="6" onclick="selectDay(6)">Day 6</button>
-                        <button class="day-btn" data-day="7" onclick="selectDay(7)">Day 7</button>
-                        <button class="day-btn" data-day="8" onclick="selectDay(8)">Day 8</button>
                     </div>
                     <div class="ctrl-row" id="type-row" style="display:none;">
                         <span class="ctrl-label">Type:</span>
@@ -867,26 +861,11 @@
             wind: 'https://www.spc.noaa.gov/products/outlook/day2otlk_wind.nolyr.geojson',
             hail: 'https://www.spc.noaa.gov/products/outlook/day2otlk_hail.nolyr.geojson',
         },
-        3: {
-            cat:  'https://www.spc.noaa.gov/products/outlook/day3otlk.nolyr.geojson',
-            prob: 'https://www.spc.noaa.gov/products/outlook/day3otlk_prob.nolyr.geojson',
-        },
-        4: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day4prob.nolyr.geojson' },
-        5: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day5prob.nolyr.geojson' },
-        6: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day6prob.nolyr.geojson' },
-        7: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day7prob.nolyr.geojson' },
-        8: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day8prob.nolyr.geojson' },
     };
 
     const DAY_TYPES = {
         1: [{ key:'cat', label:'Categorical' }, { key:'torn', label:'Tornado' }, { key:'wind', label:'Wind' }, { key:'hail', label:'Hail' }],
         2: [{ key:'cat', label:'Categorical' }, { key:'torn', label:'Tornado' }, { key:'wind', label:'Wind' }, { key:'hail', label:'Hail' }],
-        3: [{ key:'cat', label:'Categorical' }, { key:'prob', label:'Probability' }],
-        4: [{ key:'prob', label:'Probability' }],
-        5: [{ key:'prob', label:'Probability' }],
-        6: [{ key:'prob', label:'Probability' }],
-        7: [{ key:'prob', label:'Probability' }],
-        8: [{ key:'prob', label:'Probability' }],
     };
 
     const CAT_LEGEND = [
@@ -996,12 +975,15 @@
         const features = data.features.map((feature) => {
             const props = feature.properties || {};
             const label = String(props.LABEL ?? '').toUpperCase();
-            const risk = Number.parseFloat(label.replace('%', ''));
+            const raw = Number.parseFloat(label.replace('%', ''));
+            // SPC now uses decimal fractions in torn/wind/hail GeoJSON (e.g. 0.05 = 5%).
+            // Normalise to a 0-100 scale so the step breakpoints (2, 5, 10 … 60) match.
+            const riskNum = Number.isFinite(raw) ? (raw > 0 && raw < 1 ? raw * 100 : raw) : null;
             return {
                 ...feature,
                 properties: {
                     ...props,
-                    RISK_NUM: Number.isFinite(risk) ? risk : null,
+                    RISK_NUM: riskNum,
                 }
             };
         });
@@ -1543,11 +1525,43 @@
             }).catch((err) => console.warn('SW registration failed:', err));
 
             // ---- iOS / Safari fallback: check alerts when app returns to foreground ----
-            // The SW's activate event also fires a rate-limited check, but
-            // this listener catches cases where the SW is already active and
-            // the user simply switches back to the tab / home-screen app.
+            // On iOS Home Screen web apps there is no periodicSync.  We cover
+            // the gap with three complementary triggers:
+            //   1. visibilitychange hidden → register a BackgroundSync tag so
+            //      the browser fires checkAndNotifyAlerts() at an opportune
+            //      moment (network restored, OS background slot, etc.)
+            //   2. visibilitychange visible → message the SW for an immediate
+            //      rate-limited check when the user returns to the app.
+            //   3. pageshow (bfcache restore) + online → same immediate check.
             document.addEventListener('visibilitychange', async () => {
-                if (document.visibilityState !== 'visible') return;
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    if (!reg) return;
+                    if (document.visibilityState === 'hidden') {
+                        // Register a one-shot sync so the browser can wake the SW
+                        // in the background (iOS 16.4+, Chrome/Edge Android).
+                        if ('sync' in reg) reg.sync.register('weather-alerts').catch(() => {});
+                    } else {
+                        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+                        if (reg.active) reg.active.postMessage({ type: 'CHECK_ALERTS' });
+                    }
+                } catch (_) {}
+            });
+
+            // pageshow fires on bfcache restore — common on iOS Safari when
+            // the user navigates back to the home-screen app.
+            window.addEventListener('pageshow', async (e) => {
+                if (!e.persisted) return;
+                if (!('Notification' in window) || Notification.permission !== 'granted') return;
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    if (reg?.active) reg.active.postMessage({ type: 'CHECK_ALERTS' });
+                } catch (_) {}
+            });
+
+            // Trigger an alert check when connectivity is restored after being
+            // offline — catches the case where the device was on airplane mode.
+            window.addEventListener('online', async () => {
                 if (!('Notification' in window) || Notification.permission !== 'granted') return;
                 try {
                     const reg = await navigator.serviceWorker.ready;
