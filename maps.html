@@ -541,11 +541,11 @@
             cat:  'https://www.spc.noaa.gov/products/outlook/day3otlk.nolyr.geojson',
             prob: 'https://www.spc.noaa.gov/products/outlook/day3otlk_prob.nolyr.geojson',
         },
-        4: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day4prob.nolyr.geojson' },
-        5: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day5prob.nolyr.geojson' },
-        6: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day6prob.nolyr.geojson' },
-        7: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day7prob.nolyr.geojson' },
-        8: { prob: 'https://www.spc.noaa.gov/products/expprobotlk/day8prob.nolyr.geojson' },
+        4: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day4prob.nolyr.geojson' },
+        5: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day5prob.nolyr.geojson' },
+        6: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day6prob.nolyr.geojson' },
+        7: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day7prob.nolyr.geojson' },
+        8: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day8prob.nolyr.geojson' },
     };
 
     // Types available per day
@@ -629,7 +629,7 @@
         // Legacy "SIGN" hatching — render as a semi-transparent overlay
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], 'rgba(180,0,180,0.22)',
         // Numeric probability labels via step expression
-        ['step', ['coalesce', ['to-number', ['get', 'LABEL']], 0],
+        ['step', ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
             'rgba(0,0,0,0)',
             2,  'rgba(80,180,80,0.50)',
             5,  'rgba(100,200,60,0.55)',
@@ -645,7 +645,7 @@
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], '#BB1111',
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], '#CC7000',
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], '#AA00AA',
-        ['step', ['coalesce', ['to-number', ['get', 'LABEL']], 0],
+        ['step', ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
             'rgba(0,0,0,0)',
             2,  '#339933',
             5,  '#55AA00',
@@ -655,6 +655,10 @@
             45, '#8800AA',
             60, '#6600BB'
         ]
+    ];
+    const CIG_DASH_EXPR = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], ['literal', [2, 2]],
+        ['literal', [1, 0]]
     ];
 
     // ---- Legend Helpers ----
@@ -679,6 +683,7 @@
     function removeSource(id){ if (map.getSource(id)) map.removeSource(id); }
 
     function clearSPCLayers() {
+        removeLayer('spc-line-cig3-double');
         removeLayer('spc-fill');
         removeLayer('spc-line');
         removeSource('spc-data');
@@ -690,6 +695,23 @@
     function clearOWMLayers() {
         removeLayer('owm-layer');
         removeSource('owm-source');
+    }
+
+    function normalizeSPCData(data) {
+        if (!data?.features) return data;
+        const features = data.features.map((feature) => {
+            const props = feature.properties || {};
+            const label = String(props.LABEL ?? '').toUpperCase();
+            const risk = Number.parseFloat(label.replace('%', ''));
+            return {
+                ...feature,
+                properties: {
+                    ...props,
+                    RISK_NUM: Number.isFinite(risk) ? risk : null,
+                }
+            };
+        });
+        return { ...data, features };
     }
 
     // ---- SPC fetch helper with CORS fallback ----
@@ -716,11 +738,12 @@
         showLoading('Loading SPC Day ' + day + ' outlook…');
         try {
             const data = await fetchSPCGeoJSON(url);
+            const normalizedData = normalizeSPCData(data);
 
             clearSPCLayers();
 
-            // Use the raw GeoJSON — Mapbox expressions handle the colour mapping.
-            map.addSource('spc-data', { type: 'geojson', data });
+            // Use normalized GeoJSON so numeric labels like "5%" render correctly.
+            map.addSource('spc-data', { type: 'geojson', data: normalizedData });
 
             const isCat = (type === 'cat');
             // Insert before the first symbol layer so town/city labels
@@ -741,9 +764,24 @@
                 source: 'spc-data',
                 paint: {
                     'line-color': isCat ? CAT_LINE_EXPR : PROB_LINE_EXPR,
-                    'line-width': 1.2
+                    'line-width': 1.2,
+                    'line-dasharray': isCat ? ['literal', [1, 0]] : CIG_DASH_EXPR
                 }
             }, firstSymbolLayerId);
+
+            if (!isCat) {
+                map.addLayer({
+                    id: 'spc-line-cig3-double',
+                    type: 'line',
+                    source: 'spc-data',
+                    filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
+                    paint: {
+                        'line-color': '#7700CC',
+                        'line-width': 5,
+                        'line-gap-width': 2
+                    }
+                }, firstSymbolLayerId);
+            }
 
             updateSPCLegend(type);
         } catch (e) {
