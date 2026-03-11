@@ -568,6 +568,8 @@
                     <button class="layer-btn" data-layer="temperature" onclick="switchLayer('temperature')">Temperature</button>
                     <button class="layer-btn" data-layer="wind" onclick="switchLayer('wind')">Wind Speed</button>
                     <button class="layer-btn" data-layer="clouds" onclick="switchLayer('clouds')">Cloud Cover</button>
+                    <button class="layer-btn" data-layer="wpc-rain" onclick="switchLayer('wpc-rain')">WPC Rainfall</button>
+                    <button class="layer-btn" data-layer="fire-wx" onclick="switchLayer('fire-wx')">Fire Weather</button>
                 </div>
                 <!-- SPC Sub-Controls (Days 1-8) -->
                 <div class="spc-controls visible" id="spc-controls">
@@ -649,6 +651,22 @@
                         style="width:100%;height:calc(100vh - 220px);min-height:500px;border:none;border-radius:var(--radius-lg);"
                         title="MRMS Radar Viewer"
                         allowfullscreen></iframe>
+            </div>
+
+            <!-- WPC Excessive Rainfall View -->
+            <div id="wpc-rain-view" class="glass-static" style="display:none;padding:16px;">
+                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
+                    WPC Excessive Rainfall Outlooks &mdash; click any image to zoom in.
+                </p>
+                <div id="wpc-rain-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
+            </div>
+
+            <!-- SPC Fire Weather View -->
+            <div id="fire-wx-view" class="glass-static" style="display:none;padding:16px;">
+                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
+                    SPC Fire Weather Outlooks &mdash; click any image to zoom in.
+                </p>
+                <div id="fire-wx-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
             </div>
 
             <!-- Map (for Temperature / Wind) -->
@@ -1111,6 +1129,48 @@
     }
 
     // ============================================================
+    // WPC EXCESSIVE RAINFALL & SPC FIRE WEATHER
+    // ============================================================
+    const WPC_RAIN_IMAGES = [
+        { url: 'https://www.wpc.ncep.noaa.gov/qpf/94ewbg.gif',  label: 'Day 1 Excessive Rainfall' },
+        { url: 'https://www.wpc.ncep.noaa.gov/qpf/98ewbg.gif',  label: 'Day 2 Excessive Rainfall' },
+        { url: 'https://www.wpc.ncep.noaa.gov/qpf/99ewbg.gif',  label: 'Day 3 Excessive Rainfall' },
+    ];
+
+    const FIRE_WX_IMAGES = [
+        { url: 'https://www.spc.noaa.gov/products/fire_wx/day1otlk_fire.png', label: 'Day 1 Fire Weather' },
+        { url: 'https://www.spc.noaa.gov/products/fire_wx/day2otlk_fire.png', label: 'Day 2 Fire Weather' },
+    ];
+
+    function renderWPCRainImages() {
+        const container = document.getElementById('wpc-rain-grid');
+        if (!container) return;
+        const ts = Date.now();
+        container.innerHTML = WPC_RAIN_IMAGES.map(img => `
+            <div class="spc-img-card" onclick="openImageZoom('${img.url}?cb=${ts}', '${img.label}')" title="Click to zoom">
+                <div class="spc-img-label">${img.label}</div>
+                <img src="${img.url}?cb=${ts}" alt="${img.label}"
+                     style="width:100%;border-radius:6px;display:block;cursor:zoom-in;"
+                     loading="lazy"
+                     onerror="this.parentElement.style.display='none'">
+            </div>`).join('');
+    }
+
+    function renderFireWxImages() {
+        const container = document.getElementById('fire-wx-grid');
+        if (!container) return;
+        const ts = Date.now();
+        container.innerHTML = FIRE_WX_IMAGES.map(img => `
+            <div class="spc-img-card" onclick="openImageZoom('${img.url}?cb=${ts}', '${img.label}')" title="Click to zoom">
+                <div class="spc-img-label">${img.label}</div>
+                <img src="${img.url}?cb=${ts}" alt="${img.label}"
+                     style="width:100%;border-radius:6px;display:block;cursor:zoom-in;"
+                     loading="lazy"
+                     onerror="this.parentElement.style.display='none'">
+            </div>`).join('');
+    }
+
+    // ============================================================
     // SATELLITE VIEWER
     // ============================================================
     const SAT_BANDS = {
@@ -1169,6 +1229,8 @@
         document.getElementById('satellite-image-view').style.display = 'none';
         document.getElementById('radar-image-view').style.display = 'none';
         document.getElementById('map-view-wrap').style.display = 'none';
+        document.getElementById('wpc-rain-view').style.display = 'none';
+        document.getElementById('fire-wx-view').style.display = 'none';
     }
     // Show only the image gallery (used for "All Days" SPC view)
     function _showSPCView()       { _hideAllViews(); document.getElementById('spc-image-view').style.display = ''; }
@@ -1182,6 +1244,8 @@
     function _showSatelliteView() { _hideAllViews(); document.getElementById('satellite-image-view').style.display = ''; }
     function _showRadarView()     { _hideAllViews(); document.getElementById('radar-image-view').style.display = ''; }
     function _showMapView()       { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; }
+    function _showWPCRainView()   { _hideAllViews(); document.getElementById('wpc-rain-view').style.display = ''; }
+    function _showFireWxView()    { _hideAllViews(); document.getElementById('fire-wx-view').style.display = ''; }
 
 
     function setBaseMapStyle(styleKey) {
@@ -1236,6 +1300,14 @@
         } else if (layer === 'radar') {
             clearSPCLayers(); hideSPCLegend();
             _showRadarView();
+        } else if (layer === 'wpc-rain') {
+            clearSPCLayers(); hideSPCLegend(); clearOWMLayers();
+            _showWPCRainView();
+            renderWPCRainImages();
+        } else if (layer === 'fire-wx') {
+            clearSPCLayers(); hideSPCLegend(); clearOWMLayers();
+            _showFireWxView();
+            renderFireWxImages();
         } else {
             clearSPCLayers(); hideSPCLegend();
             _showMapView();
@@ -1266,6 +1338,17 @@
     }
 
     function buildTypeButtons(day) {
+        // Days 4-8: static images only, no interactive map
+        if (day >= 4) {
+            document.getElementById('type-row').style.display = 'none';
+            clearSPCLayers(); hideSPCLegend();
+            _showSPCView();
+            const hint = document.getElementById('spc-img-hint');
+            if (hint) hint.style.display = 'none';
+            renderSPCImages(day);
+            return;
+        }
+
         const types = DAY_TYPES[day] || [];
         const typeRow = document.getElementById('type-row');
         typeRow.style.display = '';
@@ -1281,7 +1364,7 @@
             typeRow.appendChild(btn);
         });
 
-        // Show static reference images below the map (all days 1-8 now have images)
+        // Show static reference images below the map (days 1-3 have images)
         const hasImages = !!(SPC_IMAGES[day]?.length);
         _showSPCMapView(hasImages);
         if (hasImages) {
