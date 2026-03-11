@@ -1,0 +1,9 @@
+{
+  "name": "ephrata-push",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cloudflare Worker that polls NWS alerts and sends web-push notifications",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
