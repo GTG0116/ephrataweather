@@ -12,7 +12,7 @@ crons = ["*/15 * * * *"]
 # paste the returned id below
 [[kv_namespaces]]
 binding = "SUBS"
-id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
+id = "6d61b23d8d734fe79610e0d7613953dd"
 
 [vars]
 # Your NWS county/zone code — Ephrata PA is PAZ064
@@ -20,10 +20,10 @@ id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
 NWS_ZONE = "PAZ064"
 
 # Must match the "mailto:" address you own
-VAPID_SUBJECT = "mailto:PASTE_YOUR_EMAIL_ADDRESS_HERE"
+VAPID_SUBJECT = "mailto:gtg0116scratch@gmail.com"
 
 # Public VAPID key from: npx web-push generate-vapid-keys
-VAPID_PUBLIC_KEY = "PASTE_YOUR_VAPID_PUBLIC_KEY_HERE"
+VAPID_PUBLIC_KEY = "BIbqd-bVxq8pihYr43env_pkFnhB_OImjTVVm3G3GWKL2kWKS0xeCmB85EOxQjG4RfLxHrILfZT5xDSgHTM8OfY"
 
 # NOTE: The VAPID private key is stored as a secret (never in this file).
 # Set it once with: wrangler secret put VAPID_PRIVATE_KEY
