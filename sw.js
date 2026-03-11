@@ -35,7 +35,7 @@ self.addEventListener('periodicsync', (event) => {
 
 // ---- Push Event (server-sent push OR iOS Web Push via VAPID) ----
 self.addEventListener('push', (event) => {
-    event.waitUntil(checkAndNotifyAlerts());
+    event.waitUntil(handlePushEvent(event));
 });
 
 // ---- Message from client page ----
@@ -74,6 +74,55 @@ async function _maybeCheckAlerts() {
         await checkAndNotifyAlerts();
     } catch (err) {
         console.warn('[SW] _maybeCheckAlerts error:', err);
+    }
+}
+
+async function handlePushEvent(event) {
+    const payload = _readPushPayload(event);
+
+    // If a push payload is supplied, always surface it immediately.
+    // This is critical on iOS Home Screen web apps where the app may be closed
+    // and we cannot rely on visibility/message-triggered checks.
+    if (payload) {
+        await self.registration.showNotification(payload.title, {
+            body: payload.body,
+            icon: payload.icon || '/IMG_0912.png',
+            badge: payload.badge || '/IMG_0912.png',
+            tag: payload.tag || `push-${Date.now()}`,
+            requireInteraction: !!payload.requireInteraction,
+            data: { url: payload.url || '/' }
+        });
+    }
+
+    // Also run an alert refresh so data-driven alert notifications still fire
+    // when the push event is a silent ping.
+    await checkAndNotifyAlerts();
+}
+
+function _readPushPayload(event) {
+    try {
+        if (!event.data) return null;
+        const raw = event.data.json();
+        return {
+            title: raw.title || 'Weather Alert',
+            body: raw.body || raw.message || 'New weather information is available.',
+            icon: raw.icon,
+            badge: raw.badge,
+            tag: raw.tag,
+            url: raw.url,
+            requireInteraction: raw.requireInteraction
+        };
+    } catch (_) {
+        try {
+            const text = event.data?.text?.();
+            if (!text) return null;
+            return {
+                title: 'Weather Alert',
+                body: text
+            };
+        } catch (_) {
+            return null;
+        }
     }
 }
 
