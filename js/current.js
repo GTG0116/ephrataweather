@@ -17,30 +17,12 @@ async function initCurrentView(lat, lng) {
         lng = loc.lng;
     }
 
-    // Request notification permission early, then sync locations to IDB so the
-    // service worker can check alerts in the background when the app is closed.
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission().then(async (permission) => {
-            if (permission === 'granted') {
-                await _syncLocationsToSW();
-                // Attempt to register periodic background sync now that permission is granted.
-                if ('serviceWorker' in navigator) {
-                    const reg = await navigator.serviceWorker.ready.catch(() => null);
-                    if (reg && 'periodicSync' in reg) {
-                        try {
-                            const perm = await navigator.permissions.query({ name: 'periodic-background-sync' });
-                            if (perm.state === 'granted') {
-                                await reg.periodicSync.register('weather-alerts', { minInterval: 30 * 60 * 1000 });
-                            }
-                        } catch (_) { /* not supported */ }
-                    }
-                }
-            }
-        });
-    } else {
-        // Permission already granted — keep locations in sync for the SW.
-        _syncLocationsToSW().catch(() => {});
-    }
+    // Notification setup: sync locations and show permission banner if needed.
+    // On iOS/Safari, Notification.requestPermission() MUST be called from a
+    // direct user gesture (tap/click).  We therefore never call it
+    // programmatically — instead we show a visible banner with a button so
+    // the user consciously opts in.
+    _initNotifFlow();
 
     // Determine data source (google/open-meteo or nws)
     const dataSource = WeatherAPI.getDataSource();
@@ -646,6 +628,90 @@ async function _syncLocationsToSW() {
         };
         req.onerror = () => resolve();
     });
+}
+
+// ---- Notification permission flow ----
+// Must not call Notification.requestPermission() automatically because iOS/Safari
+// requires the call to originate from a direct user interaction (tap/click).
+// Instead we show an in-app banner that the user consciously taps to enable alerts.
+
+function _initNotifFlow() {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+
+    if (Notification.permission === 'granted') {
+        // Already permitted — keep SW locations in sync and trigger a check.
+        _syncLocationsToSW().then(() => _requestSWAlertCheck()).catch(() => {});
+        _registerPeriodicSync();
+        return;
+    }
+
+    if (Notification.permission === 'denied') return; // User permanently blocked
+
+    // 'default' — show a non-intrusive banner so the user can opt in with a tap.
+    _showNotifBanner();
+}
+
+function _showNotifBanner() {
+    // Don't show duplicate banners
+    if (document.getElementById('notif-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'notif-banner';
+    banner.style.cssText = [
+        'display:flex', 'align-items:center', 'gap:12px',
+        'padding:12px 16px', 'margin-bottom:14px',
+        'background:rgba(100,180,255,0.1)',
+        'border:1px solid rgba(100,180,255,0.28)',
+        'border-radius:12px', 'font-size:0.84rem',
+        'color:var(--text-secondary)'
+    ].join(';');
+
+    banner.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64b4ff" stroke-width="2" stroke-linecap="round" style="flex-shrink:0">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <span style="flex:1">Enable weather alerts to get notified about severe weather even when the app is in the background.</span>
+        <button id="notif-enable-btn" style="padding:7px 14px;background:rgba(100,180,255,0.22);border:1px solid rgba(100,180,255,0.45);color:#8dd4ff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:inherit;white-space:nowrap;flex-shrink:0">Enable Alerts</button>
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0" aria-label="Dismiss">&times;</button>
+    `;
+
+    // Insert the banner at the top of the current-conditions view container
+    const container = document.getElementById('view-current') || document.querySelector('.app-container');
+    if (container) {
+        const firstChild = container.firstElementChild;
+        container.insertBefore(banner, firstChild);
+    }
+
+    // The click handler MUST be a direct user-gesture event for iOS to show the dialog
+    document.getElementById('notif-enable-btn')?.addEventListener('click', async () => {
+        const permission = await Notification.requestPermission();
+        banner.remove();
+        if (permission === 'granted') {
+            await _syncLocationsToSW();
+            await _requestSWAlertCheck();
+            _registerPeriodicSync();
+        }
+    });
+}
+
+async function _requestSWAlertCheck() {
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        if (reg?.active) {
+            reg.active.postMessage({ type: 'CHECK_ALERTS' });
+        }
+    } catch (_) {}
+}
+
+async function _registerPeriodicSync() {
+    try {
+        const reg = await navigator.serviceWorker.ready.catch(() => null);
+        if (!reg || !('periodicSync' in reg)) return;
+        const perm = await navigator.permissions.query({ name: 'periodic-background-sync' });
+        if (perm.state === 'granted') {
+            await reg.periodicSync.register('weather-alerts', { minInterval: 30 * 60 * 1000 });
+        }
+    } catch (_) { /* not supported on this browser */ }
 }
 
 function sendAlertNotifications(byLocation) {

@@ -4,30 +4,49 @@
 // even when the app is not open.
 // ============================================
 
-const SW_VERSION = 1;
+const SW_VERSION = 2;
 const DB_NAME = 'ephrata-weather';
 const DB_VERSION = 1;
+
+// Minimum interval between background alert checks (15 minutes in ms).
+// This prevents the activate-event check from hammering the NWS API every
+// time the service worker is woken up by a mundane network request.
+const MIN_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 self.addEventListener('install', () => {
     self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-    event.waitUntil(clients.claim());
+    event.waitUntil(
+        clients.claim().then(() => _maybeCheckAlerts())
+    );
 });
 
 // ---- Periodic Background Sync ----
 // Fires on a schedule (minimum ~30 min) when the app is closed.
-// Requires the PWA to be installed and the browser to support periodicSync.
+// Supported on Chrome/Edge Android PWA only; iOS uses the activate +
+// message-based fallback instead.
 self.addEventListener('periodicsync', (event) => {
     if (event.tag === 'weather-alerts') {
         event.waitUntil(checkAndNotifyAlerts());
     }
 });
 
-// ---- Push Event (future-proof for a push server) ----
+// ---- Push Event (server-sent push OR iOS Web Push via VAPID) ----
 self.addEventListener('push', (event) => {
     event.waitUntil(checkAndNotifyAlerts());
+});
+
+// ---- Message from client page ----
+// The client sends { type: 'CHECK_ALERTS' } via navigator.serviceWorker.controller.postMessage()
+// whenever the page becomes visible (visibilitychange hidden→visible).
+// This is the primary mechanism for delivering timely alerts on iOS / Safari
+// where periodicSync is not available.
+self.addEventListener('message', (event) => {
+    if (event.data?.type === 'CHECK_ALERTS') {
+        event.waitUntil(_maybeCheckAlerts());
+    }
 });
 
 // ---- Notification click → open / focus the app ----
@@ -42,6 +61,21 @@ self.addEventListener('notificationclick', (event) => {
         })
     );
 });
+
+// ---- Rate-limited wrapper around the core check ----
+// Skips the check when it ran recently so we don't hammer the NWS API
+// on every service-worker wake-up caused by fetch/push/activate events.
+async function _maybeCheckAlerts() {
+    try {
+        const lastCheck = (await idbGet('lastAlertCheck')) || 0;
+        const now = Date.now();
+        if (now - lastCheck < MIN_CHECK_INTERVAL_MS) return;
+        await idbPut('lastAlertCheck', now);
+        await checkAndNotifyAlerts();
+    } catch (err) {
+        console.warn('[SW] _maybeCheckAlerts error:', err);
+    }
+}
 
 // ---- Core alert-check routine ----
 async function checkAndNotifyAlerts() {
@@ -155,7 +189,7 @@ function _swTstmDetails(event, desc, params) {
     }
     if (wind) parts.push(`Wind: ${wind}`);
     if (hail) parts.push(`Hail: ${hail}`);
-    return parts.length ? parts.join(' • ') : null;
+    return parts.length ? parts.join(' \u2022 ') : null;
 }
 
 // ---- IndexedDB helpers ----
