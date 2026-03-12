@@ -573,11 +573,17 @@
                 </div>
                 <!-- SPC Sub-Controls (Days 1-8) -->
                 <div class="spc-controls visible" id="spc-controls">
-                    <div class="ctrl-row">
-                        <span class="ctrl-label">Day:</span>
-                        <button class="day-btn active" data-day="0" onclick="selectDay(0)">All Days</button>
-                        <button class="day-btn" data-day="1" onclick="selectDay(1)">Day 1</button>
-                        <button class="day-btn" data-day="2" onclick="selectDay(2)">Day 2</button>
+                    <div class="ctrl-row" style="overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px;">
+                        <span class="ctrl-label" style="flex-shrink:0;">Day:</span>
+                        <button class="day-btn active" data-day="0" onclick="selectDay(0)" style="flex-shrink:0;">All Days</button>
+                        <button class="day-btn" data-day="1" onclick="selectDay(1)" style="flex-shrink:0;">Day 1</button>
+                        <button class="day-btn" data-day="2" onclick="selectDay(2)" style="flex-shrink:0;">Day 2</button>
+                        <button class="day-btn" data-day="3" onclick="selectDay(3)" style="flex-shrink:0;">Day 3</button>
+                        <button class="day-btn" data-day="4" onclick="selectDay(4)" style="flex-shrink:0;">Day 4</button>
+                        <button class="day-btn" data-day="5" onclick="selectDay(5)" style="flex-shrink:0;">Day 5</button>
+                        <button class="day-btn" data-day="6" onclick="selectDay(6)" style="flex-shrink:0;">Day 6</button>
+                        <button class="day-btn" data-day="7" onclick="selectDay(7)" style="flex-shrink:0;">Day 7</button>
+                        <button class="day-btn" data-day="8" onclick="selectDay(8)" style="flex-shrink:0;">Day 8</button>
                     </div>
                     <div class="ctrl-row" id="type-row" style="display:none;">
                         <span class="ctrl-label">Type:</span>
@@ -1142,7 +1148,10 @@
         8: [{ url: 'https://www.spc.noaa.gov/products/exper/day4-8/day8prob.gif',  label: 'Day 8 Probability' }],
     };
 
-    function renderSPCImages(filterDay) {
+    // Maps type key → the label string used in SPC_IMAGES for days 1-2
+    const TYPE_TO_LABEL = { cat: 'Categorical', torn: 'Tornado', wind: 'Wind', hail: 'Hail' };
+
+    function renderSPCImages(filterDay, filterType) {
         const container = document.getElementById('spc-img-grid');
         if (!container) return;
         const ts = Date.now();
@@ -1161,7 +1170,12 @@
 
         if (filterDay && filterDay !== 0) {
             // Filtered to a specific day — flat grid, no section header
-            const imgs = SPC_IMAGES[filterDay] || [];
+            let imgs = SPC_IMAGES[filterDay] || [];
+            // For days 1-2 with interactive map, only show the image for the selected type
+            if (filterType && (filterDay === 1 || filterDay === 2)) {
+                const typeLabel = TYPE_TO_LABEL[filterType];
+                if (typeLabel) imgs = imgs.filter(img => img.label === typeLabel);
+            }
             container.style.display = imgs.length ? 'grid' : 'none';
             container.innerHTML = imgs.map(img => imgCard(img, `Day ${filterDay}`)).join('');
         } else {
@@ -1391,8 +1405,8 @@
     }
 
     function buildTypeButtons(day) {
-        // Days 4-8: static images only, no interactive map
-        if (day >= 4) {
+        // Days 3-8: static images only, no interactive map
+        if (day >= 3) {
             document.getElementById('type-row').style.display = 'none';
             clearSPCLayers(); hideSPCLegend();
             _showSPCView();
@@ -1417,15 +1431,11 @@
             typeRow.appendChild(btn);
         });
 
-        // Show static reference images below the map (days 1-3 have images)
-        const hasImages = !!(SPC_IMAGES[day]?.length);
-        _showSPCMapView(hasImages);
-        if (hasImages) {
-            // Hide the hint text on single-day view; the map is self-explanatory
-            const hint = document.getElementById('spc-img-hint');
-            if (hint) hint.style.display = 'none';
-            renderSPCImages(day);
-        }
+        // Show the interactive map and only the static image for the selected type
+        _showSPCMapView(true);
+        const hint = document.getElementById('spc-img-hint');
+        if (hint) hint.style.display = 'none';
+        renderSPCImages(day, currentType);
 
         // Ensure map is ready, then load the SPC GeoJSON
         _ensureMapReady().then(() => loadSPCLayer(day, currentType));
@@ -1437,6 +1447,8 @@
             btn.classList.toggle('active', btn.dataset.type === type));
         if (currentLayer === 'spc' && currentDay > 0) {
             loadSPCLayer(currentDay, type);
+            // Update the static image below the map to match the selected type
+            renderSPCImages(currentDay, type);
         }
     }
 
@@ -1500,75 +1512,6 @@
         // Show initial view based on hash (default: home)
         await showView(getViewFromHash());
 
-        // Register service worker for background alert notifications.
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').then(async (reg) => {
-                // Sync current + starred locations to IndexedDB so the SW can
-                // fetch alerts in the background when the app is closed.
-                if (typeof _syncLocationsToSW === 'function') {
-                    await _syncLocationsToSW();
-                }
-
-                // On iOS/Safari, periodicSync is not available.  The primary
-                // fallback is the visibilitychange listener below which messages
-                // the SW whenever the user returns to the app.
-                if ('periodicSync' in reg) {
-                    try {
-                        const perm = await navigator.permissions.query({ name: 'periodic-background-sync' });
-                        if (perm.state === 'granted') {
-                            await reg.periodicSync.register('weather-alerts', {
-                                minInterval: 30 * 60 * 1000 // 30 minutes
-                            });
-                        }
-                    } catch (_) { /* not supported on this browser */ }
-                }
-            }).catch((err) => console.warn('SW registration failed:', err));
-
-            // ---- iOS / Safari fallback: check alerts when app returns to foreground ----
-            // On iOS Home Screen web apps there is no periodicSync.  We cover
-            // the gap with three complementary triggers:
-            //   1. visibilitychange hidden → register a BackgroundSync tag so
-            //      the browser fires checkAndNotifyAlerts() at an opportune
-            //      moment (network restored, OS background slot, etc.)
-            //   2. visibilitychange visible → message the SW for an immediate
-            //      rate-limited check when the user returns to the app.
-            //   3. pageshow (bfcache restore) + online → same immediate check.
-            document.addEventListener('visibilitychange', async () => {
-                try {
-                    const reg = await navigator.serviceWorker.ready;
-                    if (!reg) return;
-                    if (document.visibilityState === 'hidden') {
-                        // Register a one-shot sync so the browser can wake the SW
-                        // in the background (iOS 16.4+, Chrome/Edge Android).
-                        if ('sync' in reg) reg.sync.register('weather-alerts').catch(() => {});
-                    } else {
-                        if (!('Notification' in window) || Notification.permission !== 'granted') return;
-                        if (reg.active) reg.active.postMessage({ type: 'CHECK_ALERTS' });
-                    }
-                } catch (_) {}
-            });
-
-            // pageshow fires on bfcache restore — common on iOS Safari when
-            // the user navigates back to the home-screen app.
-            window.addEventListener('pageshow', async (e) => {
-                if (!e.persisted) return;
-                if (!('Notification' in window) || Notification.permission !== 'granted') return;
-                try {
-                    const reg = await navigator.serviceWorker.ready;
-                    if (reg?.active) reg.active.postMessage({ type: 'CHECK_ALERTS' });
-                } catch (_) {}
-            });
-
-            // Trigger an alert check when connectivity is restored after being
-            // offline — catches the case where the device was on airplane mode.
-            window.addEventListener('online', async () => {
-                if (!('Notification' in window) || Notification.permission !== 'granted') return;
-                try {
-                    const reg = await navigator.serviceWorker.ready;
-                    if (reg?.active) reg.active.postMessage({ type: 'CHECK_ALERTS' });
-                } catch (_) {}
-            });
-        }
     })();
     </script>
 </body>
