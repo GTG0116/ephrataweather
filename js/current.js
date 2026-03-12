@@ -2,51 +2,6 @@
 // CURRENT CONDITIONS PAGE LOGIC
 // ============================================
 
-// ── Web Push (VAPID) ─────────────────────────────────────────────────────────
-// After deploying the push-server Cloudflare Worker, replace the two placeholders
-// below with your actual values.
-
-// PASTE YOUR CLOUDFLARE WORKER URL HERE
-// Example: 'https://ephrata-push.yoursubdomain.workers.dev'
-const PUSH_SERVER = 'https://ephrata-push.gtg0116scratch.workers.dev/';
-
-// PASTE YOUR VAPID PUBLIC KEY HERE
-// Get it by running: npx web-push generate-vapid-keys
-const VAPID_PUBLIC_KEY = '6d61b23d8d734fe79610e0d7613953dd';
-
-/** Convert a URL-safe base64 string to a Uint8Array (required by the browser Push API). */
-function _urlBase64ToUint8Array(base64String) {
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const raw = atob(base64);
-    return Uint8Array.from(raw, c => c.charCodeAt(0));
-}
-
-/**
- * Subscribe this device to web-push and register it with the Worker.
- * Safe to call multiple times — re-sends an existing subscription if one already exists.
- */
-async function _subscribeToPush(reg) {
-    try {
-        if (!('PushManager' in window)) return;
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-            sub = await reg.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: _urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-            });
-        }
-        await fetch(PUSH_SERVER + '/subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(sub)
-        });
-    } catch (e) {
-        console.warn('Push subscription failed:', e);
-    }
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
 // Auto-refresh timer handle — cleared and restarted each time the view inits.
 let _autoRefreshTimer = null;
 
@@ -61,13 +16,6 @@ async function initCurrentView(lat, lng) {
         lat = loc.lat;
         lng = loc.lng;
     }
-
-    // Notification setup: sync locations and show permission banner if needed.
-    // On iOS/Safari, Notification.requestPermission() MUST be called from a
-    // direct user gesture (tap/click).  We therefore never call it
-    // programmatically — instead we show a visible banner with a button so
-    // the user consciously opts in.
-    _initNotifFlow();
 
     // Determine data source (google/open-meteo or nws)
     const dataSource = WeatherAPI.getDataSource();
@@ -339,7 +287,6 @@ async function loadAndRenderAlerts(lat, lng) {
 
     const currentAlerts = byLocation.find((x) => x.location.isCurrent)?.alerts || [];
     renderAlerts(currentAlerts);
-    sendAlertNotifications(byLocation);
 
     // Check SPC Day 1 severe weather outlook
     try {
@@ -629,180 +576,6 @@ function _loadIEMRadarToAlertMap() {
     }
 }
 
-// ---- IndexedDB sync for service worker background notifications ----
-// Writes current + starred locations (and the already-notified alert IDs) to
-// IndexedDB so that sw.js can access them when the page is closed.
-async function _syncLocationsToSW() {
-    if (!('indexedDB' in window)) return;
-
-    const currentLoc = LocationManager.getCurrent();
-    const favorites = LocationManager.getFavorites() || [];
-
-    const all = [];
-    if (currentLoc?.lat != null) {
-        all.push({ lat: currentLoc.lat, lng: currentLoc.lng, name: currentLoc.name || 'Current Location' });
-    }
-    favorites.forEach((f) => {
-        if (f?.lat != null) all.push({ lat: f.lat, lng: f.lng, name: f.name });
-    });
-
-    // Dedupe by rounded coordinates
-    const seen = new Set();
-    const locations = all.filter((loc) => {
-        const key = `${Number(loc.lat).toFixed(3)},${Number(loc.lng).toFixed(3)}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-
-    const notifiedArr = JSON.parse(localStorage.getItem('ephrata_notified_alerts') || '[]');
-
-    await new Promise((resolve) => {
-        const req = indexedDB.open('ephrata-weather', 1);
-        req.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains('store')) db.createObjectStore('store');
-        };
-        req.onsuccess = (e) => {
-            const db = e.target.result;
-            const tx = db.transaction('store', 'readwrite');
-            tx.objectStore('store').put(locations, 'locations');
-            tx.objectStore('store').put(notifiedArr, 'notifiedAlerts');
-            tx.oncomplete = () => { db.close(); resolve(); };
-            tx.onerror = () => { db.close(); resolve(); };
-        };
-        req.onerror = () => resolve();
-    });
-}
-
-// ---- Notification permission flow ----
-// Must not call Notification.requestPermission() automatically because iOS/Safari
-// requires the call to originate from a direct user interaction (tap/click).
-// Instead we show an in-app banner that the user consciously taps to enable alerts.
-
-function _initNotifFlow() {
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
-
-    if (Notification.permission === 'granted') {
-        // Already permitted — keep SW locations in sync and trigger a check.
-        _syncLocationsToSW().then(() => _requestSWAlertCheck()).catch(() => {});
-        _registerPeriodicSync();
-        // Re-register push subscription with the Worker in case it was lost.
-        navigator.serviceWorker.ready.then(reg => _subscribeToPush(reg)).catch(() => {});
-        return;
-    }
-
-    if (Notification.permission === 'denied') return; // User permanently blocked
-
-    // 'default' — show a non-intrusive banner so the user can opt in with a tap.
-    _showNotifBanner();
-}
-
-function _showNotifBanner() {
-    // Don't show duplicate banners
-    if (document.getElementById('notif-banner')) return;
-
-    const banner = document.createElement('div');
-    banner.id = 'notif-banner';
-    banner.style.cssText = [
-        'display:flex', 'align-items:center', 'gap:12px',
-        'padding:12px 16px', 'margin-bottom:14px',
-        'background:rgba(100,180,255,0.1)',
-        'border:1px solid rgba(100,180,255,0.28)',
-        'border-radius:12px', 'font-size:0.84rem',
-        'color:var(--text-secondary)'
-    ].join(';');
-
-    banner.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64b4ff" stroke-width="2" stroke-linecap="round" style="flex-shrink:0">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-        </svg>
-        <span style="flex:1">Enable weather alerts to get notified about severe weather even when the app is in the background.</span>
-        <button id="notif-enable-btn" style="padding:7px 14px;background:rgba(100,180,255,0.22);border:1px solid rgba(100,180,255,0.45);color:#8dd4ff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:inherit;white-space:nowrap;flex-shrink:0">Enable Alerts</button>
-        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0" aria-label="Dismiss">&times;</button>
-    `;
-
-    // Insert the banner at the top of the current-conditions view container
-    const container = document.getElementById('view-current') || document.querySelector('.app-container');
-    if (container) {
-        const firstChild = container.firstElementChild;
-        container.insertBefore(banner, firstChild);
-    }
-
-    // The click handler MUST be a direct user-gesture event for iOS to show the dialog
-    document.getElementById('notif-enable-btn')?.addEventListener('click', async () => {
-        const permission = await Notification.requestPermission();
-        banner.remove();
-        if (permission === 'granted') {
-            await _syncLocationsToSW();
-            await _requestSWAlertCheck();
-            _registerPeriodicSync();
-            // Subscribe this device to web-push via the Cloudflare Worker.
-            const reg = await navigator.serviceWorker.ready;
-            await _subscribeToPush(reg);
-        }
-    });
-}
-
-async function _requestSWAlertCheck() {
-    try {
-        const reg = await navigator.serviceWorker.ready;
-        if (reg?.active) {
-            reg.active.postMessage({ type: 'CHECK_ALERTS' });
-        }
-    } catch (_) {}
-}
-
-async function _registerPeriodicSync() {
-    try {
-        const reg = await navigator.serviceWorker.ready.catch(() => null);
-        if (!reg || !('periodicSync' in reg)) return;
-        const perm = await navigator.permissions.query({ name: 'periodic-background-sync' });
-        if (perm.state === 'granted') {
-            await reg.periodicSync.register('weather-alerts', { minInterval: 30 * 60 * 1000 });
-        }
-    } catch (_) { /* not supported on this browser */ }
-}
-
-function sendAlertNotifications(byLocation) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
-    const notifiedKey = 'ephrata_notified_alerts';
-    const notified = new Set(JSON.parse(localStorage.getItem(notifiedKey) || '[]'));
-
-    byLocation.forEach(({ location, alerts }) => {
-        (alerts || []).forEach((alert) => {
-            const id = alert.id || `${location.name}-${alert.event}-${alert.expires || ''}`;
-            const noteKey = `${location.name}:${id}`;
-            if (notified.has(noteKey)) return;
-
-            const expiresText = _formatAlertTime(alert.expires);
-            const subtype = _alertSubtype(alert);
-            const tstmDetails = _extractSevereThunderstormDetails(alert);
-
-            let bodyParts = [alert.event || 'Alert'];
-            if (subtype) bodyParts.push(`\u26A0\uFE0F ${subtype.label}`);
-            if (tstmDetails) {
-                const d = [];
-                if (tstmDetails.wind) d.push(`Wind: ${tstmDetails.wind}`);
-                if (tstmDetails.hail) d.push(`Hail: ${tstmDetails.hail}`);
-                if (d.length) bodyParts.push(d.join(' • '));
-            }
-            bodyParts.push(`Expires: ${expiresText}`);
-
-            new Notification(`Weather Alert • ${location.name}`, {
-                body: bodyParts.join('\n'),
-                icon: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF9800"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'),
-                tag: noteKey,
-                requireInteraction: true
-            });
-            notified.add(noteKey);
-        });
-    });
-
-    localStorage.setItem(notifiedKey, JSON.stringify(Array.from(notified).slice(-200)));
-}
-
 // ---- SPC Outlook Severe Weather Risk ----
 
 // Risk level ordering (TSTM is not severe enough to trigger a banner)
@@ -878,7 +651,6 @@ async function loadAndRenderSPCOutlook(lat, lng) {
 
     if (highestRisk) {
         renderSPCBanner(highestRisk);
-        sendSPCNotification(highestRisk);
     } else {
         container.style.display = 'none';
         container.innerHTML = '';
@@ -914,26 +686,6 @@ function navigateToSPCMaps() {
     if (typeof showView === 'function') showView('maps');
 }
 
-function sendSPCNotification(risk) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    const today = new Date().toISOString().split('T')[0];
-    const noteKey = `spc-${today}-${risk}`;
-    const storageKey = 'ephrata_spc_notified';
-    const notified = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
-    if (notified.has(noteKey)) return;
-
-    const label = _SPC_RISK_LABELS[risk] || risk;
-    new Notification('SPC Severe Weather Outlook', {
-        body: `${label} Risk of severe weather is forecast for your area today. Tap to view the SPC outlook.`,
-        icon: 'data:image/svg+xml,' + encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FF9800">' +
-            '<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>'
-        ),
-        tag: noteKey
-    });
-    notified.add(noteKey);
-    localStorage.setItem(storageKey, JSON.stringify(Array.from(notified).slice(-60)));
-}
 
 // ---- SPC Fire Weather Outlook ----
 
