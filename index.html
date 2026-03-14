@@ -2333,10 +2333,15 @@
         }
     }
 
-    // Returns a Promise that resolves once the Mapbox map is initialized and loaded.
+    // Returns a Promise that resolves once the Mapbox map's style is ready for
+    // addSource / addLayer calls.  Uses isStyleLoaded() rather than loaded()
+    // because loaded() tracks tile fetching and can be false while tiles are
+    // still rendering — causing map.once('load') to wait forever since 'load'
+    // only fires once during initialization.  isStyleLoaded() stays true after
+    // the initial style load regardless of tile activity.
     function _ensureMapReady() {
-        if (!map) return Promise.resolve(); // map init happens in initMapsView
-        if (map.loaded()) return Promise.resolve();
+        if (!map) return Promise.resolve();
+        if (map.isStyleLoaded()) return Promise.resolve();
         return new Promise(resolve => map.once('load', resolve));
     }
 
