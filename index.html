@@ -1191,7 +1191,7 @@
                     <span class="source-badge badge-nws">NWS</span>
                     <span class="source-default-tag">Default</span>
                 </div>
-                <p><strong>National Weather Service</strong> — official U.S. government weather agency. Data comes directly from NOAA observation stations and forecast offices, making it the most authoritative source for U.S. locations.</p>
+                <p><strong>National Weather Service</strong> — official U.S. government weather agency. Data comes directly from NOAA observation stations and forecast offices.</p>
                 <ul>
                     <li>Official government forecasts — highly reliable for U.S.</li>
                     <li>Real-time station observations (temperature, pressure, clouds)</li>
@@ -1211,7 +1211,7 @@
                     <li>Provides full 10-day forecasts</li>
                     <li>May differ from NWS, especially for temperature and precipitation timing</li>
                     <li>Smoothed/blended data — can sometimes feel less "local"</li>
-                    <li>Only uses a single model output, which is less accurate compared to NWS human forecasts.</li>
+                    <li>Uses a ensemble (combination of multiple models to create one model output) of multiple google weather models. Still less accurate than NWS forecasts</li>
                 </ul>
             </div>
 
@@ -1219,13 +1219,13 @@
                 <div class="source-card-header">
                     <span class="source-badge badge-om">Open-Meteo</span>
                 </div>
-                <p><strong>Open-Meteo</strong> — free, open-source weather API based on European and global numerical weather models (ERA5, GFS, ECMWF). No API key required.</p>
+                <p><strong>Open-Meteo</strong> — free, open-source weather API based on European and global numerical weather models (ERA5, GFS, ECMWF).</p>
                 <ul>
                     <li>Uses long range global models (ECMWF, GFS) — strong for medium-range forecasts</li>
                     <li>Up to 16-day forecast available</li>
                     <li>Can differ from NWS on short-term timing of precipitation</li>
                     <li>Excellent wind and UV index data from model output</li>
-                    <li>Uses a mix of models, which is better than a single model output, but still isn't as accurate as NWS human forecasts.</li>
+                    <li>Uses a mix of models, which is better than a single model output, but still isn't as accurate as NWS human forecasts</li>
                 </ul>
             </div>
 
@@ -1240,7 +1240,7 @@
                     <li>Daily forecast is derived by aggregating 3-hour intervals</li>
                     <li>UV index not included in free tier (supplemented by Open-Meteo)</li>
                     <li>Also powers the temperature, wind, and cloud map overlays</li>
-                    <li>Only uses a single model output, which is less accurate compared to NWS human forecasts.</li>
+                    <li>Only uses a single model output, which is less accurate compared to NWS human forecasts</li>
                 </ul>
             </div>
 
