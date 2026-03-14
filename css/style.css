@@ -1588,17 +1588,17 @@ body {
     border-color: rgba(130,210,30,0.4);
     color: #90D030;
 }
-/* Moderate: orange */
+/* Moderate: red */
 .wpc-rain-mdt {
-    background: rgba(220,130,0,0.15);
-    border-color: rgba(240,160,0,0.45);
-    color: #FFB020;
-}
-/* High: red */
-.wpc-rain-high {
     background: rgba(200,30,30,0.17);
     border-color: rgba(230,50,50,0.48);
     color: #FF5050;
+}
+/* High: pink (like SPC High) */
+.wpc-rain-high {
+    background: rgba(220,40,220,0.15);
+    border-color: rgba(240,60,240,0.45);
+    color: #FF73DF;
 }
 
 /* --- Multi-alert collapse/expand toggle --- */

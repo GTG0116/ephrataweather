@@ -364,6 +364,100 @@
         .source-info-btn:hover { background: rgba(100,180,255,0.15); border-color: rgba(100,180,255,0.4); color: #8dd4ff; }
 
         /* ---- Source Info Modal ---- */
+        /* ---- Forecaster Discussion Modal ---- */
+        .discussion-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .discussion-modal-overlay.open { display: flex; }
+        .discussion-modal {
+            background: rgba(14,22,45,0.97);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            max-width: 740px;
+            width: 100%;
+            max-height: 88vh;
+            overflow-y: auto;
+            padding: 26px 26px 22px;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        }
+        .discussion-modal-close {
+            position: absolute;
+            top: 14px; right: 16px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.4rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 4px;
+            transition: color var(--transition-smooth);
+        }
+        .discussion-modal-close:hover { color: var(--text-primary); }
+        .discussion-modal h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+            padding-right: 28px;
+        }
+        .discussion-modal .modal-subtitle {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+        .discussion-text {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.78rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+        .discussion-loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        .discussion-error {
+            color: #FF7070;
+            font-size: 0.82rem;
+            padding: 16px;
+            background: rgba(255,60,60,0.08);
+            border: 1px solid rgba(255,60,60,0.2);
+            border-radius: 8px;
+        }
+        .discussion-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: 1px solid rgba(255,255,255,0.13);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            padding: 5px 11px;
+            transition: all var(--transition-smooth);
+        }
+        .discussion-btn:hover { background: rgba(100,180,255,0.12); border-color: rgba(100,180,255,0.35); color: #8dd4ff; }
+
         .info-modal-overlay {
             display: none;
             position: fixed;
@@ -846,6 +940,10 @@
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                             What do these categories mean?
                         </button>
+                        <button onclick="openSPCDiscussion()" class="discussion-btn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            Forecaster Discussion
+                        </button>
                     </div>
                 </div>
                 <!-- Satellite Sub-Controls -->
@@ -871,6 +969,10 @@
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                             What do these categories mean?
                         </button>
+                        <button onclick="openDiscussionModal('wpc-' + currentWPCDay)" class="discussion-btn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            Forecaster Discussion
+                        </button>
                     </div>
                 </div>
                 <!-- Fire Weather Sub-Controls -->
@@ -888,6 +990,10 @@
                         <button onclick="openOutlookInfoModal('fire')" class="outlook-info-btn">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                             What do these categories mean?
+                        </button>
+                        <button onclick="openDiscussionModal('fire-' + currentFireDay)" class="discussion-btn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            Forecaster Discussion
                         </button>
                     </div>
                 </div>
@@ -1295,6 +1401,16 @@
         </div>
     </div>
 
+    <!-- Forecaster Discussion Modal -->
+    <div id="discussion-modal" class="discussion-modal-overlay" onclick="if(event.target.id==='discussion-modal') closeDiscussionModal()">
+        <div class="discussion-modal" role="dialog" aria-modal="true" aria-labelledby="discussion-modal-title">
+            <button class="discussion-modal-close" onclick="closeDiscussionModal()" aria-label="Close">&times;</button>
+            <h2 id="discussion-modal-title">Forecaster Discussion</h2>
+            <p id="discussion-modal-subtitle" class="modal-subtitle"></p>
+            <div id="discussion-modal-body"></div>
+        </div>
+    </div>
+
     <!-- ===================================================
          SCRIPTS
          =================================================== -->
@@ -1378,8 +1494,76 @@
 
     // Close modals on ESC
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') { closeSourceInfoModal(); closeOutlookInfoModal(); }
+        if (e.key === 'Escape') { closeSourceInfoModal(); closeOutlookInfoModal(); closeDiscussionModal(); }
     });
+
+    // ============================================================
+    // FORECASTER DISCUSSION MODAL
+    // ============================================================
+    // NWS product type codes for each outlook
+    const DISCUSSION_PRODUCT_TYPES = {
+        'spc-1':    { code: 'SWODY1', label: 'SPC Day 1 Convective Outlook' },
+        'spc-2':    { code: 'SWODY2', label: 'SPC Day 2 Convective Outlook' },
+        'spc-3':    { code: 'SWODY3', label: 'SPC Day 3 Convective Outlook' },
+        'spc-48':   { code: 'SWOD48', label: 'SPC Day 4–8 Convective Outlook' },
+        'wpc-1':    { code: 'ERODY1', label: 'WPC Day 1 Excessive Rainfall Outlook' },
+        'wpc-2':    { code: 'ERODY2', label: 'WPC Day 2 Excessive Rainfall Outlook' },
+        'wpc-3':    { code: 'ERODY3', label: 'WPC Day 3 Excessive Rainfall Outlook' },
+        'fire-1':   { code: 'FWDDY1', label: 'SPC Day 1 Fire Weather Outlook' },
+        'fire-2':   { code: 'FWDDY2', label: 'SPC Day 2 Fire Weather Outlook' },
+    };
+
+    async function fetchDiscussion(productCode) {
+        const listUrl = 'https://api.weather.gov/products/types/' + productCode;
+        const listRes = await fetch(listUrl, { headers: { Accept: 'application/geo+json' } });
+        if (!listRes.ok) throw new Error('Product list fetch failed (' + listRes.status + ')');
+        const listData = await listRes.json();
+        const products = listData['@graph'] || listData.features || [];
+        if (!products.length) throw new Error('No products found for type ' + productCode);
+        const productId = products[0].id || products[0]['@id']?.split('/').pop();
+        if (!productId) throw new Error('Could not parse product ID');
+        const prodRes = await fetch('https://api.weather.gov/products/' + productId,
+            { headers: { Accept: 'application/geo+json' } });
+        if (!prodRes.ok) throw new Error('Product fetch failed (' + prodRes.status + ')');
+        const prodData = await prodRes.json();
+        return prodData.productText || prodData.text || '';
+    }
+
+    function openDiscussionModal(key) {
+        const info = DISCUSSION_PRODUCT_TYPES[key];
+        if (!info) return;
+        document.getElementById('discussion-modal-title').textContent = 'Forecaster Discussion';
+        document.getElementById('discussion-modal-subtitle').textContent = info.label;
+        document.getElementById('discussion-modal-body').innerHTML =
+            '<div class="discussion-loading">Loading discussion…</div>';
+        document.getElementById('discussion-modal').classList.add('open');
+        document.body.style.overflow = 'hidden';
+        fetchDiscussion(info.code).then(text => {
+            if (!text.trim()) {
+                document.getElementById('discussion-modal-body').innerHTML =
+                    '<div class="discussion-error">No discussion text available at this time.</div>';
+                return;
+            }
+            document.getElementById('discussion-modal-body').innerHTML =
+                '<pre class="discussion-text">' + text.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+        }).catch(err => {
+            document.getElementById('discussion-modal-body').innerHTML =
+                '<div class="discussion-error">Could not load discussion: ' + err.message +
+                '<br><br>You can view it directly at <a href="https://www.spc.noaa.gov/products/outlook/" ' +
+                'target="_blank" rel="noopener" style="color:#8dd4ff;">spc.noaa.gov/products/outlook/</a></div>';
+        });
+    }
+
+    function closeDiscussionModal() {
+        document.getElementById('discussion-modal').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+
+    function openSPCDiscussion() {
+        const day = (typeof currentDay !== 'undefined') ? currentDay : 1;
+        const key = day >= 4 ? 'spc-48' : (day >= 1 ? 'spc-' + day : 'spc-1');
+        openDiscussionModal(key);
+    }
 
     // ============================================================
     // SPA ROUTER
@@ -1523,32 +1707,48 @@
         { fill: 'rgba(255,96,96,0.55)',   stroke: '#CC2222', label: 'Moderate' },
         { fill: 'rgba(255,64,255,0.55)',  stroke: '#CC00CC', label: 'High' },
     ];
+    // Wind probability legend — matches SPC wind probability colors
     const PROB_LEGEND_WIND = [
-        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. High (cig3)', pattern: 'cross' },
-        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. Moderate (cig2)', pattern: 'solid' },
-        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. Low (cig1)', pattern: 'dash' },
-        { fill: 'rgba(255,255,255,0)',   stroke: '#B30000', label: '90%+' },
-        { fill: 'rgba(255,255,255,0)',   stroke: '#CC0066', label: '75%+' },
-        { fill: 'rgba(100,0,180,0.60)',  stroke: '#6600CC', label: '60%+' },
-        { fill: 'rgba(160,0,200,0.58)',  stroke: '#9900BB', label: '45%+' },
-        { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
-        { fill: 'rgba(255,140,0,0.55)',  stroke: '#CC7000', label: '15%+' },
-        { fill: 'rgba(100,200,60,0.55)', stroke: '#55AA00', label: '5%+' },
+        { fill: 'rgba(255,255,255,0)',    stroke: '#000000', label: 'Cond. High (cig3)', pattern: 'cross' },
+        { fill: 'rgba(255,255,255,0)',    stroke: '#000000', label: 'Cond. Moderate (cig2)', pattern: 'solid' },
+        { fill: 'rgba(255,255,255,0)',    stroke: '#000000', label: 'Cond. Low (cig1)', pattern: 'dash' },
+        { fill: 'rgba(0,210,230,0.62)',   stroke: '#00B8C8', label: '90%+' },
+        { fill: 'rgba(0,0,185,0.62)',     stroke: '#0000A0', label: '75%+' },
+        { fill: 'rgba(120,0,210,0.60)',   stroke: '#7700AA', label: '60%+' },
+        { fill: 'rgba(255,40,255,0.58)',  stroke: '#BB00BB', label: '45%+' },
+        { fill: 'rgba(220,30,30,0.58)',   stroke: '#BB1111', label: '30%+' },
+        { fill: 'rgba(255,140,0,0.55)',   stroke: '#CC7000', label: '15%+' },
+        { fill: 'rgba(160,100,50,0.55)',  stroke: '#8B4000', label: '5%+' },
+    ];
+
+    // Tornado probability legend — matches SPC tornado probability colors
+    const PROB_LEGEND_TORN = [
+        { fill: 'rgba(255,255,255,0)',    stroke: '#000000', label: 'Cond. High (cig3)', pattern: 'cross' },
+        { fill: 'rgba(255,255,255,0)',    stroke: '#000000', label: 'Cond. Moderate (cig2)', pattern: 'solid' },
+        { fill: 'rgba(255,255,255,0)',    stroke: '#000000', label: 'Cond. Low (cig1)', pattern: 'dash' },
+        { fill: 'rgba(50,100,210,0.60)',  stroke: '#2244BB', label: '60%+' },
+        { fill: 'rgba(120,0,210,0.58)',   stroke: '#7700AA', label: '45%+' },
+        { fill: 'rgba(255,40,255,0.58)',  stroke: '#BB00BB', label: '30%+' },
+        { fill: 'rgba(220,30,30,0.58)',   stroke: '#BB1111', label: '15%+' },
+        { fill: 'rgba(255,220,0,0.55)',   stroke: '#CCAA00', label: '10%+' },
+        { fill: 'rgba(160,100,50,0.55)',  stroke: '#8B4000', label: '5%+' },
+        { fill: 'rgba(80,180,80,0.50)',   stroke: '#339933', label: '2%+' },
     ];
 
     const PROB_LEGEND_HAIL = [
-        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. Moderate (cig2)', pattern: 'solid' },
-        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. Low (cig1)', pattern: 'dash' },
-        { fill: 'rgba(100,0,180,0.60)',  stroke: '#6600CC', label: '60%+' },
-        { fill: 'rgba(160,0,200,0.58)',  stroke: '#9900BB', label: '45%+' },
-        { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
-        { fill: 'rgba(255,140,0,0.55)',  stroke: '#CC7000', label: '15%+' },
-        { fill: 'rgba(100,200,60,0.55)', stroke: '#55AA00', label: '5%+' },
+        { fill: 'rgba(255,255,255,0)',    stroke: '#000000', label: 'Cond. Moderate (cig2)', pattern: 'solid' },
+        { fill: 'rgba(255,255,255,0)',    stroke: '#000000', label: 'Cond. Low (cig1)', pattern: 'dash' },
+        { fill: 'rgba(100,0,180,0.60)',   stroke: '#6600CC', label: '60%+' },
+        { fill: 'rgba(160,0,200,0.58)',   stroke: '#9900BB', label: '45%+' },
+        { fill: 'rgba(220,30,30,0.58)',   stroke: '#BB1111', label: '30%+' },
+        { fill: 'rgba(255,140,0,0.55)',   stroke: '#CC7000', label: '15%+' },
+        { fill: 'rgba(100,200,60,0.55)',  stroke: '#55AA00', label: '5%+' },
     ];
 
+    // Day 4-8 legend — golden-tan for 30%, yellow for 15% (matches SPC Day 4-8 product)
     const PROB_LEGEND_DAY4_8 = [
-        { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
-        { fill: 'rgba(255,140,0,0.55)',  stroke: '#CC7000', label: '15%+' },
+        { fill: 'rgba(200,150,70,0.60)',  stroke: '#AA7700', label: '30%+' },
+        { fill: 'rgba(240,235,80,0.55)',  stroke: '#B8B800', label: '15%+' },
     ];
 
     const CAT_FILL_EXPR = ['match', ['upcase', ['coalesce', ['get', 'LABEL'], '']],
@@ -1561,6 +1761,7 @@
         'ENH',  '#CC7700', 'MDT',  '#CC2222', 'HIGH', '#CC00CC',
         'rgba(0,0,0,0)'];
 
+    // Generic probability expression (used for hail & Day 3 prob)
     const PROB_FILL_EXPR = ['case',
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(0,0,0,0)',
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(0,0,0,0)',
@@ -1585,6 +1786,88 @@
             15, '#CC7000', 30, '#BB1111', 45, '#8800AA', 60, '#6600BB'
         ]
     ];
+
+    // Wind probability fill/line — matches SPC wind probability product colors
+    const PROB_FILL_EXPR_WIND = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(0,0,0,0)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(0,0,0,0)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], 'rgba(0,0,0,0)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], 'rgba(180,0,180,0.22)',
+        ['step', ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
+            'rgba(0,0,0,0)',
+            5,  'rgba(160,100,50,0.55)',
+            15, 'rgba(255,140,0,0.55)',
+            30, 'rgba(220,30,30,0.58)',
+            45, 'rgba(255,40,255,0.58)',
+            60, 'rgba(120,0,210,0.60)',
+            75, 'rgba(0,0,185,0.62)',
+            90, 'rgba(0,210,230,0.62)'
+        ]
+    ];
+    const PROB_LINE_EXPR_WIND = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], '#000000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], '#000000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], '#000000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], '#AA00AA',
+        ['step', ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
+            'rgba(0,0,0,0)',
+            5,  '#8B4000',
+            15, '#CC7000',
+            30, '#BB1111',
+            45, '#BB00BB',
+            60, '#7700AA',
+            75, '#0000A0',
+            90, '#00B8C8'
+        ]
+    ];
+
+    // Tornado probability fill/line — matches SPC tornado probability product colors
+    const PROB_FILL_EXPR_TORN = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], 'rgba(0,0,0,0)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], 'rgba(0,0,0,0)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], 'rgba(0,0,0,0)',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], 'rgba(180,0,180,0.22)',
+        ['step', ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
+            'rgba(0,0,0,0)',
+            2,  'rgba(80,180,80,0.50)',
+            5,  'rgba(160,100,50,0.55)',
+            10, 'rgba(255,220,0,0.55)',
+            15, 'rgba(220,30,30,0.58)',
+            30, 'rgba(255,40,255,0.58)',
+            45, 'rgba(120,0,210,0.58)',
+            60, 'rgba(50,100,210,0.60)'
+        ]
+    ];
+    const PROB_LINE_EXPR_TORN = ['case',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], '#000000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], '#000000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], '#000000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], '#AA00AA',
+        ['step', ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
+            'rgba(0,0,0,0)',
+            2,  '#339933',
+            5,  '#8B4000',
+            10, '#CCAA00',
+            15, '#BB1111',
+            30, '#BB00BB',
+            45, '#7700AA',
+            60, '#2244BB'
+        ]
+    ];
+
+    // Day 4-8 probability fill/line — golden-tan for 30%, yellow for 15%
+    const PROB_FILL_EXPR_DAY48 = ['step',
+        ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
+        'rgba(0,0,0,0)',
+        15, 'rgba(240,235,80,0.55)',
+        30, 'rgba(200,150,70,0.60)'
+    ];
+    const PROB_LINE_EXPR_DAY48 = ['step',
+        ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
+        'rgba(0,0,0,0)',
+        15, '#B8B800',
+        30, '#AA7700'
+    ];
     const CIG_DASH_EXPR = ['case',
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], ['literal', [2, 2]],
         ['literal', [1, 0]]
@@ -1608,6 +1891,7 @@
         let data;
         if (type === 'cat') data = CAT_LEGEND;
         else if (day >= 4) data = PROB_LEGEND_DAY4_8;
+        else if (type === 'torn') data = PROB_LEGEND_TORN;
         else if (type === 'hail' || day === 3) data = PROB_LEGEND_HAIL;
         else data = PROB_LEGEND_WIND;
         document.getElementById('legend-items').innerHTML = data.map(e =>
@@ -1676,12 +1960,12 @@
         },
     };
 
-    // Official NWS WPC ERO colors
+    // Official NWS WPC ERO colors (Moderate=red, High=pink like SPC High)
     const WPC_ERO_FILL_EXPR = ['match', ['get', 'CATEGORY'],
-        'MRGL', '#66BB44', 'SLGT', '#FFFF00', 'MDT', '#FF8C00', 'HIGH', '#FF0000',
+        'MRGL', '#66BB44', 'SLGT', '#FFFF00', 'MDT', '#FF0000', 'HIGH', '#FF73DF',
         'rgba(0,0,0,0)'];
     const WPC_ERO_LINE_EXPR = ['match', ['get', 'CATEGORY'],
-        'MRGL', '#44AA22', 'SLGT', '#CCCC00', 'MDT', '#CC6600', 'HIGH', '#CC0000',
+        'MRGL', '#44AA22', 'SLGT', '#CCCC00', 'MDT', '#CC0000', 'HIGH', '#CC00AA',
         'rgba(0,0,0,0)'];
 
     // Official NWS SPC fire weather colors
@@ -1695,8 +1979,8 @@
     const WPC_ERO_LEGEND = [
         { fill: '#66BB44', stroke: '#44AA22', label: 'Marginal' },
         { fill: '#FFFF00', stroke: '#CCCC00', label: 'Slight' },
-        { fill: '#FF8C00', stroke: '#CC6600', label: 'Moderate' },
-        { fill: '#FF0000', stroke: '#CC0000', label: 'High' },
+        { fill: '#FF0000', stroke: '#CC0000', label: 'Moderate' },
+        { fill: '#FF73DF', stroke: '#CC00AA', label: 'High' },
     ];
     const FIRE_LEGEND_DATA = [
         { fill: '#FFFF00', stroke: '#CCCC00', label: 'Elevated' },
@@ -1911,12 +2195,21 @@
             clearSPCLayers();
             map.addSource('spc-data', { type: 'geojson', data: normalizedData });
             const isCat = (type === 'cat');
+            const isDay48 = (day >= 4);
+            const probFillExpr = type === 'wind' ? PROB_FILL_EXPR_WIND
+                               : type === 'torn' ? PROB_FILL_EXPR_TORN
+                               : isDay48         ? PROB_FILL_EXPR_DAY48
+                               : PROB_FILL_EXPR;
+            const probLineExpr = type === 'wind' ? PROB_LINE_EXPR_WIND
+                               : type === 'torn' ? PROB_LINE_EXPR_TORN
+                               : isDay48         ? PROB_LINE_EXPR_DAY48
+                               : PROB_LINE_EXPR;
             map.addLayer({ id: 'spc-fill', type: 'fill', source: 'spc-data',
-                paint: { 'fill-color': isCat ? CAT_FILL_EXPR : PROB_FILL_EXPR, 'fill-antialias': true }
+                paint: { 'fill-color': isCat ? CAT_FILL_EXPR : probFillExpr, 'fill-antialias': true }
             }, firstSymbolLayerId);
             map.addLayer({ id: 'spc-line', type: 'line', source: 'spc-data',
                 paint: {
-                    'line-color': isCat ? CAT_LINE_EXPR : PROB_LINE_EXPR,
+                    'line-color': isCat ? CAT_LINE_EXPR : probLineExpr,
                     'line-width': 1.2,
                     'line-dasharray': isCat ? ['literal', [1, 0]] : CIG_DASH_EXPR
                 }
