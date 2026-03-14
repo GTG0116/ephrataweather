@@ -1688,7 +1688,11 @@
         if (!data?.features) return data;
         const features = data.features.map(f => {
             const props = f.properties || {};
-            const raw = (props.label || props.Label || props.LABEL || props.dn || props.DN || '').toString().toLowerCase().trim();
+            // WPC GeoJSON can use different property names depending on product version:
+            // Newer format: OUTLOOK = "Marginal (At Least 5%)" | "Slight ..." | etc.
+            // Older format: label / Label / LABEL  (string category abbreviation)
+            // Fallback: dn / DN (integer — not useful for category matching)
+            const raw = (props.OUTLOOK || props.label || props.Label || props.LABEL || props.dn || props.DN || '').toString().toLowerCase().trim();
             let cat = '';
             if (raw.includes('marginal') || raw === 'mrgl') cat = 'MRGL';
             else if (raw.includes('slight') || raw === 'slgt') cat = 'SLGT';
@@ -1858,9 +1862,10 @@
             const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
             if (r.ok) return r.json();
         } catch (_) { /* CORS blocked — fall through to proxies */ }
-        // Proxy 1: allorigins (works well with government NOAA/WPC endpoints)
+        // Proxy 1: codetabs — reliable, adds Access-Control-Allow-Origin: *,
+        // returns raw content (no envelope), works for WPC gov endpoints.
         try {
-            const p1 = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+            const p1 = 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(url);
             const r1 = await fetch(p1, { cache: 'no-store' });
             if (r1.ok) return r1.json();
         } catch (_) { /* fall through */ }
