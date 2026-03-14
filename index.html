@@ -882,8 +882,7 @@
                     </div>
                     <div class="ctrl-row">
                         <span class="ctrl-label">Type:</span>
-                        <button class="type-btn active" data-fire-type="dryt" onclick="selectFireType('dryt')">Dry T-Storms</button>
-                        <button class="type-btn" data-fire-type="windrh" onclick="selectFireType('windrh')">Wind/RH</button>
+                        <button class="type-btn active" data-fire-type="windrh" onclick="selectFireType('windrh')">Wind/RH</button>
                     </div>
                     <div class="ctrl-row">
                         <button onclick="openOutlookInfoModal('fire')" class="outlook-info-btn">
@@ -1524,17 +1523,32 @@
         { fill: 'rgba(255,96,96,0.55)',   stroke: '#CC2222', label: 'Moderate' },
         { fill: 'rgba(255,64,255,0.55)',  stroke: '#CC00CC', label: 'High' },
     ];
-    const PROB_LEGEND = [
-        { fill: 'transparent; background-image: linear-gradient(#000000, #000000), linear-gradient(#000000, #000000); background-size: 100% 2px, 2px 100%; background-position: center; background-repeat: no-repeat', stroke: '#000000', label: 'Cond. High (cig3)' },
-        { fill: 'transparent; background-image: linear-gradient(#000000, #000000); background-size: 100% 2px; background-position: center; background-repeat: no-repeat', stroke: '#000000', label: 'Cond. Moderate (cig2)' },
-        { fill: 'transparent; background-image: repeating-linear-gradient(to right, #000000, #000000 2px, transparent 2px, transparent 4px); background-size: 100% 2px; background-position: center; background-repeat: no-repeat', stroke: '#000000', label: 'Cond. Low (cig1)' },
+    const PROB_LEGEND_WIND = [
+        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. High (cig3)', pattern: 'cross' },
+        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. Moderate (cig2)', pattern: 'solid' },
+        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. Low (cig1)', pattern: 'dash' },
+        { fill: 'rgba(255,255,255,0)',   stroke: '#B30000', label: '90%+' },
+        { fill: 'rgba(255,255,255,0)',   stroke: '#CC0066', label: '75%+' },
         { fill: 'rgba(100,0,180,0.60)',  stroke: '#6600CC', label: '60%+' },
         { fill: 'rgba(160,0,200,0.58)',  stroke: '#9900BB', label: '45%+' },
         { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
         { fill: 'rgba(255,140,0,0.55)',  stroke: '#CC7000', label: '15%+' },
-        { fill: 'rgba(255,220,0,0.55)',  stroke: '#CCAA00', label: '10%+' },
         { fill: 'rgba(100,200,60,0.55)', stroke: '#55AA00', label: '5%+' },
-        { fill: 'rgba(80,180,80,0.50)',  stroke: '#339933', label: '2%+' },
+    ];
+
+    const PROB_LEGEND_HAIL = [
+        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. Moderate (cig2)', pattern: 'solid' },
+        { fill: 'rgba(255,255,255,0)',   stroke: '#000000', label: 'Cond. Low (cig1)', pattern: 'dash' },
+        { fill: 'rgba(100,0,180,0.60)',  stroke: '#6600CC', label: '60%+' },
+        { fill: 'rgba(160,0,200,0.58)',  stroke: '#9900BB', label: '45%+' },
+        { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
+        { fill: 'rgba(255,140,0,0.55)',  stroke: '#CC7000', label: '15%+' },
+        { fill: 'rgba(100,200,60,0.55)', stroke: '#55AA00', label: '5%+' },
+    ];
+
+    const PROB_LEGEND_DAY4_8 = [
+        { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
+        { fill: 'rgba(255,140,0,0.55)',  stroke: '#CC7000', label: '15%+' },
     ];
 
     const CAT_FILL_EXPR = ['match', ['upcase', ['coalesce', ['get', 'LABEL'], '']],
@@ -1576,18 +1590,28 @@
         ['literal', [1, 0]]
     ];
 
-    // PROB_LEGEND_HAIL excludes CIG3 since SPC does not use Conditional High for hail
-    const PROB_LEGEND_HAIL = PROB_LEGEND.filter(e => !e.label.includes('cig3') && !e.label.toLowerCase().includes('cond. high'));
+    function _legendSwatchStyle(entry) {
+        let style = `background:${entry.fill};border:1px solid ${entry.stroke};`;
+        if (entry.pattern === 'dash') {
+            style += 'background-image:repeating-linear-gradient(to right,#000000,#000000 2px,transparent 2px,transparent 4px);background-size:100% 2px;background-position:center;background-repeat:no-repeat;';
+        } else if (entry.pattern === 'solid') {
+            style += 'background-image:linear-gradient(#000000,#000000);background-size:100% 2px;background-position:center;background-repeat:no-repeat;';
+        } else if (entry.pattern === 'cross') {
+            style += 'background-image:linear-gradient(#000000,#000000),linear-gradient(#000000,#000000);background-size:100% 2px,2px 100%;background-position:center;background-repeat:no-repeat;';
+        }
+        return style;
+    }
 
-    function updateSPCLegend(type) {
+    function updateSPCLegend(day, type) {
         document.getElementById('spc-legend').classList.add('visible');
         document.getElementById('legend-title').textContent = type === 'cat' ? 'Categorical Risk' : 'Probability';
         let data;
         if (type === 'cat') data = CAT_LEGEND;
-        else if (type === 'hail') data = PROB_LEGEND_HAIL;
-        else data = PROB_LEGEND;
+        else if (day >= 4) data = PROB_LEGEND_DAY4_8;
+        else if (type === 'hail' || day === 3) data = PROB_LEGEND_HAIL;
+        else data = PROB_LEGEND_WIND;
         document.getElementById('legend-items').innerHTML = data.map(e =>
-            `<div class="legend-row"><div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};"></div><span>${e.label}</span></div>`
+            `<div class="legend-row"><div class="legend-swatch" style="${_legendSwatchStyle(e)}"></div><span>${e.label}</span></div>`
         ).join('');
     }
     function hideSPCLegend() { document.getElementById('spc-legend').classList.remove('visible'); }
@@ -1682,7 +1706,7 @@
 
     let currentWPCDay = 1;
     let currentFireDay = 1;
-    let currentFireType = 'dryt';
+    let currentFireType = 'windrh';
 
     function normalizeWPCData(data) {
         if (!data?.features) return data;
@@ -1783,7 +1807,7 @@
         document.querySelectorAll('#wpc-controls [data-wpc-day]').forEach(btn =>
             btn.classList.toggle('active', parseInt(btn.dataset.wpcDay) === day));
         if (currentLayer === 'wpc-rain') {
-            clearWPCLayers(); hideSPCLegend();
+            clearFireLayers(); clearWPCLayers(); hideSPCLegend();
             // Call directly — map is always initialized at this point.
             // Using _ensureMapReady() risks a stuck promise if map.loaded() is
             // briefly false after clearWPCLayers (map never fires 'load' again).
@@ -1795,7 +1819,7 @@
         document.querySelectorAll('#fire-controls [data-fire-day]').forEach(btn =>
             btn.classList.toggle('active', parseInt(btn.dataset.fireDay) === day));
         if (currentLayer === 'fire-wx') {
-            clearFireLayers(); hideSPCLegend();
+            clearWPCLayers(); clearFireLayers(); hideSPCLegend();
             loadFireLayer(day, currentFireType);
         }
     }
@@ -1804,7 +1828,7 @@
         document.querySelectorAll('#fire-controls [data-fire-type]').forEach(btn =>
             btn.classList.toggle('active', btn.dataset.fireType === type));
         if (currentLayer === 'fire-wx') {
-            clearFireLayers(); hideSPCLegend();
+            clearWPCLayers(); clearFireLayers(); hideSPCLegend();
             loadFireLayer(currentFireDay, type);
         }
     }
@@ -1826,7 +1850,7 @@
                 .addTo(map);
         } else {
             const labels = { ELEV: 'Elevated', CRIT: 'Critical', EXTCRIT: 'Extremely Critical' };
-            const typeLabel = currentFireType === 'dryt' ? 'Dry Thunderstorms' : 'Wind/RH';
+            const typeLabel = 'Wind/RH';
             new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
                 .setLngLat(e.lngLat)
                 .setHTML(`<div class="popup-title">Fire Weather Risk</div>
@@ -1920,7 +1944,7 @@
                     }, firstSymbolLayerId);
                 }
             }
-            updateSPCLegend(type);
+            updateSPCLegend(day, type);
         } catch (e) {
             console.error('SPC fetch error:', e);
             clearSPCLayers(); hideSPCLegend();
