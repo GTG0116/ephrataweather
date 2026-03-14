@@ -1593,27 +1593,34 @@
     function hideSPCLegend() { document.getElementById('spc-legend').classList.remove('visible'); }
 
     function addCIGPatterns() {
+        // Build a Mapbox-compatible {width, height, data: Uint8Array} image from
+        // a canvas draw function.  Using the explicit object form avoids issues
+        // with ImageData colorSpace differences across browsers / Mapbox GL JS v3.
         function makePattern(width, height, draw) {
             const canvas = document.createElement('canvas');
             canvas.width = width; canvas.height = height;
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
             draw(ctx);
-            return ctx.getImageData(0, 0, width, height);
+            const id = ctx.getImageData(0, 0, width, height);
+            return { width, height, data: new Uint8Array(id.data.buffer) };
         }
-        // cig1: single dotted horizontal line — black like SPC
+        // Guard against duplicate registration (e.g. if called twice before a
+        // style reset clears images).
+        if (map.hasImage('cig1-pattern')) return;
+        // cig1: dashed horizontal line — black like SPC Conditional Low
         map.addImage('cig1-pattern', makePattern(20, 12, ctx => {
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2;
             ctx.setLineDash([3, 4]);
             ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(20, 6); ctx.stroke();
         }));
-        // cig2: single solid horizontal line — black like SPC
+        // cig2: solid horizontal line — black like SPC Conditional Moderate
         map.addImage('cig2-pattern', makePattern(20, 12, ctx => {
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2;
             ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(20, 6); ctx.stroke();
         }));
-        // cig3: crosshatch — solid horizontal + vertical lines — black like SPC
+        // cig3: crosshatch — solid horizontal + vertical lines — black like SPC Conditional High
         map.addImage('cig3-pattern', makePattern(20, 20, ctx => {
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2;
             ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(20, 10); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(10, 20); ctx.stroke();
         }));
@@ -1773,7 +1780,10 @@
             btn.classList.toggle('active', parseInt(btn.dataset.wpcDay) === day));
         if (currentLayer === 'wpc-rain') {
             clearWPCLayers(); hideSPCLegend();
-            _ensureMapReady().then(() => loadWPCLayer(day));
+            // Call directly — map is always initialized at this point.
+            // Using _ensureMapReady() risks a stuck promise if map.loaded() is
+            // briefly false after clearWPCLayers (map never fires 'load' again).
+            loadWPCLayer(day);
         }
     }
     function selectFireDay(day) {
@@ -1782,7 +1792,7 @@
             btn.classList.toggle('active', parseInt(btn.dataset.fireDay) === day));
         if (currentLayer === 'fire-wx') {
             clearFireLayers(); hideSPCLegend();
-            _ensureMapReady().then(() => loadFireLayer(day, currentFireType));
+            loadFireLayer(day, currentFireType);
         }
     }
     function selectFireType(type) {
@@ -1791,7 +1801,7 @@
             btn.classList.toggle('active', btn.dataset.fireType === type));
         if (currentLayer === 'fire-wx') {
             clearFireLayers(); hideSPCLegend();
-            _ensureMapReady().then(() => loadFireLayer(currentFireDay, type));
+            loadFireLayer(currentFireDay, type);
         }
     }
 
@@ -1843,16 +1853,22 @@
     }
 
     async function fetchSPCGeoJSON(url) {
+        // Try direct fetch first (SPC serves CORS headers; WPC does not)
         try {
             const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
             if (r.ok) return r.json();
-            throw new Error('HTTP ' + r.status);
-        } catch (e) {
-            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
-            const r = await fetch(proxy, { cache: 'no-store' });
-            if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
-            return r.json();
-        }
+        } catch (_) { /* CORS blocked — fall through to proxies */ }
+        // Proxy 1: allorigins (works well with government NOAA/WPC endpoints)
+        try {
+            const p1 = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+            const r1 = await fetch(p1, { cache: 'no-store' });
+            if (r1.ok) return r1.json();
+        } catch (_) { /* fall through */ }
+        // Proxy 2: corsproxy.io as last resort
+        const p2 = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        const r2 = await fetch(p2, { cache: 'no-store' });
+        if (!r2.ok) throw new Error('All proxies failed (' + r2.status + ')');
+        return r2.json();
     }
 
     async function loadSPCLayer(day, type) {
