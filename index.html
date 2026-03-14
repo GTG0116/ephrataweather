@@ -1092,15 +1092,22 @@
                 <div class="cat-row" style="border-color:rgba(187,17,17,0.3);">
                     <div class="cat-swatch" style="background:transparent;border:2px solid #BB1111;"></div>
                     <div>
-                        <div class="cat-name">Conditional Moderate (CIG2) — Tornado & Wind Only</div>
-                        <div class="cat-desc">The probability zone is <em>conditional</em> — meaning the 10%+ chance of that hazard only materializes if a particularly favorable weather pattern sets up. It may be higher or lower depending on how the storm system evolves. Used for tornado and wind outlooks.</div>
+                        <div class="cat-name">Conditional Moderate (CIG1) — All Hazards</div>
+                        <div class="cat-desc">This is a level 1/3 on the CIG system. This is used for all outlooks, and each one means something. A tornado CIG1 means that a strong (EF2) tornado is possible in the area. For wind, it represents that an all hazards event is possible, with winds gusts up to 65kts (74mph). For hail, it represents the possibility of tennis ball to baseball sized hail (2"-3.5").</div>
+                    </div>
+                </div>
+                <div class="cat-row" style="border-color:rgba(187,17,17,0.3);">
+                    <div class="cat-swatch" style="background:transparent;border:2px solid #BB1111;"></div>
+                    <div>
+                        <div class="cat-name">Conditional Moderate (CIG2) — All Hazards</div>
+                        <div class="cat-desc">This is a level 2/3 on the CIG system. This is used for all outlooks, and each one means something. A tornado CIG2 means that a intense (EF3) tornado is possible in the area. For wind, it means that a derecho, or a long lasting storm producing damaging winds throughout is possible. For hail, it represents the possibility of softball sized hail (3.5") or higher. </div>
                     </div>
                 </div>
                 <div class="cat-row" style="border-color:rgba(119,0,204,0.3);">
                     <div class="cat-swatch" style="background:transparent;border:2px solid #7700CC;"></div>
                     <div>
                         <div class="cat-name">Conditional High (CIG3) — Tornado & Wind Only</div>
-                        <div class="cat-desc">The highest conditional probability level, meaning if conditions become favorable, a major outbreak is possible. This is a significant "watch this carefully" signal for tornado and wind outlooks only. Not used for hail.</div>
+                        <div class="cat-desc">This is a level 3/3 on the CIG system. This is used for only Tornado and Wind Outlooks, and each one means something. A tornado CIG3 means that a violent (EF4+) tornado is possible in the area. For wind, it means that a high end derecho, or a long lasting storm producing damaging winds and some destructive winds (80mph) throughout is actively occurring.</div>
                     </div>
                 </div>
             </div>
@@ -1190,7 +1197,7 @@
                     <li>Real-time station observations (temperature, pressure, clouds)</li>
                     <li>Wind data supplemented by Open-Meteo for better accuracy</li>
                     <li>UV index supplemented by Open-Meteo (NWS doesn't provide it)</li>
-                    <li>7-day forecast; may be slower to load due to multiple API calls</li>
+                    <li>Uses huamn forecasts instead of single model outputs without human input</li>
                 </ul>
             </div>
 
@@ -1204,7 +1211,7 @@
                     <li>Provides full 10-day forecasts</li>
                     <li>May differ from NWS, especially for temperature and precipitation timing</li>
                     <li>Smoothed/blended data — can sometimes feel less "local"</li>
-                    <li>Requires API key; falls back to Open-Meteo if unavailable</li>
+                    <li>Only uses a single model output, which is less accurate compared to NWS human forecasts.</li>
                 </ul>
             </div>
 
@@ -1214,11 +1221,11 @@
                 </div>
                 <p><strong>Open-Meteo</strong> — free, open-source weather API based on European and global numerical weather models (ERA5, GFS, ECMWF). No API key required.</p>
                 <ul>
-                    <li>Completely free and open — great as a comparison source</li>
-                    <li>Uses global models (ECMWF, GFS) — strong for medium-range forecasts</li>
+                    <li>Uses long range global models (ECMWF, GFS) — strong for medium-range forecasts</li>
                     <li>Up to 16-day forecast available</li>
                     <li>Can differ from NWS on short-term timing of precipitation</li>
                     <li>Excellent wind and UV index data from model output</li>
+                    <li>Uses a mix of models, which is better than a single model output, but still isn't as accurate as NWS human forecasts.</li>
                 </ul>
             </div>
 
@@ -1233,6 +1240,7 @@
                     <li>Daily forecast is derived by aggregating 3-hour intervals</li>
                     <li>UV index not included in free tier (supplemented by Open-Meteo)</li>
                     <li>Also powers the temperature, wind, and cloud map overlays</li>
+                    <li>Only uses a single model output, which is less accurate compared to NWS human forecasts.</li>
                 </ul>
             </div>
 
