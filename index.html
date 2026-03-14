@@ -858,6 +858,40 @@
                         <button class="day-btn" data-band="watervapor" onclick="selectSatBand('watervapor')">Water Vapor</button>
                     </div>
                 </div>
+                <!-- WPC Excessive Rainfall Sub-Controls -->
+                <div class="spc-controls" id="wpc-controls">
+                    <div class="ctrl-row" style="overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px;">
+                        <span class="ctrl-label" style="flex-shrink:0;">Day:</span>
+                        <button class="day-btn active" data-wpc-day="1" onclick="selectWPCDay(1)" style="flex-shrink:0;">Day 1</button>
+                        <button class="day-btn" data-wpc-day="2" onclick="selectWPCDay(2)" style="flex-shrink:0;">Day 2</button>
+                        <button class="day-btn" data-wpc-day="3" onclick="selectWPCDay(3)" style="flex-shrink:0;">Day 3</button>
+                    </div>
+                    <div class="ctrl-row">
+                        <button onclick="openOutlookInfoModal('wpc')" class="outlook-info-btn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            What do these categories mean?
+                        </button>
+                    </div>
+                </div>
+                <!-- Fire Weather Sub-Controls -->
+                <div class="spc-controls" id="fire-controls">
+                    <div class="ctrl-row" style="overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px;">
+                        <span class="ctrl-label" style="flex-shrink:0;">Day:</span>
+                        <button class="day-btn active" data-fire-day="1" onclick="selectFireDay(1)" style="flex-shrink:0;">Day 1</button>
+                        <button class="day-btn" data-fire-day="2" onclick="selectFireDay(2)" style="flex-shrink:0;">Day 2</button>
+                    </div>
+                    <div class="ctrl-row">
+                        <span class="ctrl-label">Type:</span>
+                        <button class="type-btn active" data-fire-type="dryt" onclick="selectFireType('dryt')">Dry T-Storms</button>
+                        <button class="type-btn" data-fire-type="windrh" onclick="selectFireType('windrh')">Wind/RH</button>
+                    </div>
+                    <div class="ctrl-row">
+                        <button onclick="openOutlookInfoModal('fire')" class="outlook-info-btn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            What do these categories mean?
+                        </button>
+                    </div>
+                </div>
                 <!-- Radar Sub-Controls (none needed for iframe viewer) -->
                 <div class="radar-controls" id="radar-controls" style="display:none;"></div>
                 <!-- OWM Sub-Controls -->
@@ -917,7 +951,20 @@
                         allowfullscreen></iframe>
             </div>
 
-            <!-- WPC Excessive Rainfall View -->
+            <!-- Map (for SPC / WPC / Fire / Temperature / Wind) -->
+            <div class="map-wrapper glass-static" id="map-view-wrap" style="display:none;">
+                <div id="map"></div>
+                <div class="spc-legend" id="spc-legend">
+                    <div class="legend-title" id="legend-title">Categorical Risk</div>
+                    <div id="legend-items"></div>
+                </div>
+                <div class="map-loading" id="map-loading" style="display:none;">
+                    <div class="spinner"></div>
+                    <p id="loading-msg" style="font-size:0.85rem;color:var(--text-secondary);">Loading outlook…</p>
+                </div>
+            </div>
+
+            <!-- WPC Excessive Rainfall Static Images (below interactive map) -->
             <div id="wpc-rain-view" class="glass-static" style="display:none;padding:16px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
                     <p style="font-size:0.78rem;color:var(--text-muted);margin:0;">
@@ -931,7 +978,7 @@
                 <div id="wpc-rain-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
             </div>
 
-            <!-- SPC Fire Weather View -->
+            <!-- SPC Fire Weather Static Images (below interactive map) -->
             <div id="fire-wx-view" class="glass-static" style="display:none;padding:16px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
                     <p style="font-size:0.78rem;color:var(--text-muted);margin:0;">
@@ -943,19 +990,6 @@
                     </button>
                 </div>
                 <div id="fire-wx-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
-            </div>
-
-            <!-- Map (for Temperature / Wind) -->
-            <div class="map-wrapper glass-static" id="map-view-wrap" style="display:none;">
-                <div id="map"></div>
-                <div class="spc-legend" id="spc-legend">
-                    <div class="legend-title" id="legend-title">Categorical Risk</div>
-                    <div id="legend-items"></div>
-                </div>
-                <div class="map-loading" id="map-loading" style="display:none;">
-                    <div class="spinner"></div>
-                    <p id="loading-msg" style="font-size:0.85rem;color:var(--text-secondary);">Loading outlook…</p>
-                </div>
             </div>
 
         </section>
@@ -1089,22 +1123,22 @@
                         <div class="cat-desc">Extremely rare. A catastrophic, near-certain outbreak for this hazard. Used for the most dangerous outbreak days. All residents in this area should take shelter well before storms arrive.</div>
                     </div>
                 </div>
-                <div class="cat-row" style="border-color:rgba(187,17,17,0.3);">
-                    <div class="cat-swatch" style="background:transparent;border:2px solid #CC7000;"></div>
+                <div class="cat-row" style="border-color:rgba(0,0,0,0.2);">
+                    <div class="cat-swatch" style="background:transparent;border:2px solid #000000;"></div>
                     <div>
                         <div class="cat-name">Conditional Moderate (CIG1) — All Hazards</div>
                         <div class="cat-desc">This is a level 1/3 on the CIG system. This is used for all outlooks, and each one means something. A tornado CIG1 means that a strong (EF2) tornado is possible in the area. For wind, it represents that an all hazards event is possible, with winds gusts up to 65kts (74mph). For hail, it represents the possibility of tennis ball to baseball sized hail (2"-3.5").</div>
                     </div>
                 </div>
-                <div class="cat-row" style="border-color:rgba(187,17,17,0.3);">
-                    <div class="cat-swatch" style="background:transparent;border:2px solid #BB1111;"></div>
+                <div class="cat-row" style="border-color:rgba(0,0,0,0.2);">
+                    <div class="cat-swatch" style="background:transparent;border:2px solid #000000;"></div>
                     <div>
                         <div class="cat-name">Conditional Moderate (CIG2) — All Hazards</div>
                         <div class="cat-desc">This is a level 2/3 on the CIG system. This is used for all outlooks, and each one means something. A tornado CIG2 means that a intense (EF3) tornado is possible in the area. For wind, it means that a derecho, or a long lasting storm producing damaging winds throughout is possible. For hail, it represents the possibility of softball sized hail (3.5") or higher. </div>
                     </div>
                 </div>
-                <div class="cat-row" style="border-color:rgba(119,0,204,0.3);">
-                    <div class="cat-swatch" style="background:transparent;border:2px solid #7700CC;"></div>
+                <div class="cat-row" style="border-color:rgba(0,0,0,0.2);">
+                    <div class="cat-swatch" style="background:transparent;border:2px solid #000000;"></div>
                     <div>
                         <div class="cat-name">Conditional High (CIG3) — Tornado & Wind Only</div>
                         <div class="cat-desc">This is a level 3/3 on the CIG system. This is used for only Tornado and Wind Outlooks, and each one means something. A tornado CIG3 means that a violent (EF4+) tornado is possible in the area. For wind, it means that a high end derecho, or a long lasting storm producing damaging winds and some destructive winds (80mph) throughout is actively occurring.</div>
@@ -1153,21 +1187,21 @@
                     The <strong>SPC Fire Weather Outlook</strong> highlights areas where dry air, strong winds, and low humidity create dangerous conditions for wildfires to ignite and spread rapidly. Even a small spark from a campfire, downed power line, or cigarette can become a fast-moving wildfire.
                 </p>
                 <div class="cat-row">
-                    <div class="cat-swatch" style="background:#FFE066;border:1px solid #CCAA00;"></div>
+                    <div class="cat-swatch" style="background:#FFFF00;border:1px solid #CCCC00;"></div>
                     <div>
                         <div class="cat-name">Elevated</div>
                         <div class="cat-desc">Conditions are somewhat favorable for fire spread. Grasses and brush can ignite more easily than usual and fires may spread faster than normal. Use extra caution with any open flames outdoors.</div>
                     </div>
                 </div>
                 <div class="cat-row">
-                    <div class="cat-swatch" style="background:#FF6600;border:1px solid #CC4400;"></div>
+                    <div class="cat-swatch" style="background:#FF0000;border:1px solid #CC0000;"></div>
                     <div>
                         <div class="cat-name">Critical</div>
                         <div class="cat-desc">Fire weather conditions are dangerous. A combination of very low relative humidity (often below 15–20%), strong winds, and dry fuels creates ideal wildfire conditions. Any fire that starts could spread rapidly and be difficult to control. Outdoor burning is extremely hazardous.</div>
                     </div>
                 </div>
                 <div class="cat-row">
-                    <div class="cat-swatch" style="background:#CC00CC;border:1px solid #990099;"></div>
+                    <div class="cat-swatch" style="background:#FF73DF;border:1px solid #CC00AA;"></div>
                     <div>
                         <div class="cat-name">Extremely Critical</div>
                         <div class="cat-desc">Historically dangerous fire weather conditions are expected. Extreme wind speeds combined with very low humidity and critically dry fuels create a recipe for explosive, potentially uncontrollable wildfires. Evacuations may be necessary. This is a rare, high-impact event — used for the most dangerous fire weather setups of the year.</div>
@@ -1460,11 +1494,26 @@
             wind: 'https://www.spc.noaa.gov/products/outlook/day2otlk_wind.nolyr.geojson',
             hail: 'https://www.spc.noaa.gov/products/outlook/day2otlk_hail.nolyr.geojson',
         },
+        3: {
+            cat:  'https://www.spc.noaa.gov/products/outlook/day3otlk_cat.nolyr.geojson',
+            prob: 'https://www.spc.noaa.gov/products/outlook/day3otlk_prob.nolyr.geojson',
+        },
+        4: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day4prob.nolyr.geojson' },
+        5: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day5prob.nolyr.geojson' },
+        6: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day6prob.nolyr.geojson' },
+        7: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day7prob.nolyr.geojson' },
+        8: { prob: 'https://www.spc.noaa.gov/products/exper/day4-8/day8prob.nolyr.geojson' },
     };
 
     const DAY_TYPES = {
         1: [{ key:'cat', label:'Categorical' }, { key:'torn', label:'Tornado' }, { key:'wind', label:'Wind' }, { key:'hail', label:'Hail' }],
         2: [{ key:'cat', label:'Categorical' }, { key:'torn', label:'Tornado' }, { key:'wind', label:'Wind' }, { key:'hail', label:'Hail' }],
+        3: [{ key:'cat', label:'Categorical' }, { key:'prob', label:'Probability' }],
+        4: [{ key:'prob', label:'Probability' }],
+        5: [{ key:'prob', label:'Probability' }],
+        6: [{ key:'prob', label:'Probability' }],
+        7: [{ key:'prob', label:'Probability' }],
+        8: [{ key:'prob', label:'Probability' }],
     };
 
     const CAT_LEGEND = [
@@ -1476,9 +1525,9 @@
         { fill: 'rgba(255,64,255,0.55)',  stroke: '#CC00CC', label: 'High' },
     ];
     const PROB_LEGEND = [
-        { fill: 'transparent; background-image: linear-gradient(#7700CC, #7700CC), linear-gradient(#7700CC, #7700CC); background-size: 100% 2px, 2px 100%; background-position: center; background-repeat: no-repeat', stroke: '#7700CC', label: 'Cond. High (cig3)' },
-        { fill: 'transparent; background-image: linear-gradient(#BB1111, #BB1111); background-size: 100% 2px; background-position: center; background-repeat: no-repeat', stroke: '#BB1111', label: 'Cond. Moderate (cig2)' },
-        { fill: 'transparent; background-image: repeating-linear-gradient(to right, #CC7000, #CC7000 2px, transparent 2px, transparent 4px); background-size: 100% 2px; background-position: center; background-repeat: no-repeat', stroke: '#CC7000', label: 'Cond. Low (cig1)' },
+        { fill: 'transparent; background-image: linear-gradient(#000000, #000000), linear-gradient(#000000, #000000); background-size: 100% 2px, 2px 100%; background-position: center; background-repeat: no-repeat', stroke: '#000000', label: 'Cond. High (cig3)' },
+        { fill: 'transparent; background-image: linear-gradient(#000000, #000000); background-size: 100% 2px; background-position: center; background-repeat: no-repeat', stroke: '#000000', label: 'Cond. Moderate (cig2)' },
+        { fill: 'transparent; background-image: repeating-linear-gradient(to right, #000000, #000000 2px, transparent 2px, transparent 4px); background-size: 100% 2px; background-position: center; background-repeat: no-repeat', stroke: '#000000', label: 'Cond. Low (cig1)' },
         { fill: 'rgba(100,0,180,0.60)',  stroke: '#6600CC', label: '60%+' },
         { fill: 'rgba(160,0,200,0.58)',  stroke: '#9900BB', label: '45%+' },
         { fill: 'rgba(220,30,30,0.58)',  stroke: '#BB1111', label: '30%+' },
@@ -1512,9 +1561,9 @@
         ]
     ];
     const PROB_LINE_EXPR = ['case',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], '#7700CC',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], '#BB1111',
-        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], '#CC7000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'], '#000000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'], '#000000',
+        ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'], '#000000',
         ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'SIGN'], '#AA00AA',
         ['step', ['coalesce', ['get', 'RISK_NUM'], ['to-number', ['get', 'LABEL']], 0],
             'rgba(0,0,0,0)',
@@ -1551,20 +1600,20 @@
             draw(ctx);
             return ctx.getImageData(0, 0, width, height);
         }
-        // cig1: single dotted horizontal line
+        // cig1: single dotted horizontal line — black like SPC
         map.addImage('cig1-pattern', makePattern(20, 12, ctx => {
-            ctx.strokeStyle = '#CC7000'; ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5;
             ctx.setLineDash([3, 4]);
             ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(20, 6); ctx.stroke();
         }));
-        // cig2: single solid horizontal line
+        // cig2: single solid horizontal line — black like SPC
         map.addImage('cig2-pattern', makePattern(20, 12, ctx => {
-            ctx.strokeStyle = '#BB1111'; ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5;
             ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(20, 6); ctx.stroke();
         }));
-        // cig3: crosshatch — solid horizontal + vertical lines
+        // cig3: crosshatch — solid horizontal + vertical lines — black like SPC
         map.addImage('cig3-pattern', makePattern(20, 20, ctx => {
-            ctx.strokeStyle = '#7700CC'; ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 1.5;
             ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(20, 10); ctx.stroke();
             ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(10, 20); ctx.stroke();
         }));
@@ -1574,6 +1623,204 @@
     function removeSource(id){ if (map && map.getSource(id)) map.removeSource(id); }
     function clearSPCLayers() { removeLayer('spc-line-cig3-double'); removeLayer('spc-fill-cig1'); removeLayer('spc-fill-cig2'); removeLayer('spc-fill-cig3'); removeLayer('spc-fill'); removeLayer('spc-line'); removeSource('spc-data'); }
     function clearOWMLayers() { removeLayer('owm-layer'); removeSource('owm-source'); }
+    function clearWPCLayers() { removeLayer('wpc-fill'); removeLayer('wpc-line'); removeSource('wpc-data'); }
+    function clearFireLayers() { removeLayer('fire-fill'); removeLayer('fire-line'); removeSource('fire-data'); }
+
+    // ============================================================
+    // WPC ERO & FIRE WEATHER — URLS, COLORS, LEGENDS
+    // ============================================================
+    const WPC_ERO_URLS = {
+        1: 'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day1_Latest.geojson',
+        2: 'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day2_Latest.geojson',
+        3: 'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day3_Latest.geojson',
+    };
+    const FIRE_WX_URLS = {
+        1: {
+            dryt:   'https://www.spc.noaa.gov/products/fire_wx/day1fw_dryt.nolyr.geojson',
+            windrh: 'https://www.spc.noaa.gov/products/fire_wx/day1fw_windrh.nolyr.geojson',
+        },
+        2: {
+            dryt:   'https://www.spc.noaa.gov/products/fire_wx/day2fw_dryt.nolyr.geojson',
+            windrh: 'https://www.spc.noaa.gov/products/fire_wx/day2fw_windrh.nolyr.geojson',
+        },
+    };
+
+    // Official NWS WPC ERO colors
+    const WPC_ERO_FILL_EXPR = ['match', ['get', 'CATEGORY'],
+        'MRGL', '#66BB44', 'SLGT', '#FFFF00', 'MDT', '#FF8C00', 'HIGH', '#FF0000',
+        'rgba(0,0,0,0)'];
+    const WPC_ERO_LINE_EXPR = ['match', ['get', 'CATEGORY'],
+        'MRGL', '#44AA22', 'SLGT', '#CCCC00', 'MDT', '#CC6600', 'HIGH', '#CC0000',
+        'rgba(0,0,0,0)'];
+
+    // Official NWS SPC fire weather colors
+    const FIRE_FILL_EXPR = ['match', ['get', 'CATEGORY'],
+        'ELEV', '#FFFF00', 'CRIT', '#FF0000', 'EXTCRIT', '#FF73DF',
+        'rgba(0,0,0,0)'];
+    const FIRE_LINE_EXPR = ['match', ['get', 'CATEGORY'],
+        'ELEV', '#CCCC00', 'CRIT', '#CC0000', 'EXTCRIT', '#CC00AA',
+        'rgba(0,0,0,0)'];
+
+    const WPC_ERO_LEGEND = [
+        { fill: '#66BB44', stroke: '#44AA22', label: 'Marginal' },
+        { fill: '#FFFF00', stroke: '#CCCC00', label: 'Slight' },
+        { fill: '#FF8C00', stroke: '#CC6600', label: 'Moderate' },
+        { fill: '#FF0000', stroke: '#CC0000', label: 'High' },
+    ];
+    const FIRE_LEGEND_DATA = [
+        { fill: '#FFFF00', stroke: '#CCCC00', label: 'Elevated' },
+        { fill: '#FF0000', stroke: '#CC0000', label: 'Critical' },
+        { fill: '#FF73DF', stroke: '#CC00AA', label: 'Extremely Critical' },
+    ];
+
+    let currentWPCDay = 1;
+    let currentFireDay = 1;
+    let currentFireType = 'dryt';
+
+    function normalizeWPCData(data) {
+        if (!data?.features) return data;
+        const features = data.features.map(f => {
+            const props = f.properties || {};
+            const raw = (props.label || props.Label || props.LABEL || props.dn || props.DN || '').toString().toLowerCase().trim();
+            let cat = '';
+            if (raw.includes('marginal') || raw === 'mrgl') cat = 'MRGL';
+            else if (raw.includes('slight') || raw === 'slgt') cat = 'SLGT';
+            else if (raw.includes('moderate') || raw === 'mdt') cat = 'MDT';
+            else if (raw.includes('high') || raw === 'high') cat = 'HIGH';
+            return { ...f, properties: { ...props, CATEGORY: cat } };
+        });
+        return { ...data, features };
+    }
+
+    function normalizeFireData(data) {
+        if (!data?.features) return data;
+        const features = data.features.map(f => {
+            const props = f.properties || {};
+            const raw = (props.LABEL || props.label || '').toString().toLowerCase().trim();
+            let cat = '';
+            if (raw.includes('extremely') || raw === 'extcrit' || raw === 'expcrit' || raw === 'ec') cat = 'EXTCRIT';
+            else if (raw.includes('critical') || raw === 'crit' || raw === 'c') cat = 'CRIT';
+            else if (raw.includes('elevated') || raw === 'elev' || raw === 'el') cat = 'ELEV';
+            return { ...f, properties: { ...props, CATEGORY: cat } };
+        });
+        return { ...data, features };
+    }
+
+    function updateWPCLegend() {
+        document.getElementById('spc-legend').classList.add('visible');
+        document.getElementById('legend-title').textContent = 'Excessive Rainfall Risk';
+        document.getElementById('legend-items').innerHTML = WPC_ERO_LEGEND.map(e =>
+            `<div class="legend-row"><div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};opacity:0.85;"></div><span>${e.label}</span></div>`
+        ).join('');
+    }
+    function updateFireLegend() {
+        document.getElementById('spc-legend').classList.add('visible');
+        document.getElementById('legend-title').textContent = 'Fire Weather Risk';
+        document.getElementById('legend-items').innerHTML = FIRE_LEGEND_DATA.map(e =>
+            `<div class="legend-row"><div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};opacity:0.85;"></div><span>${e.label}</span></div>`
+        ).join('');
+    }
+
+    async function loadWPCLayer(day) {
+        if (!map) return;
+        const url = WPC_ERO_URLS[day];
+        if (!url) { clearWPCLayers(); hideSPCLegend(); return; }
+        showLoading('Loading WPC Day ' + day + ' Excessive Rainfall Outlook…');
+        try {
+            const data = await fetchSPCGeoJSON(url);
+            const normalized = normalizeWPCData(data);
+            clearWPCLayers();
+            map.addSource('wpc-data', { type: 'geojson', data: normalized });
+            map.addLayer({ id: 'wpc-fill', type: 'fill', source: 'wpc-data',
+                paint: { 'fill-color': WPC_ERO_FILL_EXPR, 'fill-opacity': 0.55, 'fill-antialias': true }
+            }, firstSymbolLayerId);
+            map.addLayer({ id: 'wpc-line', type: 'line', source: 'wpc-data',
+                paint: { 'line-color': WPC_ERO_LINE_EXPR, 'line-width': 1.5 }
+            }, firstSymbolLayerId);
+            updateWPCLegend();
+        } catch (e) {
+            console.error('WPC ERO fetch error:', e);
+            clearWPCLayers(); hideSPCLegend();
+        } finally { hideLoading(); }
+    }
+
+    async function loadFireLayer(day, type) {
+        if (!map) return;
+        const url = FIRE_WX_URLS[day]?.[type];
+        if (!url) { clearFireLayers(); hideSPCLegend(); return; }
+        showLoading('Loading SPC Day ' + day + ' Fire Weather Outlook…');
+        try {
+            const data = await fetchSPCGeoJSON(url);
+            const normalized = normalizeFireData(data);
+            clearFireLayers();
+            map.addSource('fire-data', { type: 'geojson', data: normalized });
+            map.addLayer({ id: 'fire-fill', type: 'fill', source: 'fire-data',
+                paint: { 'fill-color': FIRE_FILL_EXPR, 'fill-opacity': 0.55, 'fill-antialias': true }
+            }, firstSymbolLayerId);
+            map.addLayer({ id: 'fire-line', type: 'line', source: 'fire-data',
+                paint: { 'line-color': FIRE_LINE_EXPR, 'line-width': 1.5 }
+            }, firstSymbolLayerId);
+            updateFireLegend();
+        } catch (e) {
+            console.error('Fire weather fetch error:', e);
+            clearFireLayers(); hideSPCLegend();
+        } finally { hideLoading(); }
+    }
+
+    function selectWPCDay(day) {
+        currentWPCDay = day;
+        document.querySelectorAll('#wpc-controls [data-wpc-day]').forEach(btn =>
+            btn.classList.toggle('active', parseInt(btn.dataset.wpcDay) === day));
+        if (currentLayer === 'wpc-rain') {
+            clearWPCLayers(); hideSPCLegend();
+            _ensureMapReady().then(() => loadWPCLayer(day));
+        }
+    }
+    function selectFireDay(day) {
+        currentFireDay = day;
+        document.querySelectorAll('#fire-controls [data-fire-day]').forEach(btn =>
+            btn.classList.toggle('active', parseInt(btn.dataset.fireDay) === day));
+        if (currentLayer === 'fire-wx') {
+            clearFireLayers(); hideSPCLegend();
+            _ensureMapReady().then(() => loadFireLayer(day, currentFireType));
+        }
+    }
+    function selectFireType(type) {
+        currentFireType = type;
+        document.querySelectorAll('#fire-controls [data-fire-type]').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.fireType === type));
+        if (currentLayer === 'fire-wx') {
+            clearFireLayers(); hideSPCLegend();
+            _ensureMapReady().then(() => loadFireLayer(currentFireDay, type));
+        }
+    }
+
+    async function handleOutlookClick(e) {
+        if (currentLayer !== 'wpc-rain' && currentLayer !== 'fire-wx') return;
+        const layerId = currentLayer === 'wpc-rain' ? 'wpc-fill' : 'fire-fill';
+        if (!map.getLayer(layerId)) return;
+        const features = map.queryRenderedFeatures(e.point, { layers: [layerId] });
+        if (!features.length) return;
+        const cat = features[0].properties?.CATEGORY || '';
+        if (!cat) return;
+        if (currentLayer === 'wpc-rain') {
+            const labels = { MRGL: 'Marginal', SLGT: 'Slight', MDT: 'Moderate', HIGH: 'High' };
+            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
+                .setLngLat(e.lngLat)
+                .setHTML(`<div class="popup-title">Excessive Rainfall Risk</div>
+                          <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`)
+                .addTo(map);
+        } else {
+            const labels = { ELEV: 'Elevated', CRIT: 'Critical', EXTCRIT: 'Extremely Critical' };
+            const typeLabel = currentFireType === 'dryt' ? 'Dry Thunderstorms' : 'Wind/RH';
+            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
+                .setLngLat(e.lngLat)
+                .setHTML(`<div class="popup-title">Fire Weather Risk</div>
+                          <div class="popup-stat"><span class="popup-key">Type</span><span class="popup-val">${typeLabel}</span></div>
+                          <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`)
+                .addTo(map);
+        }
+    }
 
     function normalizeSPCData(data) {
         if (!data?.features) return data;
@@ -1648,7 +1895,7 @@
                     }, firstSymbolLayerId);
                     map.addLayer({ id: 'spc-line-cig3-double', type: 'line', source: 'spc-data',
                         filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
-                        paint: { 'line-color': '#7700CC', 'line-width': 5, 'line-gap-width': 2 }
+                        paint: { 'line-color': '#000000', 'line-width': 5, 'line-gap-width': 2 }
                     }, firstSymbolLayerId);
                 }
             }
@@ -1752,8 +1999,8 @@
         8: [{ url: 'https://www.spc.noaa.gov/products/exper/day4-8/day8prob.gif',  label: 'Day 8 Probability' }],
     };
 
-    // Maps type key → the label string used in SPC_IMAGES for days 1-2
-    const TYPE_TO_LABEL = { cat: 'Categorical', torn: 'Tornado', wind: 'Wind', hail: 'Hail' };
+    // Maps type key → the label string used in SPC_IMAGES
+    const TYPE_TO_LABEL = { cat: 'Categorical', torn: 'Tornado', wind: 'Wind', hail: 'Hail', prob: 'Probability' };
 
     function renderSPCImages(filterDay, filterType) {
         const container = document.getElementById('spc-img-grid');
@@ -1915,8 +2162,8 @@
     function _showSatelliteView() { _hideAllViews(); document.getElementById('satellite-image-view').style.display = ''; }
     function _showRadarView()     { _hideAllViews(); document.getElementById('radar-image-view').style.display = ''; }
     function _showMapView()       { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; }
-    function _showWPCRainView()   { _hideAllViews(); document.getElementById('wpc-rain-view').style.display = ''; }
-    function _showFireWxView()    { _hideAllViews(); document.getElementById('fire-wx-view').style.display = ''; }
+    function _showWPCRainView()   { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; document.getElementById('wpc-rain-view').style.display = ''; if (map) setTimeout(() => map.resize(), 50); }
+    function _showFireWxView()    { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; document.getElementById('fire-wx-view').style.display = ''; if (map) setTimeout(() => map.resize(), 50); }
 
 
     function setBaseMapStyle(styleKey) {
@@ -1934,10 +2181,15 @@
             for (const layer of styleLayers) {
                 if (layer.type === 'symbol') { firstSymbolLayerId = layer.id; break; }
             }
+            addCIGPatterns();
             map.off('click', handleOWMClick);
             map.on('click', handleOWMClick);
+            map.off('click', handleOutlookClick);
+            map.on('click', handleOutlookClick);
             if (currentLayer === 'spc' && currentDay > 0) loadSPCLayer(currentDay, currentType);
             else if (currentLayer === 'temperature' || currentLayer === 'wind' || currentLayer === 'clouds') loadOWMLayer(currentLayer);
+            else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
+            else if (currentLayer === 'fire-wx') loadFireLayer(currentFireDay, currentFireType);
         });
     }
 
@@ -1946,6 +2198,8 @@
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
         document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
+        document.getElementById('wpc-controls').classList.toggle('visible', layer === 'wpc-rain');
+        document.getElementById('fire-controls').classList.toggle('visible', layer === 'fire-wx');
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = layer === 'spc' ? '' : 'none';
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
@@ -1953,7 +2207,7 @@
         document.getElementById('basemap-controls').classList.toggle('visible', mapLayer);
 
         if (layer === 'spc') {
-            clearOWMLayers();
+            clearOWMLayers(); clearWPCLayers(); clearFireLayers();
             if (currentDay > 0) {
                 // Individual day — show interactive map + images
                 buildTypeButtons(currentDay);
@@ -1967,22 +2221,24 @@
                 renderSPCImages(0);
             }
         } else if (layer === 'satellite') {
-            clearSPCLayers(); hideSPCLegend();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
             _showSatelliteView();
             loadSatelliteImage(currentSatBand);
         } else if (layer === 'radar') {
-            clearSPCLayers(); hideSPCLegend();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
             _showRadarView();
         } else if (layer === 'wpc-rain') {
-            clearSPCLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showWPCRainView();
             renderWPCRainImages();
+            _ensureMapReady().then(() => loadWPCLayer(currentWPCDay));
         } else if (layer === 'fire-wx') {
-            clearSPCLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); hideSPCLegend(); clearOWMLayers();
             _showFireWxView();
             renderFireWxImages();
+            _ensureMapReady().then(() => loadFireLayer(currentFireDay, currentFireType));
         } else {
-            clearSPCLayers(); hideSPCLegend();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
             _showMapView();
             clearOWMLayers();
             if (mapLayer) loadOWMLayer(layer);
@@ -2011,19 +2267,17 @@
     }
 
     function buildTypeButtons(day) {
-        // Days 3-8: static images only, no interactive map
-        if (day >= 3) {
-            document.getElementById('type-row').style.display = 'none';
+        const types = DAY_TYPES[day] || [];
+        const typeRow = document.getElementById('type-row');
+
+        if (!types.length) {
+            typeRow.style.display = 'none';
             clearSPCLayers(); hideSPCLegend();
             _showSPCView();
-            const hint = document.getElementById('spc-img-hint');
-            if (hint) hint.style.display = 'none';
             renderSPCImages(day);
             return;
         }
 
-        const types = DAY_TYPES[day] || [];
-        const typeRow = document.getElementById('type-row');
         typeRow.style.display = '';
         typeRow.innerHTML = '<span class="ctrl-label">Type:</span>';
         currentType = types[0]?.key || 'cat';
@@ -2103,6 +2357,7 @@
                 }
                 addCIGPatterns();
                 map.on('click', handleOWMClick);
+                map.on('click', handleOutlookClick);
             });
         }
     }
