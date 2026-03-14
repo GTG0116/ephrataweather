@@ -3,6 +3,8 @@
 // Primary: Google Weather API (GET with query params)
 // Fallback: Open-Meteo (free, CORS-enabled)
 // Optional: NWS (National Weather Service) — user-selectable
+// Optional: Open-Meteo — direct Open-Meteo source
+// Optional: OWM (OpenWeatherMap) — user-selectable
 // ============================================
 
 // --- Data Source Preference ---
@@ -216,6 +218,264 @@ function _googleDateTimeToISO(dt) {
     if (typeof dt === 'string') return dt;
     const d = new Date(dt.year, dt.month - 1, dt.day, dt.hours || 0);
     return d.toISOString();
+}
+
+// OWM condition code → our internal type (uses OWM weather id groups)
+function _owmConditionType(id) {
+    if (!id) return 'PARTLY_CLOUDY';
+    if (id >= 200 && id < 300) return id >= 221 ? 'HEAVY_THUNDERSTORM' : 'THUNDERSTORM';
+    if (id >= 300 && id < 400) return 'DRIZZLE';
+    if (id === 500) return 'LIGHT_RAIN';
+    if (id === 501) return 'RAIN';
+    if (id >= 502 && id < 600) return 'HEAVY_RAIN';
+    if (id === 511) return 'FREEZING_RAIN';
+    if (id >= 520 && id < 530) return id === 522 || id === 531 ? 'HEAVY_RAIN' : 'RAIN';
+    if (id === 600 || id === 620) return 'LIGHT_SNOW';
+    if (id === 601 || id === 621) return 'SNOW';
+    if (id >= 602 && id < 620) return 'HEAVY_SNOW';
+    if (id >= 611 && id <= 616) return 'SLEET';
+    if (id >= 700 && id < 800) return 'FOG';
+    if (id === 800) return 'CLEAR';
+    if (id === 801) return 'MOSTLY_CLEAR';
+    if (id === 802) return 'PARTLY_CLOUDY';
+    if (id === 803) return 'MOSTLY_CLOUDY';
+    if (id === 804) return 'OVERCAST';
+    return 'PARTLY_CLOUDY';
+}
+
+// Fetch complete Open-Meteo current conditions (dedicated, not fallback)
+async function _fetchOpenMeteoCurrent(lat, lng) {
+    const params = new URLSearchParams({
+        latitude: lat, longitude: lng,
+        current: 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index,dew_point_2m,visibility',
+        temperature_unit: 'fahrenheit',
+        wind_speed_unit: 'mph',
+        timezone: 'auto'
+    });
+    const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`Open-Meteo current: ${resp.status}`);
+    const data = await resp.json();
+    const c = data.current;
+    const cond = _wmoCondition(c.weather_code);
+    return {
+        temperature: { degrees: c.temperature_2m },
+        feelsLikeTemperature: { degrees: c.apparent_temperature },
+        weatherCondition: { type: cond.type, description: { text: cond.description } },
+        wind: { speed: { value: c.wind_speed_10m }, gust: { value: c.wind_gusts_10m }, direction: c.wind_direction_10m },
+        relativeHumidity: c.relative_humidity_2m,
+        dewPoint: { degrees: c.dew_point_2m },
+        uvIndex: c.uv_index,
+        visibility: { distance: c.visibility },
+        pressure: { meanSeaLevelMillibars: c.pressure_msl },
+        cloudCover: c.cloud_cover,
+        _source: 'open-meteo'
+    };
+}
+
+// Fetch Open-Meteo hourly forecast (dedicated)
+async function _fetchOpenMeteoHourly(lat, lng, hours = 24) {
+    const params = new URLSearchParams({
+        latitude: lat, longitude: lng,
+        hourly: 'temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m,relative_humidity_2m,pressure_msl',
+        temperature_unit: 'fahrenheit',
+        wind_speed_unit: 'mph',
+        timezone: 'auto',
+        forecast_days: Math.ceil(hours / 24) + 1
+    });
+    const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`Open-Meteo hourly: ${resp.status}`);
+    const data = await resp.json();
+    const h = data.hourly;
+    const forecastHours = [];
+    const now = new Date();
+    for (let i = 0; i < h.time.length && forecastHours.length < hours; i++) {
+        if (new Date(h.time[i]) < now - 3600000 && forecastHours.length === 0) continue;
+        const cond = _wmoCondition(h.weather_code[i]);
+        forecastHours.push({
+            interval: { startTime: h.time[i] },
+            displayDateTime: h.time[i],
+            temperature: { degrees: h.temperature_2m[i] },
+            feelsLikeTemperature: { degrees: h.apparent_temperature?.[i] },
+            weatherCondition: { type: cond.type, description: { text: cond.description } },
+            precipitation: { probability: h.precipitation_probability[i] },
+            wind: { speed: h.wind_speed_10m[i], direction: h.wind_direction_10m[i] },
+            relativeHumidity: h.relative_humidity_2m?.[i],
+            pressure: h.pressure_msl?.[i] != null ? { meanSeaLevelMillibars: h.pressure_msl[i] } : null
+        });
+    }
+    return { forecastHours };
+}
+
+// Fetch Open-Meteo daily forecast (dedicated)
+async function _fetchOpenMeteoDaily(lat, lng, days = 10) {
+    const params = new URLSearchParams({
+        latitude: lat, longitude: lng,
+        daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset,relative_humidity_2m_mean',
+        temperature_unit: 'fahrenheit',
+        wind_speed_unit: 'mph',
+        timezone: 'auto',
+        forecast_days: Math.min(days, 16)
+    });
+    const resp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`Open-Meteo daily: ${resp.status}`);
+    const data = await resp.json();
+    const d = data.daily;
+    const forecastDays = [];
+    for (let i = 0; i < d.time.length; i++) {
+        const cond = _wmoCondition(d.weather_code[i]);
+        forecastDays.push({
+            displayDate: d.time[i],
+            interval: { startTime: d.time[i] },
+            maxTemperature: { degrees: d.temperature_2m_max[i] },
+            minTemperature: { degrees: d.temperature_2m_min[i] },
+            weatherCondition: { type: cond.type, description: { text: cond.description } },
+            precipitation: {
+                probability: d.precipitation_probability_max[i],
+                qpf: { millimeters: d.precipitation_sum[i] || 0 }
+            },
+            maxWind: { speed: { value: d.wind_speed_10m_max[i] }, direction: d.wind_direction_10m_dominant[i] },
+            relativeHumidity: d.relative_humidity_2m_mean ? d.relative_humidity_2m_mean[i] : null,
+            avgHumidity: d.relative_humidity_2m_mean ? d.relative_humidity_2m_mean[i] : null,
+            uvIndex: d.uv_index_max[i],
+            maxUvIndex: d.uv_index_max[i],
+            sunrise: d.sunrise[i],
+            sunset: d.sunset[i]
+        });
+    }
+    return { forecastDays };
+}
+
+// Fetch OWM current conditions
+async function _fetchOWMCurrent(lat, lng) {
+    const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
+    if (!key || key === 'YOUR_OWM_API_KEY_HERE') throw new Error('OWM API key not configured');
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${key}&units=imperial`;
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`OWM current: ${resp.status}`);
+    const d = await resp.json();
+    const id = d.weather?.[0]?.id;
+    const condType = _owmConditionType(id);
+    const desc = d.weather?.[0]?.description || 'Unknown';
+    // OWM free tier doesn't provide UV index; supplement from Open-Meteo
+    let uvIndex = null;
+    try {
+        const p = new URLSearchParams({ latitude: lat, longitude: lng, current: 'uv_index', timezone: 'auto' });
+        const r = await fetch(`https://api.open-meteo.com/v1/forecast?${p}`, { cache: 'no-store' });
+        if (r.ok) { const uvd = await r.json(); uvIndex = uvd.current?.uv_index ?? null; }
+    } catch (e) { /* ok */ }
+    return {
+        temperature: { degrees: d.main?.temp },
+        feelsLikeTemperature: { degrees: d.main?.feels_like },
+        weatherCondition: { type: condType, description: { text: desc.charAt(0).toUpperCase() + desc.slice(1) } },
+        wind: {
+            speed: { value: d.wind?.speed },
+            gust: { value: d.wind?.gust ?? null },
+            direction: d.wind?.deg
+        },
+        relativeHumidity: d.main?.humidity,
+        dewPoint: { degrees: null }, // not in OWM free current
+        uvIndex,
+        visibility: { distance: d.visibility }, // meters
+        pressure: { meanSeaLevelMillibars: d.main?.pressure },
+        cloudCover: d.clouds?.all,
+        _owmCity: d.name,
+        _source: 'owm'
+    };
+}
+
+// Fetch OWM hourly forecast (from 3-hour intervals, free tier)
+async function _fetchOWMHourly(lat, lng, hours = 24) {
+    const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
+    if (!key || key === 'YOUR_OWM_API_KEY_HERE') throw new Error('OWM API key not configured');
+    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${key}&units=imperial&cnt=${Math.ceil(hours / 3) + 2}`;
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`OWM hourly: ${resp.status}`);
+    const data = await resp.json();
+    const list = data.list || [];
+    const forecastHours = [];
+    const now = new Date();
+    for (const item of list) {
+        if (forecastHours.length >= hours) break;
+        const dt = new Date(item.dt * 1000);
+        if (dt < now - 3600000 && forecastHours.length === 0) continue;
+        const id = item.weather?.[0]?.id;
+        const condType = _owmConditionType(id);
+        const desc = item.weather?.[0]?.description || '';
+        forecastHours.push({
+            interval: { startTime: dt.toISOString() },
+            displayDateTime: dt.toISOString(),
+            temperature: { degrees: item.main?.temp },
+            feelsLikeTemperature: { degrees: item.main?.feels_like },
+            weatherCondition: { type: condType, description: { text: desc.charAt(0).toUpperCase() + desc.slice(1) } },
+            precipitation: { probability: Math.round((item.pop || 0) * 100) },
+            wind: { speed: item.wind?.speed, direction: item.wind?.deg },
+            relativeHumidity: item.main?.humidity,
+            pressure: item.main?.pressure != null ? { meanSeaLevelMillibars: item.main.pressure } : null
+        });
+    }
+    return { forecastHours };
+}
+
+// Fetch OWM daily forecast (aggregated from 3-hour free forecast, up to ~5 days)
+async function _fetchOWMDaily(lat, lng, days = 7) {
+    const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
+    if (!key || key === 'YOUR_OWM_API_KEY_HERE') throw new Error('OWM API key not configured');
+    const cnt = Math.min(days * 8 + 4, 40); // 8 slots per day (3h intervals)
+    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${key}&units=imperial&cnt=${cnt}`;
+    const resp = await fetch(url, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(`OWM daily: ${resp.status}`);
+    const data = await resp.json();
+    const list = data.list || [];
+    // Group 3h periods by local date
+    const byDate = {};
+    for (const item of list) {
+        const dt = new Date(item.dt * 1000);
+        const dateStr = dt.toLocaleDateString('en-CA'); // YYYY-MM-DD
+        if (!byDate[dateStr]) byDate[dateStr] = [];
+        byDate[dateStr].push(item);
+    }
+    // Also get sunrise/sunset from Open-Meteo for day/night icon
+    let sunMap = {};
+    try {
+        const sunTimes = await _fetchSunTimes(lat, lng, days);
+        sunTimes.forEach(s => { sunMap[s.displayDate?.slice(0, 10)] = s; });
+    } catch (e) { /* ok */ }
+
+    const forecastDays = [];
+    for (const [dateStr, items] of Object.entries(byDate)) {
+        if (forecastDays.length >= days) break;
+        const temps = items.map(i => i.main?.temp).filter(t => t != null);
+        const maxTemp = temps.length ? Math.max(...temps) : null;
+        const minTemp = temps.length ? Math.min(...temps) : null;
+        const pops = items.map(i => (i.pop || 0) * 100);
+        const maxPop = pops.length ? Math.max(...pops) : 0;
+        const winds = items.map(i => i.wind?.speed).filter(w => w != null);
+        const maxWind = winds.length ? Math.max(...winds) : null;
+        // Pick the weather condition from the midday slot or first available
+        const midday = items.find(i => { const h = new Date(i.dt * 1000).getHours(); return h >= 11 && h <= 14; }) || items[0];
+        const id = midday?.weather?.[0]?.id;
+        const condType = _owmConditionType(id);
+        const desc = midday?.weather?.[0]?.description || '';
+        const humids = items.map(i => i.main?.humidity).filter(h => h != null);
+        const avgHumidity = humids.length ? Math.round(humids.reduce((a, b) => a + b, 0) / humids.length) : null;
+        const sun = sunMap[dateStr];
+        forecastDays.push({
+            displayDate: dateStr,
+            interval: { startTime: dateStr },
+            maxTemperature: { degrees: maxTemp },
+            minTemperature: { degrees: minTemp },
+            weatherCondition: { type: condType, description: { text: desc.charAt(0).toUpperCase() + desc.slice(1) } },
+            precipitation: { probability: Math.round(maxPop), qpf: { millimeters: 0 } },
+            maxWind: { speed: { value: maxWind }, direction: items[0]?.wind?.deg },
+            relativeHumidity: avgHumidity,
+            avgHumidity,
+            uvIndex: null,
+            maxUvIndex: null,
+            sunrise: sun?.sunrise ?? null,
+            sunset: sun?.sunset ?? null
+        });
+    }
+    return { forecastDays };
 }
 
 const WeatherAPI = {
@@ -515,6 +775,16 @@ const WeatherAPI = {
     // === Data Source Preference ===
     getDataSource: _getDataSource,
     setDataSource: _setDataSource,
+
+    // === Open-Meteo (dedicated source) ===
+    getOpenMeteoCurrentConditions(lat, lng) { return _fetchOpenMeteoCurrent(lat, lng); },
+    getOpenMeteoHourlyForecast(lat, lng, hours) { return _fetchOpenMeteoHourly(lat, lng, hours); },
+    getOpenMeteoDailyForecast(lat, lng, days) { return _fetchOpenMeteoDaily(lat, lng, days); },
+
+    // === OWM (OpenWeatherMap) ===
+    getOWMCurrentConditions(lat, lng) { return _fetchOWMCurrent(lat, lng); },
+    getOWMHourlyForecast(lat, lng, hours) { return _fetchOWMHourly(lat, lng, hours); },
+    getOWMDailyForecast(lat, lng, days) { return _fetchOWMDaily(lat, lng, days); },
 
     // === NWS Current Conditions ===
     async getNWSCurrentConditions(lat, lng) {

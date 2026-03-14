@@ -17,17 +17,38 @@ async function initCurrentView(lat, lng) {
         lng = loc.lng;
     }
 
-    // Determine data source (google/open-meteo or nws)
+    // Determine data source
     const dataSource = WeatherAPI.getDataSource();
     const isNWS = dataSource === 'nws';
+    const isOpenMeteo = dataSource === 'open-meteo';
+    const isOWM = dataSource === 'owm';
+
+    function _getCurrentFn() {
+        if (isNWS) return WeatherAPI.getNWSCurrentConditions(lat, lng);
+        if (isOpenMeteo) return WeatherAPI.getOpenMeteoCurrentConditions(lat, lng);
+        if (isOWM) return WeatherAPI.getOWMCurrentConditions(lat, lng);
+        return WeatherAPI.getCurrentConditions(lat, lng); // google
+    }
+    function _getHourlyFn() {
+        if (isNWS) return WeatherAPI.getNWSHourlyForecast(lat, lng, 24);
+        if (isOpenMeteo) return WeatherAPI.getOpenMeteoHourlyForecast(lat, lng, 24);
+        if (isOWM) return WeatherAPI.getOWMHourlyForecast(lat, lng, 24);
+        return WeatherAPI.getHourlyForecast(lat, lng, 24); // google
+    }
+    function _getDailyFn(days) {
+        if (isNWS) return WeatherAPI.getNWSDailyForecast(lat, lng, days);
+        if (isOpenMeteo) return WeatherAPI.getOpenMeteoDailyForecast(lat, lng, days);
+        if (isOWM) return WeatherAPI.getOWMDailyForecast(lat, lng, days);
+        return WeatherAPI.getDailyForecast(lat, lng, days); // google
+    }
 
     // Fetch weather data in parallel
     const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult] = await Promise.allSettled([
-        isNWS ? WeatherAPI.getNWSCurrentConditions(lat, lng) : WeatherAPI.getCurrentConditions(lat, lng),
-        isNWS ? WeatherAPI.getNWSHourlyForecast(lat, lng, 24) : WeatherAPI.getHourlyForecast(lat, lng, 24),
+        _getCurrentFn(),
+        _getHourlyFn(),
         // Pull a few days so hourly day/night selection can use
         // each hour's date-specific sunrise/sunset window.
-        isNWS ? WeatherAPI.getNWSDailyForecast(lat, lng, 3) : WeatherAPI.getDailyForecast(lat, lng, 3),
+        _getDailyFn(3),
         WeatherAPI.getAirQuality(lat, lng),
         WeatherAPI.getPollen(lat, lng)
     ]);
@@ -89,11 +110,16 @@ async function _autoRefreshCurrent() {
     const loc = LocationManager.getCurrent();
     if (!loc?.lat) return;
 
-    const isNWS = WeatherAPI.getDataSource() === 'nws';
+    const _src = WeatherAPI.getDataSource();
+    function _getAutoRefreshCurrentFn() {
+        if (_src === 'nws') return WeatherAPI.getNWSCurrentConditions(loc.lat, loc.lng);
+        if (_src === 'open-meteo') return WeatherAPI.getOpenMeteoCurrentConditions(loc.lat, loc.lng);
+        if (_src === 'owm') return WeatherAPI.getOWMCurrentConditions(loc.lat, loc.lng);
+        return WeatherAPI.getCurrentConditions(loc.lat, loc.lng);
+    }
 
     const [currentResult, aqiResult] = await Promise.allSettled([
-        isNWS ? WeatherAPI.getNWSCurrentConditions(loc.lat, loc.lng)
-              : WeatherAPI.getCurrentConditions(loc.lat, loc.lng),
+        _getAutoRefreshCurrentFn(),
         WeatherAPI.getAirQuality(loc.lat, loc.lng)
     ]);
 

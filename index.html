@@ -225,6 +225,249 @@
         }
         .header-meta-row .location-search-container { flex: 1; min-width: 0; }
 
+        /* ---- Outlook info button (shown near SPC/WPC/Fire outlook galleries) ---- */
+        .outlook-info-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 11px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.13);
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 500;
+            font-family: inherit;
+            white-space: nowrap;
+            flex-shrink: 0;
+            transition: all var(--transition-smooth);
+        }
+        .outlook-info-btn:hover { background: rgba(100,180,255,0.14); border-color: rgba(100,180,255,0.35); color: #8dd4ff; }
+
+        /* ---- Outlook Info Modal ---- */
+        .outlook-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .outlook-modal-overlay.open { display: flex; }
+        .outlook-modal {
+            background: rgba(14,22,45,0.97);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            max-width: 680px;
+            width: 100%;
+            max-height: 88vh;
+            overflow-y: auto;
+            padding: 26px 26px 22px;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        }
+        .outlook-modal-close {
+            position: absolute;
+            top: 14px; right: 16px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.4rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 4px;
+            transition: color var(--transition-smooth);
+        }
+        .outlook-modal-close:hover { color: var(--text-primary); }
+        .outlook-modal h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+        .outlook-modal .modal-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 18px;
+        }
+        .outlook-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+        .outlook-tab {
+            padding: 5px 13px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.11);
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.78rem;
+            font-weight: 500;
+            font-family: inherit;
+            transition: all var(--transition-smooth);
+        }
+        .outlook-tab:hover { background: rgba(255,255,255,0.11); color: var(--text-secondary); }
+        .outlook-tab.active { background: rgba(100,180,255,0.18); border-color: rgba(100,180,255,0.4); color: #8dd4ff; }
+        .outlook-section { display: none; }
+        .outlook-section.active { display: block; }
+        .cat-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 11px 14px;
+            border-radius: 9px;
+            margin-bottom: 8px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.07);
+        }
+        .cat-swatch {
+            width: 14px;
+            min-width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            margin-top: 2px;
+        }
+        .cat-name {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 3px;
+        }
+        .cat-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ---- Source info button ---- */
+        .source-info-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.16);
+            border-radius: 50%;
+            color: var(--text-muted);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all var(--transition-smooth);
+        }
+        .source-info-btn:hover { background: rgba(100,180,255,0.15); border-color: rgba(100,180,255,0.4); color: #8dd4ff; }
+
+        /* ---- Source Info Modal ---- */
+        .info-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .info-modal-overlay.open { display: flex; }
+        .info-modal {
+            background: rgba(14,22,45,0.97);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            max-width: 620px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 28px 28px 24px;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        }
+        .info-modal h2 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 18px;
+            color: var(--text-primary);
+        }
+        .info-modal-close {
+            position: absolute;
+            top: 16px; right: 18px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.4rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 4px;
+            transition: color var(--transition-smooth);
+        }
+        .info-modal-close:hover { color: var(--text-primary); }
+        .source-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.09);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+        }
+        .source-card:last-child { margin-bottom: 0; }
+        .source-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .source-badge {
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 9px;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+        .badge-nws    { background: rgba(64,180,255,0.2);  color: #40b4ff; border: 1px solid rgba(64,180,255,0.35); }
+        .badge-google { background: rgba(255,180,64,0.2);  color: #ffb440; border: 1px solid rgba(255,180,64,0.35); }
+        .badge-om     { background: rgba(100,220,130,0.2); color: #64dc82; border: 1px solid rgba(100,220,130,0.35); }
+        .badge-owm    { background: rgba(220,120,255,0.2); color: #dc78ff; border: 1px solid rgba(220,120,255,0.35); }
+        .source-default-tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #40b4ff;
+            background: rgba(64,180,255,0.12);
+            border: 1px solid rgba(64,180,255,0.28);
+            border-radius: 20px;
+            padding: 2px 8px;
+        }
+        .source-card p {
+            font-size: 0.83rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+            margin: 0;
+        }
+        .source-card ul {
+            margin: 6px 0 0 0;
+            padding-left: 18px;
+            font-size: 0.81rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+        .source-comparison-note {
+            margin-top: 16px;
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 8px;
+            border-left: 3px solid rgba(100,180,255,0.5);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.55;
+        }
+
         /* ---- Refresh button ---- */
         .refresh-btn {
             display: flex;
@@ -256,9 +499,18 @@
                 <div class="header-title-row">
                     <h1>Ephrata Weather</h1>
                     <div class="source-toggle" title="Select weather data source">
-                        <button class="source-btn active" id="btn-src-google" onclick="setWeatherDataSource('google')">Google</button>
                         <button class="source-btn" id="btn-src-nws" onclick="setWeatherDataSource('nws')">NWS</button>
+                        <button class="source-btn" id="btn-src-google" onclick="setWeatherDataSource('google')">Google</button>
+                        <button class="source-btn" id="btn-src-open-meteo" onclick="setWeatherDataSource('open-meteo')">Open-Meteo</button>
+                        <button class="source-btn" id="btn-src-owm" onclick="setWeatherDataSource('owm')">OWM</button>
                     </div>
+                    <button class="source-info-btn" onclick="openSourceInfoModal()" title="About weather data sources" aria-label="Learn about weather data sources">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                    </button>
                 </div>
                 <div class="header-meta-row">
                     <div class="location-search-container" id="location-search-container">
@@ -589,6 +841,12 @@
                         <span class="ctrl-label">Type:</span>
                         <!-- Populated dynamically by buildTypeButtons() -->
                     </div>
+                    <div class="ctrl-row" id="spc-info-row" style="display:none;">
+                        <button onclick="openOutlookInfoModal('spc')" class="outlook-info-btn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            What do these categories mean?
+                        </button>
+                    </div>
                 </div>
                 <!-- Satellite Sub-Controls -->
                 <div class="spc-controls" id="satellite-controls">
@@ -627,9 +885,15 @@
 
             <!-- SPC Outlook Image Gallery -->
             <div id="spc-image-view" class="glass-static" style="padding:16px;">
-                <p id="spc-img-hint" style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
-                    Images from NOAA Storm Prediction Center &mdash; click any image to zoom in. Select a specific day above to view the interactive outlook map (Days 1&ndash;8).
-                </p>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+                    <p id="spc-img-hint" style="font-size:0.78rem;color:var(--text-muted);margin:0;">
+                        Images from NOAA Storm Prediction Center &mdash; click any image to zoom in. Select a specific day above to view the interactive outlook map (Days 1&ndash;8).
+                    </p>
+                    <button onclick="openOutlookInfoModal('spc')" class="outlook-info-btn" title="What do these categories mean?">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        What does this mean?
+                    </button>
+                </div>
                 <div id="spc-img-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
             </div>
 
@@ -655,17 +919,29 @@
 
             <!-- WPC Excessive Rainfall View -->
             <div id="wpc-rain-view" class="glass-static" style="display:none;padding:16px;">
-                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
-                    WPC Excessive Rainfall Outlooks &mdash; click any image to zoom in.
-                </p>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+                    <p style="font-size:0.78rem;color:var(--text-muted);margin:0;">
+                        WPC Excessive Rainfall Outlooks &mdash; click any image to zoom in.
+                    </p>
+                    <button onclick="openOutlookInfoModal('wpc')" class="outlook-info-btn" title="What do these categories mean?">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        What does this mean?
+                    </button>
+                </div>
                 <div id="wpc-rain-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
             </div>
 
             <!-- SPC Fire Weather View -->
             <div id="fire-wx-view" class="glass-static" style="display:none;padding:16px;">
-                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
-                    SPC Fire Weather Outlooks &mdash; click any image to zoom in.
-                </p>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+                    <p style="font-size:0.78rem;color:var(--text-muted);margin:0;">
+                        SPC Fire Weather Outlooks &mdash; click any image to zoom in.
+                    </p>
+                    <button onclick="openOutlookInfoModal('fire')" class="outlook-info-btn" title="What do these categories mean?">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        What does this mean?
+                    </button>
+                </div>
                 <div id="fire-wx-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
             </div>
 
@@ -693,6 +969,276 @@
         <div style="max-width:95vw;max-height:92vh;text-align:center;" onclick="event.stopPropagation()">
             <img id="zoom-img" src="" alt="" style="max-width:95vw;max-height:84vh;object-fit:contain;border-radius:6px;">
             <div id="zoom-caption" style="color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:10px;"></div>
+        </div>
+    </div>
+
+    <!-- Outlook Info Modal -->
+    <div id="outlook-info-modal" class="outlook-modal-overlay" onclick="if(event.target.id==='outlook-info-modal') closeOutlookInfoModal()">
+        <div class="outlook-modal" role="dialog" aria-modal="true" aria-labelledby="outlook-info-title">
+            <button class="outlook-modal-close" onclick="closeOutlookInfoModal()" aria-label="Close">&times;</button>
+            <h2 id="outlook-info-title">Understanding Weather Outlooks</h2>
+            <p class="modal-subtitle">Plain-language guide to what each category means — no meteorology degree required.</p>
+
+            <div class="outlook-tabs" id="outlook-info-tabs">
+                <button class="outlook-tab active" data-otab="spc-cat" onclick="switchOutlookTab('spc-cat')">SPC Categorical</button>
+                <button class="outlook-tab" data-otab="spc-prob" onclick="switchOutlookTab('spc-prob')">SPC Probability</button>
+                <button class="outlook-tab" data-otab="wpc" onclick="switchOutlookTab('wpc')">WPC Rainfall</button>
+                <button class="outlook-tab" data-otab="fire" onclick="switchOutlookTab('fire')">Fire Weather</button>
+            </div>
+
+            <!-- SPC Categorical -->
+            <div id="otab-spc-cat" class="outlook-section active">
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;">
+                    The SPC <strong>Categorical Outlook</strong> tells you the overall risk of severe thunderstorms anywhere in a shaded area. "Severe" means hail ≥1 inch, wind gusts ≥58 mph, or a tornado.
+                </p>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#96D896;border:1px solid #44BB44;"></div>
+                    <div>
+                        <div class="cat-name">Thunderstorm (TSTM)</div>
+                        <div class="cat-desc">Ordinary (non-severe) thunderstorms are possible. No significant risk of large hail, damaging winds, or tornadoes — but lightning and heavy rain can still occur. Think of a typical summer storm.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#44BB44;border:1px solid #44BB44;"></div>
+                    <div>
+                        <div class="cat-name">Marginal Risk (MRGL)</div>
+                        <div class="cat-desc">A low risk of isolated severe storms. Severe weather is possible but not expected to be widespread. Most people in the area will likely not see severe weather, but a quick spin-up tornado or a brief strong storm is worth watching.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#DDBB00;border:1px solid #DDBB00;"></div>
+                    <div>
+                        <div class="cat-name">Slight Risk (SLGT)</div>
+                        <div class="cat-desc">A few scattered severe storms are expected. You probably won't see severe weather at your exact location, but some areas nearby will. Stay weather-aware and have a plan to take shelter quickly. Hail, damaging winds, and an isolated tornado are all possible.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FF9900;border:1px solid #CC7700;"></div>
+                    <div>
+                        <div class="cat-name">Enhanced Risk (ENH)</div>
+                        <div class="cat-desc">Numerous severe storms are likely. More areas will be impacted than in a Slight Risk. Expect a greater chance of large hail, widespread damaging wind gusts, and the possibility of a few tornadoes. Take this seriously and know your shelter options in advance.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FF6060;border:1px solid #CC2222;"></div>
+                    <div>
+                        <div class="cat-name">Moderate Risk (MDT)</div>
+                        <div class="cat-desc">A significant severe weather outbreak is expected. Widespread damaging storms, large hail, and multiple tornadoes — including possibly strong (EF2+) ones — are likely over a large area. Serious preparations are needed. This is a high-impact weather day.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FF40FF;border:1px solid #CC00CC;"></div>
+                    <div>
+                        <div class="cat-name">High Risk (HIGH)</div>
+                        <div class="cat-desc">An extremely dangerous, potentially historic severe weather event is expected. Rare — issued only a few times per year at most. A major tornado outbreak with violent (EF4–EF5) tornadoes, extreme hail, or a destructive wind event is likely. Take immediate action; treat this as a life-threatening situation.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SPC Probability -->
+            <div id="otab-spc-prob" class="outlook-section">
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;">
+                    The <strong>Probability Outlook</strong> shows the chance (within 25 miles of any point) that a specific hazard — tornado, damaging wind, or large hail — will occur. Higher percentages mean a higher chance of that specific hazard hitting your area.
+                </p>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#50B450;border:1px solid #339933;"></div>
+                    <div>
+                        <div class="cat-name">2% — Very Low Chance</div>
+                        <div class="cat-desc">A very small chance that a tornado/large hail/damaging wind occurs within 25 miles of you. Think of this as "keep an eye on the weather" territory — most people will not be affected.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#64C83C;border:1px solid #55AA00;"></div>
+                    <div>
+                        <div class="cat-name">5% — Low Chance</div>
+                        <div class="cat-desc">Still a relatively small chance, but worth being aware. Isolated severe weather is possible. Have a plan ready but don't cancel outdoor activities just yet.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FFDC00;border:1px solid #CCAA00;"></div>
+                    <div>
+                        <div class="cat-name">10% — Elevated Chance</div>
+                        <div class="cat-desc">A meaningful chance of severe weather near you. Scattered storms capable of this hazard are expected. Stay weather-aware throughout the day and know where to seek shelter.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FF8C00;border:1px solid #CC7000;"></div>
+                    <div>
+                        <div class="cat-name">15% — Moderate Chance</div>
+                        <div class="cat-desc">A solid chance that this specific hazard affects your area. Prepare ahead of time, monitor weather updates frequently, and be ready to act quickly.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#DC1E1E;border:1px solid #BB1111;"></div>
+                    <div>
+                        <div class="cat-name">30% — High Chance</div>
+                        <div class="cat-desc">A significant chance of this hazard occurring. Multiple events are expected. This is a high-end severe weather day for this hazard type. Have shelter plans finalized and be ready to act at a moment's notice.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#A000C8;border:1px solid #8800AA;"></div>
+                    <div>
+                        <div class="cat-name">45%+ — Very High Chance</div>
+                        <div class="cat-desc">A very high likelihood of this hazard within 25 miles. A major outbreak is expected. Take this extremely seriously — prepare now, not later.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#6400B4;border:1px solid #6600CC;"></div>
+                    <div>
+                        <div class="cat-name">60%+ — Extremely High</div>
+                        <div class="cat-desc">Extremely rare. A catastrophic, near-certain outbreak for this hazard. Used for the most dangerous outbreak days. All residents in this area should take shelter well before storms arrive.</div>
+                    </div>
+                </div>
+                <div class="cat-row" style="border-color:rgba(187,17,17,0.3);">
+                    <div class="cat-swatch" style="background:transparent;border:2px solid #BB1111;"></div>
+                    <div>
+                        <div class="cat-name">Conditional Moderate (CIG2) — Tornado & Wind Only</div>
+                        <div class="cat-desc">The probability zone is <em>conditional</em> — meaning the 10%+ chance of that hazard only materializes if a particularly favorable weather pattern sets up. It may be higher or lower depending on how the storm system evolves. Used for tornado and wind outlooks.</div>
+                    </div>
+                </div>
+                <div class="cat-row" style="border-color:rgba(119,0,204,0.3);">
+                    <div class="cat-swatch" style="background:transparent;border:2px solid #7700CC;"></div>
+                    <div>
+                        <div class="cat-name">Conditional High (CIG3) — Tornado & Wind Only</div>
+                        <div class="cat-desc">The highest conditional probability level, meaning if conditions become favorable, a major outbreak is possible. This is a significant "watch this carefully" signal for tornado and wind outlooks only. Not used for hail.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WPC Excessive Rainfall -->
+            <div id="otab-wpc" class="outlook-section">
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;">
+                    The <strong>WPC Excessive Rainfall Outlook</strong> shows where heavy rain could cause flash flooding. It reflects the probability of rainfall that exceeds flash flood guidance thresholds — not just "heavy rain," but rain heavy enough to cause flooding of roads, streams, and low-lying areas.
+                </p>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#88CC66;border:1px solid #55AA33;"></div>
+                    <div>
+                        <div class="cat-name">Marginal Risk</div>
+                        <div class="cat-desc">Isolated flash flooding is possible, mainly in spots with poor drainage, areas that already had recent rain, or burn scars. Most people won't experience flooding, but stay aware if you're near a stream or in a low-lying area.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FFDD44;border:1px solid #CCAA00;"></div>
+                    <div>
+                        <div class="cat-name">Slight Risk</div>
+                        <div class="cat-desc">Scattered flash flooding is expected somewhere in the area. Some roads and streams may flood. Avoid driving through flooded roadways and monitor local weather alerts. Vulnerable areas like underpasses are especially at risk.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FF8800;border:1px solid #CC5500;"></div>
+                    <div>
+                        <div class="cat-name">Moderate Risk</div>
+                        <div class="cat-desc">Widespread flash flooding is likely across a large area. Significant impacts expected — multiple roads flooded, streams and rivers rising rapidly, and potential for structural flooding. Be prepared to move to higher ground and avoid all flood-prone areas.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FF2222;border:1px solid #CC0000;"></div>
+                    <div>
+                        <div class="cat-name">High Risk</div>
+                        <div class="cat-desc">Major, potentially life-threatening flash flooding is expected. Rare. Rivers could rise dramatically and rapidly. This is a flood emergency-level event — do not attempt to travel through any flooded area. Have an evacuation plan ready.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fire Weather -->
+            <div id="otab-fire" class="outlook-section">
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;">
+                    The <strong>SPC Fire Weather Outlook</strong> highlights areas where dry air, strong winds, and low humidity create dangerous conditions for wildfires to ignite and spread rapidly. Even a small spark from a campfire, downed power line, or cigarette can become a fast-moving wildfire.
+                </p>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FFE066;border:1px solid #CCAA00;"></div>
+                    <div>
+                        <div class="cat-name">Elevated</div>
+                        <div class="cat-desc">Conditions are somewhat favorable for fire spread. Grasses and brush can ignite more easily than usual and fires may spread faster than normal. Use extra caution with any open flames outdoors.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FF6600;border:1px solid #CC4400;"></div>
+                    <div>
+                        <div class="cat-name">Critical</div>
+                        <div class="cat-desc">Fire weather conditions are dangerous. A combination of very low relative humidity (often below 15–20%), strong winds, and dry fuels creates ideal wildfire conditions. Any fire that starts could spread rapidly and be difficult to control. Outdoor burning is extremely hazardous.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#CC00CC;border:1px solid #990099;"></div>
+                    <div>
+                        <div class="cat-name">Extremely Critical</div>
+                        <div class="cat-desc">Historically dangerous fire weather conditions are expected. Extreme wind speeds combined with very low humidity and critically dry fuels create a recipe for explosive, potentially uncontrollable wildfires. Evacuations may be necessary. This is a rare, high-impact event — used for the most dangerous fire weather setups of the year.</div>
+                    </div>
+                </div>
+                <div style="margin-top:12px;padding:11px 13px;background:rgba(255,100,0,0.07);border:1px solid rgba(255,100,0,0.2);border-radius:8px;font-size:0.78rem;color:var(--text-muted);line-height:1.55;">
+                    <strong style="color:#FF8844;">Remember:</strong> Fire weather outlooks focus on the <em>atmosphere's</em> potential to support fire spread — local fuel conditions, recent precipitation, and any active fire situations also play a key role in actual fire behavior.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Source Info Modal -->
+    <div id="source-info-modal" class="info-modal-overlay" onclick="if(event.target.id==='source-info-modal') closeSourceInfoModal()">
+        <div class="info-modal" role="dialog" aria-modal="true" aria-labelledby="source-info-title">
+            <button class="info-modal-close" onclick="closeSourceInfoModal()" aria-label="Close">&times;</button>
+            <h2 id="source-info-title">Weather Data Sources</h2>
+
+            <div class="source-card">
+                <div class="source-card-header">
+                    <span class="source-badge badge-nws">NWS</span>
+                    <span class="source-default-tag">Default</span>
+                </div>
+                <p><strong>National Weather Service</strong> — official U.S. government weather agency. Data comes directly from NOAA observation stations and forecast offices, making it the most authoritative source for U.S. locations.</p>
+                <ul>
+                    <li>Official government forecasts — highly reliable for U.S.</li>
+                    <li>Real-time station observations (temperature, pressure, clouds)</li>
+                    <li>Wind data supplemented by Open-Meteo for better accuracy</li>
+                    <li>UV index supplemented by Open-Meteo (NWS doesn't provide it)</li>
+                    <li>7-day forecast; may be slower to load due to multiple API calls</li>
+                </ul>
+            </div>
+
+            <div class="source-card">
+                <div class="source-card-header">
+                    <span class="source-badge badge-google">Google</span>
+                </div>
+                <p><strong>Google Weather API</strong> — Google's weather service, which aggregates data from multiple providers to produce smoothed, model-based forecasts worldwide.</p>
+                <ul>
+                    <li>Good global coverage, works for any location worldwide</li>
+                    <li>Provides full 10-day forecasts</li>
+                    <li>May differ from NWS, especially for temperature and precipitation timing</li>
+                    <li>Smoothed/blended data — can sometimes feel less "local"</li>
+                    <li>Requires API key; falls back to Open-Meteo if unavailable</li>
+                </ul>
+            </div>
+
+            <div class="source-card">
+                <div class="source-card-header">
+                    <span class="source-badge badge-om">Open-Meteo</span>
+                </div>
+                <p><strong>Open-Meteo</strong> — free, open-source weather API based on European and global numerical weather models (ERA5, GFS, ECMWF). No API key required.</p>
+                <ul>
+                    <li>Completely free and open — great as a comparison source</li>
+                    <li>Uses global models (ECMWF, GFS) — strong for medium-range forecasts</li>
+                    <li>Up to 16-day forecast available</li>
+                    <li>Can differ from NWS on short-term timing of precipitation</li>
+                    <li>Excellent wind and UV index data from model output</li>
+                </ul>
+            </div>
+
+            <div class="source-card">
+                <div class="source-card-header">
+                    <span class="source-badge badge-owm">OWM</span>
+                </div>
+                <p><strong>OpenWeatherMap</strong> — a popular weather data provider with global coverage, using a blend of weather station data and numerical models.</p>
+                <ul>
+                    <li>Good global coverage with hyperlocal station blending</li>
+                    <li>Free tier provides current conditions + 5-day/3-hour forecast</li>
+                    <li>Daily forecast is derived by aggregating 3-hour intervals</li>
+                    <li>UV index not included in free tier (supplemented by Open-Meteo)</li>
+                    <li>Also powers the temperature, wind, and cloud map overlays</li>
+                </ul>
+            </div>
+
+            <div class="source-comparison-note">
+                <strong>Tip:</strong> Differences between sources are normal — each uses different models, observation networks, and update schedules. NWS is generally the best choice for U.S. locations. Open-Meteo and OWM are useful for comparing forecasts or when NWS coverage isn't available.
+            </div>
         </div>
     </div>
 
@@ -726,14 +1272,48 @@
     // ============================================================
     function setWeatherDataSource(src) {
         WeatherAPI.setDataSource(src);
-        document.getElementById('btn-src-google').classList.toggle('active', src === 'google');
-        document.getElementById('btn-src-nws').classList.toggle('active', src === 'nws');
+        ['nws', 'google', 'open-meteo', 'owm'].forEach(s => {
+            const btn = document.getElementById('btn-src-' + s);
+            if (btn) btn.classList.toggle('active', s === src);
+        });
         // Reset all data views so they re-fetch with the new source on next visit
         VALID_VIEWS.forEach(v => { viewInited[v] = false; });
         // Immediately re-fetch data for currently active view
         if (currentViewId === 'current' || currentViewId === 'forecast') {
             initViewData(currentViewId);
         }
+    }
+
+    function openSourceInfoModal() {
+        document.getElementById('source-info-modal').classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeSourceInfoModal() {
+        document.getElementById('source-info-modal').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+
+    // ============================================================
+    // OUTLOOK INFO MODAL
+    // ============================================================
+    // Maps from the outlook type passed by the button to the default tab to show
+    const _OUTLOOK_TAB_MAP = { spc: 'spc-cat', prob: 'spc-prob', wpc: 'wpc', fire: 'fire' };
+
+    function openOutlookInfoModal(type) {
+        const defaultTab = _OUTLOOK_TAB_MAP[type] || 'spc-cat';
+        switchOutlookTab(defaultTab);
+        document.getElementById('outlook-info-modal').classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeOutlookInfoModal() {
+        document.getElementById('outlook-info-modal').classList.remove('open');
+        document.body.style.overflow = '';
+    }
+    function switchOutlookTab(tab) {
+        document.querySelectorAll('#outlook-info-tabs .outlook-tab').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.otab === tab));
+        document.querySelectorAll('.outlook-section').forEach(sec =>
+            sec.classList.toggle('active', sec.id === 'otab-' + tab));
     }
 
     // Refresh button — re-fetch data for the current view
@@ -746,14 +1326,19 @@
         }
     }
 
-    // Initialise toggle state from saved preference
+    // Initialise toggle state from saved preference (NWS is default)
     (function() {
         const saved = WeatherAPI.getDataSource();
-        if (saved === 'nws') {
-            document.getElementById('btn-src-google').classList.remove('active');
-            document.getElementById('btn-src-nws').classList.add('active');
-        }
+        ['nws', 'google', 'open-meteo', 'owm'].forEach(s => {
+            const btn = document.getElementById('btn-src-' + s);
+            if (btn) btn.classList.toggle('active', s === saved);
+        });
     })();
+
+    // Close modals on ESC
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { closeSourceInfoModal(); closeOutlookInfoModal(); }
+    });
 
     // ============================================================
     // SPA ROUTER
@@ -934,10 +1519,16 @@
         ['literal', [1, 0]]
     ];
 
+    // PROB_LEGEND_HAIL excludes CIG3 since SPC does not use Conditional High for hail
+    const PROB_LEGEND_HAIL = PROB_LEGEND.filter(e => !e.label.includes('cig3') && !e.label.toLowerCase().includes('cond. high'));
+
     function updateSPCLegend(type) {
         document.getElementById('spc-legend').classList.add('visible');
         document.getElementById('legend-title').textContent = type === 'cat' ? 'Categorical Risk' : 'Probability';
-        const data = type === 'cat' ? CAT_LEGEND : PROB_LEGEND;
+        let data;
+        if (type === 'cat') data = CAT_LEGEND;
+        else if (type === 'hail') data = PROB_LEGEND_HAIL;
+        else data = PROB_LEGEND;
         document.getElementById('legend-items').innerHTML = data.map(e =>
             `<div class="legend-row"><div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};"></div><span>${e.label}</span></div>`
         ).join('');
@@ -1031,6 +1622,9 @@
                 }
             }, firstSymbolLayerId);
             if (!isCat) {
+                // CIG1 (Conditional Low) and CIG2 (Conditional Moderate) apply to tornado & wind
+                // CIG3 (Conditional High) does NOT apply to hail — SPC only uses it for torn/wind
+                const hasCig3 = (type !== 'hail');
                 map.addLayer({ id: 'spc-fill-cig1', type: 'fill', source: 'spc-data',
                     filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'],
                     paint: { 'fill-pattern': 'cig1-pattern' }
@@ -1039,14 +1633,16 @@
                     filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'],
                     paint: { 'fill-pattern': 'cig2-pattern' }
                 }, firstSymbolLayerId);
-                map.addLayer({ id: 'spc-fill-cig3', type: 'fill', source: 'spc-data',
-                    filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
-                    paint: { 'fill-pattern': 'cig3-pattern' }
-                }, firstSymbolLayerId);
-                map.addLayer({ id: 'spc-line-cig3-double', type: 'line', source: 'spc-data',
-                    filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
-                    paint: { 'line-color': '#7700CC', 'line-width': 5, 'line-gap-width': 2 }
-                }, firstSymbolLayerId);
+                if (hasCig3) {
+                    map.addLayer({ id: 'spc-fill-cig3', type: 'fill', source: 'spc-data',
+                        filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
+                        paint: { 'fill-pattern': 'cig3-pattern' }
+                    }, firstSymbolLayerId);
+                    map.addLayer({ id: 'spc-line-cig3-double', type: 'line', source: 'spc-data',
+                        filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
+                        paint: { 'line-color': '#7700CC', 'line-width': 5, 'line-gap-width': 2 }
+                    }, firstSymbolLayerId);
+                }
             }
             updateSPCLegend(type);
         } catch (e) {
@@ -1342,6 +1938,8 @@
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
         document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
+        const spcInfoRow = document.getElementById('spc-info-row');
+        if (spcInfoRow) spcInfoRow.style.display = layer === 'spc' ? '' : 'none';
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
         document.getElementById('basemap-controls').classList.toggle('visible', mapLayer);
