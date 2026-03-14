@@ -969,10 +969,6 @@
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                             What do these categories mean?
                         </button>
-                        <button onclick="openDiscussionModal('wpc-' + currentWPCDay)" class="discussion-btn">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                            Forecaster Discussion
-                        </button>
                     </div>
                 </div>
                 <!-- Fire Weather Sub-Controls -->
@@ -1501,36 +1497,36 @@
     // FORECASTER DISCUSSION MODAL
     // ============================================================
     // NWS product type codes for each outlook
-    const DISCUSSION_PRODUCT_TYPES = {
-        'spc-1':    { code: 'SWODY1', label: 'SPC Day 1 Convective Outlook' },
-        'spc-2':    { code: 'SWODY2', label: 'SPC Day 2 Convective Outlook' },
-        'spc-3':    { code: 'SWODY3', label: 'SPC Day 3 Convective Outlook' },
-        'spc-48':   { code: 'SWOD48', label: 'SPC Day 4–8 Convective Outlook' },
-        'wpc-1':    { code: 'ERODY1', label: 'WPC Day 1 Excessive Rainfall Outlook' },
-        'wpc-2':    { code: 'ERODY2', label: 'WPC Day 2 Excessive Rainfall Outlook' },
-        'wpc-3':    { code: 'ERODY3', label: 'WPC Day 3 Excessive Rainfall Outlook' },
-        'fire-1':   { code: 'FWDDY1', label: 'SPC Day 1 Fire Weather Outlook' },
-        'fire-2':   { code: 'FWDDY2', label: 'SPC Day 2 Fire Weather Outlook' },
+    // Discussion text URLs (SPC .txt endpoints, fetched via CORS proxy same as GeoJSON)
+    const DISCUSSION_URLS = {
+        'spc-1':  { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.txt',          label: 'SPC Day 1 Convective Outlook' },
+        'spc-2':  { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.txt',          label: 'SPC Day 2 Convective Outlook' },
+        'spc-3':  { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.txt',          label: 'SPC Day 3 Convective Outlook' },
+        'spc-48': { url: 'https://www.spc.noaa.gov/products/exper/day4-8/day4-8otlk.txt',  label: 'SPC Day 4–8 Convective Outlook' },
+        'fire-1': { url: 'https://www.spc.noaa.gov/products/fire_wx/day1otlk.txt',          label: 'SPC Day 1 Fire Weather Outlook' },
+        'fire-2': { url: 'https://www.spc.noaa.gov/products/fire_wx/day2otlk.txt',          label: 'SPC Day 2 Fire Weather Outlook' },
     };
 
-    async function fetchDiscussion(productCode) {
-        const listUrl = 'https://api.weather.gov/products/types/' + productCode;
-        const listRes = await fetch(listUrl, { headers: { Accept: 'application/geo+json' } });
-        if (!listRes.ok) throw new Error('Product list fetch failed (' + listRes.status + ')');
-        const listData = await listRes.json();
-        const products = listData['@graph'] || listData.features || [];
-        if (!products.length) throw new Error('No products found for type ' + productCode);
-        const productId = products[0].id || products[0]['@id']?.split('/').pop();
-        if (!productId) throw new Error('Could not parse product ID');
-        const prodRes = await fetch('https://api.weather.gov/products/' + productId,
-            { headers: { Accept: 'application/geo+json' } });
-        if (!prodRes.ok) throw new Error('Product fetch failed (' + prodRes.status + ')');
-        const prodData = await prodRes.json();
-        return prodData.productText || prodData.text || '';
+    async function fetchDiscussionText(url) {
+        // Try direct fetch first (SPC serves CORS headers)
+        try {
+            const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
+            if (r.ok) return r.text();
+        } catch (_) { /* fall through to proxy */ }
+        // Proxy fallback
+        try {
+            const p1 = 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(url);
+            const r1 = await fetch(p1, { cache: 'no-store' });
+            if (r1.ok) return r1.text();
+        } catch (_) { /* fall through */ }
+        const p2 = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        const r2 = await fetch(p2, { cache: 'no-store' });
+        if (!r2.ok) throw new Error('All fetches failed (' + r2.status + ')');
+        return r2.text();
     }
 
     function openDiscussionModal(key) {
-        const info = DISCUSSION_PRODUCT_TYPES[key];
+        const info = DISCUSSION_URLS[key];
         if (!info) return;
         document.getElementById('discussion-modal-title').textContent = 'Forecaster Discussion';
         document.getElementById('discussion-modal-subtitle').textContent = info.label;
@@ -1538,7 +1534,7 @@
             '<div class="discussion-loading">Loading discussion…</div>';
         document.getElementById('discussion-modal').classList.add('open');
         document.body.style.overflow = 'hidden';
-        fetchDiscussion(info.code).then(text => {
+        fetchDiscussionText(info.url).then(text => {
             if (!text.trim()) {
                 document.getElementById('discussion-modal-body').innerHTML =
                     '<div class="discussion-error">No discussion text available at this time.</div>';
@@ -1549,7 +1545,7 @@
         }).catch(err => {
             document.getElementById('discussion-modal-body').innerHTML =
                 '<div class="discussion-error">Could not load discussion: ' + err.message +
-                '<br><br>You can view it directly at <a href="https://www.spc.noaa.gov/products/outlook/" ' +
+                '<br><br>View directly at <a href="https://www.spc.noaa.gov/products/outlook/" ' +
                 'target="_blank" rel="noopener" style="color:#8dd4ff;">spc.noaa.gov/products/outlook/</a></div>';
         });
     }
