@@ -9,11 +9,13 @@ async function initForecastView(lat, lng) {
         lng = loc.lng;
     }
 
-    const isNWS = WeatherAPI.getDataSource() === 'nws';
+    const _src = WeatherAPI.getDataSource();
     try {
-        const data = isNWS
-            ? await WeatherAPI.getNWSDailyForecast(lat, lng, 10)
-            : await WeatherAPI.getDailyForecast(lat, lng, 10);
+        let data;
+        if (_src === 'nws') data = await WeatherAPI.getNWSDailyForecast(lat, lng, 10);
+        else if (_src === 'open-meteo') data = await WeatherAPI.getOpenMeteoDailyForecast(lat, lng, 10);
+        else if (_src === 'owm') data = await WeatherAPI.getOWMDailyForecast(lat, lng, 7);
+        else data = await WeatherAPI.getDailyForecast(lat, lng, 10);
         renderForecast(data);
     } catch (err) {
         document.getElementById('forecast-list').innerHTML =
