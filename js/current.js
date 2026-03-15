@@ -1179,10 +1179,8 @@ function renderHourlyForecast(data, forecastDays) {
 
     strip.innerHTML = _hourlyData.map((hour, i) => {
         const time = i === 0 ? 'Now' : WeatherAPI.formatTime(hour.interval?.startTime || hour.displayDateTime);
-        const temp = WeatherAPI.formatTemp(hour.temperature?.degrees);
         const condType = hour.weatherCondition?.type || '';
 
-        // Night check per hour using that hour's forecast day sunrise/sunset
         const tsMs = Date.parse(hour.interval?.startTime || hour.displayDateTime || '');
         const dayForHour = _dayForTimestamp(tsMs, forecastDays);
         const hourNight = _isTimestampNight(tsMs, dayForHour);
@@ -1198,141 +1196,63 @@ function renderHourlyForecast(data, forecastDays) {
                  title="Tap for details">
                 <span class="time">${time}</span>
                 <div style="width:36px;height:36px;">${iconSvg}</div>
-                <span class="temp">${temp}&deg;</span>
-                ${precipStr ? `<span class="precip" style="display:flex;align-items:center;gap:2px;white-space:nowrap;"><svg width="9" height="9" viewBox="0 0 24 24" fill="rgba(100,180,255,0.85)" style="flex-shrink:0;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>${precipStr}</span>` : ''}
+                ${precipStr ? `<span class="precip" style="display:flex;align-items:center;gap:2px;white-space:nowrap;"><svg width="9" height="9" viewBox="0 0 24 24" fill="rgba(100,180,255,0.85)" style="flex-shrink:0;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>${precipStr}</span>` : '<span class="precip" style="visibility:hidden;font-size:0.7rem;">--</span>'}
             </div>
         `;
     }).join('');
 
-    // Render hourly charts after the strip
-    renderHourlyCharts(_hourlyData);
+    _renderMetricRow(_hourlyData, _activeMetric);
 }
 
-// ---- Hourly Charts ----
-let _activeChart = 'temp';
+// ---- Hourly Metric Row ----
+let _activeMetric = 'temp';
 
-function renderHourlyCharts(hours) {
-    const container = document.getElementById('hourly-charts-container');
-    if (!container) return;
-    container.style.display = 'block';
-    _drawChart(_activeChart, hours);
+function _getMetricValue(hour, metric) {
+    switch (metric) {
+        case 'temp':      return hour.temperature?.degrees != null ? Math.round(hour.temperature.degrees) : null;
+        case 'feelslike': return hour.feelsLikeTemperature?.degrees != null ? Math.round(hour.feelsLikeTemperature.degrees) : null;
+        case 'humidity':  return hour.relativeHumidity != null ? Math.round(hour.relativeHumidity) : null;
+        case 'wind':      return hour.wind?.speed != null ? Math.round(hour.wind.speed) : null;
+        case 'precip':    return hour.precipitation?.probability != null ? Math.round(hour.precipitation.probability) : null;
+        case 'windgusts': return hour.wind?.gust != null ? Math.round(hour.wind.gust) : null;
+        default:          return null;
+    }
 }
 
-function switchHourlyChart(metric) {
-    _activeChart = metric;
-    document.querySelectorAll('.chart-tab').forEach(btn =>
+function _metricUnit(metric) {
+    switch (metric) {
+        case 'temp':
+        case 'feelslike': return '\u00b0';
+        case 'humidity':
+        case 'precip':    return '%';
+        case 'wind':
+        case 'windgusts': return '';
+        default:          return '';
+    }
+}
+
+function _renderMetricRow(hours, metric) {
+    const row = document.getElementById('hourly-metric-row');
+    if (!row || !hours.length) return;
+
+    const unit = _metricUnit(metric);
+    const parts = [];
+    hours.forEach((hour, i) => {
+        const val = _getMetricValue(hour, metric);
+        const display = val != null ? `${val}${unit}` : '--';
+        parts.push(`<span class="hourly-mval">${display}</span>`);
+        if (i < hours.length - 1) {
+            parts.push(`<span class="hourly-mdash" aria-hidden="true">\u2014</span>`);
+        }
+    });
+    row.innerHTML = parts.join('');
+}
+
+function switchMetric(metric) {
+    _activeMetric = metric;
+    document.querySelectorAll('.metric-pill').forEach(btn =>
         btn.classList.toggle('active', btn.dataset.metric === metric));
-    _drawChart(metric, _hourlyData);
-}
-
-function _drawChart(metric, hours) {
-    const canvas = document.getElementById('hourly-chart-svg');
-    if (!canvas || !hours.length) return;
-
-    const W = canvas.clientWidth || 700;
-    const H = 160;
-    canvas.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    canvas.setAttribute('height', H);
-
-    // Extract values
-    const entries = hours.slice(0, 24).map((h, i) => {
-        let val = null;
-        if (metric === 'temp')    val = h.temperature?.degrees;
-        if (metric === 'wind')    val = h.wind?.speed;
-        if (metric === 'pressure') {
-            const mb = h.pressure?.meanSeaLevelMillibars;
-            val = mb != null ? (mb * 0.02953).toFixed(2) * 1 : null; // convert to inHg
-        }
-        if (metric === 'precip')  val = h.precipitation?.probability ?? 0;
-        const time = i === 0 ? 'Now' : WeatherAPI.formatTime(h.interval?.startTime || h.displayDateTime);
-        return { val, time, i };
-    }).filter(e => e.val != null);
-
-    if (entries.length < 2) {
-        canvas.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="13">No data available</text>';
-        return;
-    }
-
-    const PAD_L = 44, PAD_R = 12, PAD_T = 16, PAD_B = 36;
-    const plotW = W - PAD_L - PAD_R;
-    const plotH = H - PAD_T - PAD_B;
-
-    const vals = entries.map(e => e.val);
-    let minV = Math.min(...vals);
-    let maxV = Math.max(...vals);
-    // Add padding so line doesn't hit edges
-    const spread = maxV - minV || 1;
-    minV -= spread * 0.1;
-    maxV += spread * 0.1;
-
-    const xOf = (idx) => PAD_L + (idx / (entries.length - 1)) * plotW;
-    const yOf = (v)   => PAD_T + plotH - ((v - minV) / (maxV - minV)) * plotH;
-
-    // Build path
-    let linePath = '';
-    let areaPath = '';
-    entries.forEach((e, i) => {
-        const x = xOf(i), y = yOf(e.val);
-        if (i === 0) { linePath += `M${x},${y}`; areaPath += `M${x},${PAD_T + plotH} L${x},${y}`; }
-        else         { linePath += ` L${x},${y}`; areaPath += ` L${x},${y}`; }
-    });
-    areaPath += ` L${xOf(entries.length - 1)},${PAD_T + plotH} Z`;
-
-    // Color by metric
-    const colors = {
-        temp:     { line: '#FF7043', area: 'rgba(255,112,67,0.18)', dot: '#FF7043' },
-        wind:     { line: '#42A5F5', area: 'rgba(66,165,245,0.18)', dot: '#42A5F5' },
-        pressure: { line: '#AB47BC', area: 'rgba(171,71,188,0.18)', dot: '#AB47BC' },
-        precip:   { line: '#26C6DA', area: 'rgba(38,198,218,0.18)', dot: '#26C6DA' }
-    };
-    const c = colors[metric] || colors.temp;
-
-    // Units for y axis labels
-    const unitSuffix = metric === 'temp' ? '°' : metric === 'wind' ? '' : metric === 'pressure' ? '"' : '%';
-
-    // Y axis ticks (5 evenly spaced)
-    const yTicks = 4;
-    let yLabels = '';
-    for (let t = 0; t <= yTicks; t++) {
-        const v = minV + (maxV - minV) * (t / yTicks);
-        const y = yOf(v);
-        const label = metric === 'pressure' ? v.toFixed(2) : Math.round(v) + unitSuffix;
-        yLabels += `<line x1="${PAD_L}" y1="${y}" x2="${PAD_L + plotW}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-                    <text x="${PAD_L - 5}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
-    }
-
-    // X axis time labels (every 4 hours)
-    let xLabels = '';
-    entries.forEach((e, i) => {
-        if (i % 4 === 0 || i === entries.length - 1) {
-            xLabels += `<text x="${xOf(i)}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${e.time}</text>`;
-        }
-    });
-
-    // Dots at data points (every 4 hours to avoid clutter)
-    let dots = '';
-    entries.forEach((e, i) => {
-        if (i % 4 === 0 || i === 0) {
-            const v = metric === 'pressure' ? e.val.toFixed(2) + '"' : Math.round(e.val) + unitSuffix;
-            dots += `<circle cx="${xOf(i)}" cy="${yOf(e.val)}" r="3" fill="${c.dot}" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                     <text x="${xOf(i)}" y="${yOf(e.val) - 7}" text-anchor="middle" fill="${c.dot}" font-size="9" font-weight="500">${v}</text>`;
-        }
-    });
-
-    const chartId = 'cg_' + metric;
-    canvas.innerHTML = `
-        <defs>
-            <linearGradient id="${chartId}" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="${c.line}" stop-opacity="0.5"/>
-                <stop offset="100%" stop-color="${c.line}" stop-opacity="0"/>
-            </linearGradient>
-        </defs>
-        ${yLabels}
-        ${xLabels}
-        <path d="${areaPath}" fill="url(#${chartId})"/>
-        <path d="${linePath}" fill="none" stroke="${c.line}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-        ${dots}
-    `;
+    _renderMetricRow(_hourlyData, metric);
 }
 
 function renderAirQuality(data) {
