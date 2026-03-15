@@ -1085,6 +1085,16 @@
                 </div>
                 <!-- Radar Sub-Controls -->
                 <div class="radar-controls" id="radar-controls">
+                    <!-- Product Selector -->
+                    <div class="ctrl-row" style="flex-wrap:wrap;gap:5px;">
+                        <button class="type-btn active" data-product="precip_type" onclick="setRadarProduct('precip_type')">Precip Type</button>
+                        <button class="type-btn" data-product="refl" onclick="setRadarProduct('refl')">Reflectivity</button>
+                        <button class="type-btn" data-product="mesh" onclick="setRadarProduct('mesh')">Hail (MESH)</button>
+                        <button class="type-btn" data-product="qpe6h" onclick="setRadarProduct('qpe6h')">6hr Precip</button>
+                        <button class="type-btn" data-product="qpe24h" onclick="setRadarProduct('qpe24h')">24hr Precip</button>
+                        <button class="type-btn" data-product="lightning" onclick="setRadarProduct('lightning')">Lightning</button>
+                        <button class="type-btn" data-product="rotation" onclick="setRadarProduct('rotation')">Az Shear</button>
+                    </div>
                     <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <button id="radar-play-btn" class="day-btn active" onclick="toggleRadarAnimation()" style="flex-shrink:0;min-width:70px;">&#9654; Play</button>
                         <input type="range" id="radar-frame-slider" min="0" max="14" value="14"
@@ -1164,6 +1174,10 @@
                 <div class="spc-legend" id="spc-legend">
                     <div class="legend-title" id="legend-title">Categorical Risk</div>
                     <div id="legend-items"></div>
+                </div>
+                <div class="spc-legend radar-legend" id="radar-legend" style="display:none;">
+                    <div class="legend-title" id="radar-legend-title">Reflectivity</div>
+                    <div id="radar-legend-items"></div>
                 </div>
                 <div class="map-loading" id="map-loading" style="display:none;">
                     <div class="spinner"></div>
@@ -1684,41 +1698,125 @@
     }
 
     // ============================================================
-    // MRMS RADAR (GitHub-hosted master images)
+    // MRMS RADAR (GitHub-hosted images — multiple products)
     // ============================================================
     const MRMS_BASE   = 'https://raw.githubusercontent.com/EphrataWeather/MRMS/main/public/data/';
-    const MRMS_FRAMES = 15;
     // Image source corners [lng, lat]: NW, NE, SE, SW  (bounds 24–50°N, 130–60°W)
     const MRMS_COORDS = [[-130, 50], [-60, 50], [-60, 24], [-130, 24]];
 
-    let _radarMeta      = null;   // cached metadata array (loaded once per session)
-    let _radarFrameIdx  = 0;      // currently displayed frame (0 = most recent)
-    let _radarAnimTimer = null;
-    let _radarLoaded    = false;  // whether the Mapbox source/layer exist
+    // Product definitions: filePrefix, frame count, metadata file prefix
+    const MRMS_PRODUCT_DEFS = {
+        precip_type: { label: 'Precip Type',             filePrefix: 'master',    frames: 15, metaPrefix: ''           },
+        refl:        { label: 'Reflectivity',             filePrefix: 'refl',      frames: 5,  metaPrefix: 'refl_'      },
+        mesh:        { label: 'Max Hail Size (MESH)',     filePrefix: 'mesh',      frames: 5,  metaPrefix: 'mesh_'      },
+        qpe6h:       { label: '6-Hr Precip Estimate',     filePrefix: 'qpe6h',     frames: 5,  metaPrefix: 'qpe6h_'     },
+        qpe24h:      { label: '24-Hr Precip Estimate',    filePrefix: 'qpe24h',    frames: 5,  metaPrefix: 'qpe24h_'    },
+        lightning:   { label: 'CG Lightning Probability', filePrefix: 'lightning', frames: 5,  metaPrefix: 'lightning_' },
+        rotation:    { label: 'Azimuth Shear/Rotation',   filePrefix: 'rotation',  frames: 5,  metaPrefix: 'rotation_'  },
+    };
 
-    function _mrmsFrameUrl(idx) {
-        // Add a 1-minute cache-bust so refreshes actually fetch the latest data
-        const cb = Math.floor(Date.now() / 60000);
-        return MRMS_BASE + (idx === 0 ? 'master.png' : 'master_' + idx + '.png') + '?cb=' + cb;
+    // Legend color-bar definitions for each product
+    const MRMS_LEGENDS = {
+        precip_type: {
+            sections: [
+                {
+                    label: 'RAIN (IN/HR)',
+                    gradient: 'linear-gradient(to right, #00FFFF 0%, #00DD00 25%, #FFFF00 55%, #FF4400 78%, #FF0000 100%)',
+                    ticks: ['0.01"', '0.20"', '1.0"', '5.0"']
+                },
+                {
+                    label: 'ICE / MIX',
+                    gradient: 'linear-gradient(to right, #FF44FF 0%, #AA00AA 50%, #660066 100%)',
+                    ticks: ['Light', 'Heavy']
+                },
+                {
+                    label: 'SNOW (IN/HR)',
+                    gradient: 'linear-gradient(to right, #00FFFF 0%, #88CCFF 45%, #AAAAFF 75%, #DDDDFF 100%)',
+                    ticks: ['0.004"', '0.10"', '0.24"']
+                }
+            ]
+        },
+        refl: {
+            sections: [{
+                label: 'REFLECTIVITY (dBZ)',
+                gradient: 'linear-gradient(to right, #888888 0%, #888888 7%, #4499FF 18%, #00BB00 28%, #009900 35%, #FFFF00 47%, #FFC000 54%, #FF8000 62%, #FF2200 70%, #CC0000 76%, #FF00FF 87%, #CC44CC 100%)',
+                ticks: ['0', '35', '55', '75']
+            }]
+        },
+        mesh: {
+            sections: [{
+                label: 'HAIL DIAMETER (IN)',
+                gradient: 'linear-gradient(to right, #AAFF00 0%, #FFFF00 28%, #FF8800 55%, #FF2200 78%, #AA0000 100%)',
+                ticks: ['0.25"\nPea', '0.75"', '1.75"\nGolf', '3.0"\nBaseball']
+            }]
+        },
+        qpe6h: {
+            sections: [{
+                label: '6-HR ACCUMULATION (IN)',
+                gradient: 'linear-gradient(to right, #88FFEE 0%, #00CCAA 20%, #00CC00 38%, #FFFF00 57%, #FF8800 75%, #FF0000 90%, #880000 100%)',
+                ticks: ['0.05"', '0.5"', '2.0"', '8.0"']
+            }]
+        },
+        qpe24h: {
+            sections: [{
+                label: '24-HR ACCUMULATION (IN)',
+                gradient: 'linear-gradient(to right, #88FFEE 0%, #00CCAA 18%, #00CC00 35%, #FFFF00 55%, #FF8800 72%, #FF0000 88%, #880000 100%)',
+                ticks: ['0.25"', '2.0"', '6.0"', '16"']
+            }]
+        },
+        lightning: {
+            sections: [{
+                label: '1-HR CG LIGHTNING PROB (%)',
+                gradient: 'linear-gradient(to right, #FFFFAA 0%, #FFDD44 25%, #FF8800 50%, #FF2200 72%, #880000 100%)',
+                ticks: ['5%', '30%', '60%', '90%']
+            }]
+        },
+        rotation: {
+            sections: [{
+                label: 'AZ SHEAR (S\u207B\u00B9)',
+                gradient: 'linear-gradient(to right, #00FF00 0%, #AAFF00 20%, #FFFF00 38%, #FF8800 55%, #FF0000 70%, #FF00FF 85%, #8800AA 100%)',
+                ticks: ['0.003', '0.012', '0.030', '0.050']
+            }]
+        }
+    };
+
+    let _radarMeta           = {};   // cached metadata keyed by product key
+    let _radarFrameIdx       = 0;    // currently displayed frame (0 = most recent)
+    let _radarAnimTimer      = null;
+    let _radarLoaded         = false;
+    let _currentRadarProduct = 'precip_type';
+
+    function _mrmsFrameUrl(idx, product) {
+        const def = MRMS_PRODUCT_DEFS[product || _currentRadarProduct];
+        const cb  = Math.floor(Date.now() / 60000);
+        let filename;
+        if (def.filePrefix === 'master') {
+            filename = idx === 0 ? 'master.png' : 'master_' + idx + '.png';
+        } else {
+            filename = def.filePrefix + '_' + idx + '.png';
+        }
+        return MRMS_BASE + filename + '?cb=' + cb;
     }
 
-    async function _loadRadarMeta() {
-        if (_radarMeta) return _radarMeta;
-        const requests = Array.from({ length: MRMS_FRAMES }, (_, i) =>
-            fetch(MRMS_BASE + 'metadata_' + i + '.json', { cache: 'no-store' })
+    async function _loadRadarMeta(product) {
+        product = product || _currentRadarProduct;
+        if (_radarMeta[product]) return _radarMeta[product];
+        const def = MRMS_PRODUCT_DEFS[product];
+        const requests = Array.from({ length: def.frames }, (_, i) =>
+            fetch(MRMS_BASE + 'metadata_' + def.metaPrefix + i + '.json', { cache: 'no-store' })
                 .then(r => r.ok ? r.json() : null).catch(() => null)
         );
-        _radarMeta = await Promise.all(requests);
-        return _radarMeta;
+        _radarMeta[product] = await Promise.all(requests);
+        return _radarMeta[product];
     }
 
     function _updateRadarUI(idx) {
-        const meta = (_radarMeta || [])[idx];
+        const def  = MRMS_PRODUCT_DEFS[_currentRadarProduct];
+        const meta = (_radarMeta[_currentRadarProduct] || [])[idx];
         const timeEl = document.getElementById('radar-time-display');
         if (timeEl) timeEl.textContent = meta?.time ?? '—';
-        // slider position: 0 = oldest (frame MRMS_FRAMES-1), max = newest (frame 0)
         const slider = document.getElementById('radar-frame-slider');
-        if (slider) slider.value = MRMS_FRAMES - 1 - idx;
+        if (slider) slider.value = def.frames - 1 - idx;
     }
 
     function showRadarFrame(idx) {
@@ -1747,23 +1845,83 @@
             if (map.getLayer('mrms-radar-layer')) map.removeLayer('mrms-radar-layer');
             if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
         }
+        const legend = document.getElementById('radar-legend');
+        if (legend) legend.style.display = 'none';
     }
 
     async function loadRadarLayer() {
-        showLoading('Loading radar…');
+        showLoading('Loading radar\u2026');
         try {
-            await _loadRadarMeta();
+            const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
+            await _loadRadarMeta(_currentRadarProduct);
             const slider = document.getElementById('radar-frame-slider');
-            if (slider) { slider.max = MRMS_FRAMES - 1; slider.value = MRMS_FRAMES - 1; }
-            showRadarFrame(0); // start on most recent frame
+            if (slider) { slider.max = def.frames - 1; slider.value = def.frames - 1; }
+            showRadarFrame(0);
+            renderRadarLegend(_currentRadarProduct);
         } finally { hideLoading(); }
+    }
+
+    function renderRadarLegend(product) {
+        const legendDef = MRMS_LEGENDS[product];
+        const legend    = document.getElementById('radar-legend');
+        const items     = document.getElementById('radar-legend-items');
+        const title     = document.getElementById('radar-legend-title');
+        if (!legend || !items || !legendDef) return;
+
+        title.textContent = MRMS_PRODUCT_DEFS[product].label.toUpperCase();
+        items.innerHTML = '';
+
+        legendDef.sections.forEach(section => {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'margin-bottom:8px;';
+
+            const lbl = document.createElement('div');
+            lbl.style.cssText = 'font-size:0.6rem;font-weight:700;letter-spacing:0.05em;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;';
+            lbl.textContent = section.label;
+            wrap.appendChild(lbl);
+
+            const bar = document.createElement('div');
+            bar.style.cssText = 'width:160px;height:12px;border-radius:2px;background:' + section.gradient + ';';
+            wrap.appendChild(bar);
+
+            const tickRow = document.createElement('div');
+            tickRow.style.cssText = 'display:flex;justify-content:space-between;width:160px;margin-top:2px;';
+            section.ticks.forEach(t => {
+                const span = document.createElement('span');
+                span.style.cssText = 'font-size:0.58rem;color:var(--text-secondary);text-align:center;white-space:pre-line;line-height:1.1;';
+                span.textContent = t;
+                tickRow.appendChild(span);
+            });
+            wrap.appendChild(tickRow);
+            items.appendChild(wrap);
+        });
+
+        legend.style.display = '';
+    }
+
+    function setRadarProduct(product) {
+        if (!MRMS_PRODUCT_DEFS[product]) return;
+        _currentRadarProduct = product;
+        _radarLoaded = false;
+        document.querySelectorAll('[data-product]').forEach(btn =>
+            btn.classList.toggle('active', btn.dataset.product === product)
+        );
+        if (currentLayer === 'radar') {
+            stopRadarAnimation();
+            if (map) {
+                if (map.getLayer('mrms-radar-layer')) map.removeLayer('mrms-radar-layer');
+                if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
+            }
+            _ensureMapReady().then(() => loadRadarLayer());
+        }
     }
 
     function playRadarAnimation() {
         if (_radarAnimTimer) return;
+        const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
         _radarAnimTimer = setInterval(() => {
-            // Advance oldest→newest then loop: decrement index (0=newest, 14=oldest)
-            showRadarFrame(_radarFrameIdx <= 0 ? MRMS_FRAMES - 1 : _radarFrameIdx - 1);
+            // Advance oldest→newest then loop: decrement index (0=newest)
+            showRadarFrame(_radarFrameIdx <= 0 ? def.frames - 1 : _radarFrameIdx - 1);
         }, 600);
         const btn = document.getElementById('radar-play-btn');
         if (btn) btn.innerHTML = '&#9646;&#9646; Pause';
@@ -1781,8 +1939,9 @@
 
     function onRadarSliderChange(val) {
         stopRadarAnimation();
-        // slider 0=oldest → frame MRMS_FRAMES-1;  slider max=newest → frame 0
-        showRadarFrame(MRMS_FRAMES - 1 - parseInt(val, 10));
+        const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
+        // slider 0=oldest → frame frames-1;  slider max=newest → frame 0
+        showRadarFrame(def.frames - 1 - parseInt(val, 10));
     }
 
     function setRadarOpacity(val) {
@@ -1792,7 +1951,7 @@
 
     async function refreshRadar() {
         stopRadarAnimation();
-        _radarMeta = null;   // clear metadata cache so fresh timestamps are fetched
+        _radarMeta = {};  // clear all cached metadata
         clearRadarLayer();
         await loadRadarLayer();
     }
