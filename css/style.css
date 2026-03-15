@@ -301,23 +301,92 @@ body {
     color: var(--accent-blue);
 }
  
-/* --- Hourly Forecast Strip --- */
-.hourly-strip {
-    display: flex;
-    gap: 4px;
+/* --- Hourly Forecast Card --- */
+.hourly-forecast-card {
+    border-radius: var(--radius-lg);
+}
+
+.hourly-scroll-wrapper {
     overflow-x: auto;
-    padding: 20px 20px 14px;
-    scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;
-    /* Show a thin scrollbar on desktop so mouse users know it scrolls */
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.2) rgba(255,255,255,0.05);
 }
 
-.hourly-strip::-webkit-scrollbar { height: 5px; }
-.hourly-strip::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 3px; }
-.hourly-strip::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
-.hourly-strip::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+.hourly-scroll-wrapper::-webkit-scrollbar { height: 4px; }
+.hourly-scroll-wrapper::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+.hourly-scroll-wrapper::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+.hourly-scroll-wrapper::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+
+/* --- Hourly Forecast Strip --- */
+.hourly-strip {
+    display: flex;
+    gap: 4px;
+    padding: 20px 20px 8px;
+    min-width: max-content;
+    scroll-snap-type: x mandatory;
+}
+
+/* --- Hourly Metric Values Row --- */
+.hourly-metric-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 20px 16px;
+    min-width: max-content;
+}
+
+.hourly-mval {
+    min-width: 72px;
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 300;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.hourly-mdash {
+    color: rgba(100, 200, 160, 0.7);
+    font-size: 1rem;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+/* --- Hourly Metric Selector --- */
+.hourly-selector {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.hourly-selector::-webkit-scrollbar { display: none; }
+
+.metric-pill {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    border-radius: 24px;
+    border: 1.5px solid rgba(255,255,255,0.18);
+    background: transparent;
+    color: rgba(255,255,255,0.75);
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 500;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.metric-pill.active {
+    background: #3B82F6;
+    border-color: #3B82F6;
+    color: #fff;
+}
+
+.metric-pill:hover:not(.active) {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.3);
+}
 
 /* --- Hourly Detail Popup --- */
 .hourly-detail-popup {
@@ -392,9 +461,9 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 72px;
-    padding: 12px 8px;
+    padding: 10px 8px 6px;
     border-radius: var(--radius-md);
     scroll-snap-align: start;
     transition: background var(--transition-smooth);
@@ -412,11 +481,6 @@ body {
 .hourly-item .time {
     font-size: 0.75rem;
     color: var(--text-secondary);
-    font-weight: 500;
-}
- 
-.hourly-item .temp {
-    font-size: 1rem;
     font-weight: 500;
 }
  
