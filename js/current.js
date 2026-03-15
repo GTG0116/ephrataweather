@@ -376,11 +376,69 @@ function _buildAlertBannerHTML(alert, i) {
     `;
 }
 
+// Returns a numeric priority score for an alert — higher = more impactful.
+function _alertPriority(alert) {
+    const event = (alert.event || '').toLowerCase();
+    const severity = (alert.severity || '').toLowerCase();
+    const subtype = _alertSubtype(alert);
+
+    // Subtype-specific overrides (most dangerous subtypes)
+    if (subtype) {
+        switch (subtype.type) {
+            case 'tornado_emergency':      return 1000;
+            case 'flash_flood_emergency':  return 950;
+            case 'pds_tornado':            return 900;
+            case 'tornado_observed':       return 850;
+            case 'eds_tstm':               return 800;
+            case 'destructive_tstm':       return 790;
+            case 'flash_flood_observed':   return 780;
+            case 'considerable_tstm':      return 760;
+        }
+    }
+
+    // Event-type scoring
+    if (event.includes('tornado warning'))              return 700;
+    if (event.includes('flash flood warning'))          return 650;
+    if (event.includes('severe thunderstorm warning'))  return 600;
+    if (event.includes('special marine warning'))       return 590;
+    if (event.includes('tornado watch'))                return 560;
+    if (event.includes('flash flood watch'))            return 540;
+    if (event.includes('severe thunderstorm watch'))    return 520;
+    if (event.includes('flood warning'))                return 500;
+    if (event.includes('blizzard warning'))             return 490;
+    if (event.includes('ice storm warning'))            return 480;
+    if (event.includes('winter storm warning'))         return 470;
+    if (event.includes('high wind warning'))            return 460;
+    if (event.includes('hurricane warning') ||
+        event.includes('typhoon warning'))              return 450;
+    if (event.includes('tropical storm warning'))       return 440;
+    if (event.includes('red flag warning'))             return 430;
+    if (event.includes('fire weather watch'))           return 420;
+
+    // Fall back to NWS severity field
+    if (severity === 'extreme')  return 400;
+    if (event.includes('warning')) {
+        if (severity === 'severe')   return 380;
+        if (severity === 'moderate') return 360;
+        return 350;
+    }
+    if (event.includes('watch')) {
+        if (severity === 'severe')   return 320;
+        if (severity === 'moderate') return 300;
+        return 290;
+    }
+    if (event.includes('advisory')) return 200;
+    if (event.includes('statement')) return 150;
+    return 100;
+}
+
 function renderAlerts(alerts) {
     const container = document.getElementById('alerts-container');
     if (!container) return;
 
-    _renderedAlerts = alerts || [];
+    // Sort by impact severity (most dangerous first)
+    const sorted = [...(alerts || [])].sort((a, b) => _alertPriority(b) - _alertPriority(a));
+    _renderedAlerts = sorted;
     if (_renderedAlerts.length === 0) {
         container.style.display = 'none';
         container.innerHTML = '';
@@ -515,54 +573,67 @@ function _drawAlertMap(alert) {
         _alertMap.addControl(new mapboxgl.NavigationControl(), 'top-right');
     }
 
-    const feature = {
-        type: 'Feature',
-        geometry: alert.geometry,
-        properties: { title: alert.headline || alert.event || 'Alert' }
+    // Apply a GeoJSON FeatureCollection to the map and fit bounds
+    const _applyGeoJSON = (geojson) => {
+        const doUpdate = () => {
+            if (_alertMap.getSource('alert-geo')) {
+                _alertMap.getSource('alert-geo').setData(geojson);
+            } else {
+                _alertMap.addSource('alert-geo', { type: 'geojson', data: geojson });
+                _alertMap.addLayer({
+                    id: 'alert-fill',
+                    type: 'fill',
+                    source: 'alert-geo',
+                    paint: { 'fill-color': '#ff7043', 'fill-opacity': 0.22 }
+                });
+                _alertMap.addLayer({
+                    id: 'alert-line',
+                    type: 'line',
+                    source: 'alert-geo',
+                    paint: { 'line-color': '#ffab91', 'line-width': 2.2 }
+                });
+            }
+            _loadIEMRadarToAlertMap();
+            if (geojson.features.length && window.turf) {
+                const bounds = turf.bbox(geojson);
+                _alertMap.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 30, duration: 0 });
+            } else {
+                const loc = LocationManager.getCurrent();
+                _alertMap.easeTo({ center: [loc.lng, loc.lat], zoom: 7, duration: 0 });
+            }
+            _alertMap.resize();
+            setTimeout(() => _alertMap.resize(), 100);
+            setTimeout(() => _alertMap.resize(), 400);
+        };
+        if (_alertMap.loaded()) doUpdate();
+        else _alertMap.once('load', doUpdate);
     };
 
-    const sourceData = {
-        type: 'FeatureCollection',
-        features: alert.geometry ? [feature] : []
-    };
-
-    const loadOrUpdate = () => {
-        if (_alertMap.getSource('alert-geo')) {
-            _alertMap.getSource('alert-geo').setData(sourceData);
-        } else {
-            _alertMap.addSource('alert-geo', { type: 'geojson', data: sourceData });
-            _alertMap.addLayer({
-                id: 'alert-fill',
-                type: 'fill',
-                source: 'alert-geo',
-                paint: { 'fill-color': '#ff7043', 'fill-opacity': 0.22 }
-            });
-            _alertMap.addLayer({
-                id: 'alert-line',
-                type: 'line',
-                source: 'alert-geo',
-                paint: { 'line-color': '#ffab91', 'line-width': 2.2 }
-            });
+    if (alert.geometry) {
+        // Storm-based warning: direct polygon supplied by NWS
+        _applyGeoJSON({
+            type: 'FeatureCollection',
+            features: [{ type: 'Feature', geometry: alert.geometry, properties: {} }]
+        });
+    } else {
+        // County/zone-based alert: fetch zone polygons from affectedZones URLs
+        const zoneUrls = (alert.raw?.properties?.affectedZones || []).slice(0, 25);
+        if (!zoneUrls.length) {
+            _applyGeoJSON({ type: 'FeatureCollection', features: [] });
+            return;
         }
-
-        // Add IEM NEXRAD radar beneath the alert polygon
-        _loadIEMRadarToAlertMap();
-
-        if (alert.geometry && window.turf) {
-            const bounds = turf.bbox(sourceData);
-            _alertMap.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 30, duration: 0 });
-        } else {
-            const loc = LocationManager.getCurrent();
-            _alertMap.easeTo({ center: [loc.lng, loc.lat], zoom: 7, duration: 0 });
-        }
-        // Resize immediately and again after a delay to handle mobile layout settling
-        _alertMap.resize();
-        setTimeout(() => _alertMap.resize(), 100);
-        setTimeout(() => _alertMap.resize(), 400);
-    };
-
-    if (_alertMap.loaded()) loadOrUpdate();
-    else _alertMap.once('load', loadOrUpdate);
+        Promise.allSettled(
+            zoneUrls.map(url =>
+                fetch(url, { headers: { 'Accept': 'application/geo+json' } })
+                    .then(r => r.ok ? r.json() : null)
+            )
+        ).then(results => {
+            const features = results
+                .filter(r => r.status === 'fulfilled' && r.value?.geometry)
+                .map(r => ({ type: 'Feature', geometry: r.value.geometry, properties: {} }));
+            _applyGeoJSON({ type: 'FeatureCollection', features });
+        });
+    }
 }
 
 // ---- IEM NEXRAD radar layer on the alert map ----
