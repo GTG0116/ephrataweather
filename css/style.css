@@ -83,7 +83,108 @@ body {
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
 }
- 
+
+/* --- Weather Condition Backgrounds ---
+   Applied dynamically via applyWeatherBackground() in current.js.
+   Each class overrides the base gradient; the gradientShift animation
+   continues to run so the colours gently pulse on every theme.        */
+
+/* Clear sky — day: vivid blue */
+.bg-gradient.bg-cond-clear-day {
+    background: linear-gradient(135deg,
+        #041632 0%, #0b3068 20%, #155caa 40%, #1a6cc0 60%, #104ea0 80%, #041632 100%);
+}
+.bg-gradient.bg-cond-clear-day::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(80, 160, 255, 0.22) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 20%, rgba(120, 190, 255, 0.14) 0%, transparent 50%),
+        radial-gradient(ellipse at 45% 80%, rgba(60, 140, 230, 0.10) 0%, transparent 50%);
+}
+
+/* Clear sky — night: deep midnight */
+.bg-gradient.bg-cond-clear-night {
+    background: linear-gradient(135deg,
+        #010309 0%, #040812 20%, #06101e 40%, #081222 60%, #05091a 80%, #010309 100%);
+}
+.bg-gradient.bg-cond-clear-night::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(40, 60, 140, 0.18) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 25%, rgba(60, 80, 180, 0.10) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(30, 50, 120, 0.08) 0%, transparent 50%);
+}
+
+/* Partly cloudy — day: softer hazy blue */
+.bg-gradient.bg-cond-partly-cloudy-day {
+    background: linear-gradient(135deg,
+        #0c1e38 0%, #152e54 20%, #1c3e6c 40%, #1a3a64 60%, #12283e 80%, #0c1e38 100%);
+}
+
+/* Partly cloudy — night: dark navy haze */
+.bg-gradient.bg-cond-partly-cloudy-night {
+    background: linear-gradient(135deg,
+        #060a14 0%, #0a1220 20%, #0e1a2c 40%, #0c1828 60%, #080e1c 80%, #060a14 100%);
+}
+
+/* Cloudy / overcast: heavy blue-gray */
+.bg-gradient.bg-cond-cloudy {
+    background: linear-gradient(135deg,
+        #0e1220 0%, #151a2c 20%, #1a2034 40%, #181e30 60%, #121624 80%, #0e1220 100%);
+}
+.bg-gradient.bg-cond-cloudy::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(50, 70, 110, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(60, 80, 120, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 80%, rgba(40, 60, 100, 0.06) 0%, transparent 50%);
+}
+
+/* Rain (drizzle, light rain, heavy rain): dark steel blue */
+.bg-gradient.bg-cond-rain {
+    background: linear-gradient(135deg,
+        #070c14 0%, #0c1320 20%, #101a28 40%, #0e1724 60%, #090d18 80%, #070c14 100%);
+}
+.bg-gradient.bg-cond-rain::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(30, 80, 140, 0.14) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 20%, rgba(40, 90, 150, 0.09) 0%, transparent 50%),
+        radial-gradient(ellipse at 45% 80%, rgba(20, 70, 130, 0.07) 0%, transparent 50%);
+}
+
+/* Thunderstorm: very dark purple-navy */
+.bg-gradient.bg-cond-storm {
+    background: linear-gradient(135deg,
+        #060410 0%, #0c0820 20%, #140a2c 40%, #100826 60%, #08061a 80%, #060410 100%);
+}
+.bg-gradient.bg-cond-storm::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(100, 40, 180, 0.18) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 20%, rgba(80, 30, 160, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 45% 80%, rgba(60, 20, 140, 0.09) 0%, transparent 50%);
+}
+
+/* Snow / sleet: icy pale blue */
+.bg-gradient.bg-cond-snow {
+    background: linear-gradient(135deg,
+        #0e1e32 0%, #172c48 20%, #1d3658 40%, #1b3252 60%, #142840 80%, #0e1e32 100%);
+}
+.bg-gradient.bg-cond-snow::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(160, 200, 255, 0.14) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(180, 220, 255, 0.09) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 80%, rgba(140, 190, 240, 0.07) 0%, transparent 50%);
+}
+
+/* Fog / haze: muted cool gray */
+.bg-gradient.bg-cond-fog {
+    background: linear-gradient(135deg,
+        #0c0e12 0%, #141618 20%, #181b20 40%, #161920 60%, #101214 80%, #0c0e12 100%);
+}
+.bg-gradient.bg-cond-fog::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(80, 90, 110, 0.10) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 20%, rgba(90, 100, 120, 0.07) 0%, transparent 50%),
+        radial-gradient(ellipse at 45% 80%, rgba(70, 80, 100, 0.05) 0%, transparent 50%);
+}
+
 /* --- Glass Panel --- */
 .glass {
     background: var(--glass-bg);

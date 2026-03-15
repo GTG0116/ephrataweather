@@ -1733,7 +1733,7 @@
             map.addSource('mrms-radar', { type: 'image', url, coordinates: MRMS_COORDS });
             map.addLayer({
                 id: 'mrms-radar-layer', type: 'raster', source: 'mrms-radar',
-                paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 300 }
+                paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 300, 'raster-resampling': 'nearest' }
             }, _overlayBefore());
             _radarLoaded = true;
         }
