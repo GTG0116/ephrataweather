@@ -993,8 +993,25 @@
                         </button>
                     </div>
                 </div>
-                <!-- Radar Sub-Controls (none needed for iframe viewer) -->
-                <div class="radar-controls" id="radar-controls" style="display:none;"></div>
+                <!-- Radar Sub-Controls -->
+                <div class="radar-controls" id="radar-controls">
+                    <div class="ctrl-row" style="align-items:center;gap:8px;flex-wrap:nowrap;">
+                        <button id="radar-play-btn" class="day-btn active" onclick="toggleRadarAnimation()" style="flex-shrink:0;min-width:70px;">&#9654; Play</button>
+                        <input type="range" id="radar-frame-slider" min="0" max="14" value="14"
+                               oninput="onRadarSliderChange(this.value)"
+                               style="flex:1;accent-color:var(--accent-blue);">
+                        <button class="day-btn" onclick="refreshRadar()" style="flex-shrink:0;" title="Reload latest frames">&#8635;</button>
+                    </div>
+                    <div class="ctrl-row" style="justify-content:space-between;font-size:0.78rem;">
+                        <span style="color:var(--text-muted);">&#9664; Older</span>
+                        <span id="radar-time-display" style="color:var(--text-secondary);font-weight:600;">—</span>
+                        <span style="color:var(--text-muted);">Newer &#9654;</span>
+                    </div>
+                    <div class="opacity-row">
+                        <span>Opacity:</span>
+                        <input type="range" min="0" max="100" value="85" oninput="setRadarOpacity(this.value)" id="radar-opacity">
+                    </div>
+                </div>
                 <!-- OWM Sub-Controls -->
                 <div class="owm-controls" id="owm-controls">
                     <span style="font-size:0.8rem;color:var(--text-secondary);">
@@ -1499,12 +1516,11 @@
     // NWS product type codes for each outlook
     // Discussion text URLs (SPC .txt endpoints, fetched via CORS proxy same as GeoJSON)
     const DISCUSSION_URLS = {
-        'spc-1':  { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.txt',          label: 'SPC Day 1 Convective Outlook' },
-        'spc-2':  { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.txt',          label: 'SPC Day 2 Convective Outlook' },
-        'spc-3':  { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.txt',          label: 'SPC Day 3 Convective Outlook' },
-        'spc-48': { url: 'https://www.spc.noaa.gov/products/exper/day4-8/day4-8otlk.txt',  label: 'SPC Day 4–8 Convective Outlook' },
-        'fire-1': { url: 'https://www.spc.noaa.gov/products/fire_wx/day1otlk.txt',          label: 'SPC Day 1 Fire Weather Outlook' },
-        'fire-2': { url: 'https://www.spc.noaa.gov/products/fire_wx/day2otlk.txt',          label: 'SPC Day 2 Fire Weather Outlook' },
+        'spc-1':  { url: 'https://www.spc.noaa.gov/products/outlook/day1otlk.txt',  label: 'SPC Day 1 Convective Outlook' },
+        'spc-2':  { url: 'https://www.spc.noaa.gov/products/outlook/day2otlk.txt',  label: 'SPC Day 2 Convective Outlook' },
+        'spc-3':  { url: 'https://www.spc.noaa.gov/products/outlook/day3otlk.txt',  label: 'SPC Day 3 Convective Outlook' },
+        'fire-1': { url: 'https://www.spc.noaa.gov/products/fire_wx/day1otlk.txt',  label: 'SPC Day 1 Fire Weather Outlook' },
+        'fire-2': { url: 'https://www.spc.noaa.gov/products/fire_wx/day2otlk.txt',  label: 'SPC Day 2 Fire Weather Outlook' },
     };
 
     // If a proxy returns the SPC .txt URL wrapped in HTML, extract the raw text.
@@ -1573,8 +1589,123 @@
 
     function openSPCDiscussion() {
         const day = (typeof currentDay !== 'undefined') ? currentDay : 1;
-        const key = day >= 4 ? 'spc-48' : (day >= 1 ? 'spc-' + day : 'spc-1');
+        // Days 4–8 have no discussion text; cap at Day 3
+        const key = day >= 3 ? 'spc-3' : (day >= 1 ? 'spc-' + day : 'spc-1');
         openDiscussionModal(key);
+    }
+
+    // ============================================================
+    // MRMS RADAR (GitHub-hosted master images)
+    // ============================================================
+    const MRMS_BASE   = 'https://raw.githubusercontent.com/EphrataWeather/MRMS/main/public/data/';
+    const MRMS_FRAMES = 15;
+    // Image source corners [lng, lat]: NW, NE, SE, SW  (bounds 24–50°N, 130–60°W)
+    const MRMS_COORDS = [[-130, 50], [-60, 50], [-60, 24], [-130, 24]];
+
+    let _radarMeta      = null;   // cached metadata array (loaded once per session)
+    let _radarFrameIdx  = 0;      // currently displayed frame (0 = most recent)
+    let _radarAnimTimer = null;
+    let _radarLoaded    = false;  // whether the Mapbox source/layer exist
+
+    function _mrmsFrameUrl(idx) {
+        // Add a 1-minute cache-bust so refreshes actually fetch the latest data
+        const cb = Math.floor(Date.now() / 60000);
+        return MRMS_BASE + (idx === 0 ? 'master.png' : 'master_' + idx + '.png') + '?cb=' + cb;
+    }
+
+    async function _loadRadarMeta() {
+        if (_radarMeta) return _radarMeta;
+        const requests = Array.from({ length: MRMS_FRAMES }, (_, i) =>
+            fetch(MRMS_BASE + 'metadata_' + i + '.json', { cache: 'no-store' })
+                .then(r => r.ok ? r.json() : null).catch(() => null)
+        );
+        _radarMeta = await Promise.all(requests);
+        return _radarMeta;
+    }
+
+    function _updateRadarUI(idx) {
+        const meta = (_radarMeta || [])[idx];
+        const timeEl = document.getElementById('radar-time-display');
+        if (timeEl) timeEl.textContent = meta?.time ?? '—';
+        // slider position: 0 = oldest (frame MRMS_FRAMES-1), max = newest (frame 0)
+        const slider = document.getElementById('radar-frame-slider');
+        if (slider) slider.value = MRMS_FRAMES - 1 - idx;
+    }
+
+    function showRadarFrame(idx) {
+        if (!map) return;
+        _radarFrameIdx = idx;
+        const url = _mrmsFrameUrl(idx);
+        if (_radarLoaded && map.getSource('mrms-radar')) {
+            map.getSource('mrms-radar').updateImage({ url });
+        } else {
+            if (map.getLayer('mrms-radar-layer')) map.removeLayer('mrms-radar-layer');
+            if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
+            map.addSource('mrms-radar', { type: 'image', url, coordinates: MRMS_COORDS });
+            map.addLayer({
+                id: 'mrms-radar-layer', type: 'raster', source: 'mrms-radar',
+                paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 0 }
+            });
+            _radarLoaded = true;
+        }
+        _updateRadarUI(idx);
+    }
+
+    function clearRadarLayer() {
+        stopRadarAnimation();
+        _radarLoaded = false;
+        if (map) {
+            if (map.getLayer('mrms-radar-layer')) map.removeLayer('mrms-radar-layer');
+            if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
+        }
+    }
+
+    async function loadRadarLayer() {
+        showLoading('Loading radar…');
+        try {
+            await _loadRadarMeta();
+            const slider = document.getElementById('radar-frame-slider');
+            if (slider) { slider.max = MRMS_FRAMES - 1; slider.value = MRMS_FRAMES - 1; }
+            showRadarFrame(0); // start on most recent frame
+        } finally { hideLoading(); }
+    }
+
+    function playRadarAnimation() {
+        if (_radarAnimTimer) return;
+        _radarAnimTimer = setInterval(() => {
+            // Advance oldest→newest then loop: decrement index (0=newest, 14=oldest)
+            showRadarFrame(_radarFrameIdx <= 0 ? MRMS_FRAMES - 1 : _radarFrameIdx - 1);
+        }, 400);
+        const btn = document.getElementById('radar-play-btn');
+        if (btn) btn.innerHTML = '&#9646;&#9646; Pause';
+    }
+
+    function stopRadarAnimation() {
+        if (_radarAnimTimer) { clearInterval(_radarAnimTimer); _radarAnimTimer = null; }
+        const btn = document.getElementById('radar-play-btn');
+        if (btn) btn.innerHTML = '&#9654; Play';
+    }
+
+    function toggleRadarAnimation() {
+        if (_radarAnimTimer) stopRadarAnimation(); else playRadarAnimation();
+    }
+
+    function onRadarSliderChange(val) {
+        stopRadarAnimation();
+        // slider 0=oldest → frame MRMS_FRAMES-1;  slider max=newest → frame 0
+        showRadarFrame(MRMS_FRAMES - 1 - parseInt(val, 10));
+    }
+
+    function setRadarOpacity(val) {
+        if (map && map.getLayer('mrms-radar-layer'))
+            map.setPaintProperty('mrms-radar-layer', 'raster-opacity', parseInt(val, 10) / 100);
+    }
+
+    async function refreshRadar() {
+        stopRadarAnimation();
+        _radarMeta = null;   // clear metadata cache so fresh timestamps are fetched
+        clearRadarLayer();
+        await loadRadarLayer();
     }
 
     // ============================================================
@@ -1619,6 +1750,15 @@
         } else if (viewId === 'maps') {
             // Map needs a resize when its container becomes visible
             if (window._spaMap) setTimeout(() => window._spaMap.resize(), 50);
+        }
+
+        // After maps view is ready, jump to a specific SPC day if requested
+        // (set by navigateToSPCMaps(dayNum) in current.js banner click handlers)
+        if (viewId === 'maps' && window._spcTargetDay) {
+            const targetDay = window._spcTargetDay;
+            window._spcTargetDay = null;
+            if (currentLayer !== 'spc') switchLayer('spc');
+            selectDay(targetDay);
         }
     }
 
@@ -1667,14 +1807,16 @@
     let currentDay = 0;  // 0 = show all days
     let currentType = 'cat';
     let firstSymbolLayerId = undefined;
-    let currentBasemap = 'dark';
+    let currentBasemap = localStorage.getItem('ephrataBasemap') || 'dark';
     const BASEMAP_STYLES = {
         dark: 'mapbox://styles/mapbox/dark-v11',
         streets: 'mapbox://styles/mapbox/streets-v12',
         'satellite-streets': 'mapbox://styles/mapbox/satellite-streets-v12',
         outdoors: 'mapbox://styles/mapbox/outdoors-v12'
     };
-
+    // Sync saved basemap selection to button active states immediately
+    document.querySelectorAll('#basemap-controls [data-basemap]').forEach(btn =>
+        btn.classList.toggle('active', btn.dataset.basemap === currentBasemap));
 
     const SPC_URLS = {
         1: {
@@ -2510,7 +2652,7 @@
         if (map) setTimeout(() => map.resize(), 50);
     }
     function _showSatelliteView() { _hideAllViews(); document.getElementById('satellite-image-view').style.display = ''; }
-    function _showRadarView()     { _hideAllViews(); document.getElementById('radar-image-view').style.display = ''; }
+    function _showRadarView()     { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; if (map) setTimeout(() => map.resize(), 50); }
     function _showMapView()       { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; }
     function _showWPCRainView()   { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; document.getElementById('wpc-rain-view').style.display = ''; if (map) setTimeout(() => map.resize(), 50); }
     function _showFireWxView()    { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; document.getElementById('fire-wx-view').style.display = ''; if (map) setTimeout(() => map.resize(), 50); }
@@ -2519,6 +2661,7 @@
     function setBaseMapStyle(styleKey) {
         if (!BASEMAP_STYLES[styleKey]) return;
         currentBasemap = styleKey;
+        localStorage.setItem('ephrataBasemap', styleKey);
         document.querySelectorAll('#basemap-controls [data-basemap]').forEach(btn =>
             btn.classList.toggle('active', btn.dataset.basemap === styleKey));
 
@@ -2540,21 +2683,25 @@
             else if (currentLayer === 'temperature' || currentLayer === 'wind' || currentLayer === 'clouds') loadOWMLayer(currentLayer);
             else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
             else if (currentLayer === 'fire-wx') loadFireLayer(currentFireDay, currentFireType);
+            else if (currentLayer === 'radar') { _radarLoaded = false; showRadarFrame(_radarFrameIdx); }
         });
     }
 
     function switchLayer(layer) {
+        if (layer !== 'radar') clearRadarLayer(); // always clean up radar when leaving
         currentLayer = layer;
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
         document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
         document.getElementById('wpc-controls').classList.toggle('visible', layer === 'wpc-rain');
         document.getElementById('fire-controls').classList.toggle('visible', layer === 'fire-wx');
+        document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = layer === 'spc' ? '' : 'none';
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
-        document.getElementById('basemap-controls').classList.toggle('visible', mapLayer);
+        document.getElementById('basemap-controls').classList.toggle('visible',
+            mapLayer || layer === 'spc' || layer === 'radar');
 
         if (layer === 'spc') {
             clearOWMLayers(); clearWPCLayers(); clearFireLayers();
@@ -2575,8 +2722,9 @@
             _showSatelliteView();
             loadSatelliteImage(currentSatBand);
         } else if (layer === 'radar') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showRadarView();
+            _ensureMapReady().then(() => loadRadarLayer());
         } else if (layer === 'wpc-rain') {
             clearSPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showWPCRainView();
