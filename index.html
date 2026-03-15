@@ -168,6 +168,48 @@
 
         .ctrl-icon-row { display: flex; gap: 6px; margin-left: auto; }
 
+        /* ---- Collapsible Charts ---- */
+        .chart-toggle-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+        .chart-toggle-title {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+        }
+        .chart-toggle-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-family: inherit;
+            padding: 3px 6px;
+            border-radius: var(--radius-sm);
+            transition: color var(--transition-smooth);
+        }
+        .chart-toggle-btn:hover { color: var(--text-secondary); }
+        .chart-toggle-btn svg { transition: transform 0.3s ease; }
+        .chart-container-collapsed .chart-toggle-btn svg { transform: rotate(-90deg); }
+        .chart-collapse-body {
+            overflow: hidden;
+            transition: max-height 0.35s ease;
+            max-height: 600px;
+        }
+        .chart-container-collapsed .chart-collapse-body { max-height: 0; }
+
         .map-wrapper { position: relative; height: calc(100vh - 320px); min-height: 440px; border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 16px; }
         #map { width: 100%; height: 100%; }
 
@@ -244,21 +286,29 @@
         }
 
         /* ---- Redesigned Header ---- */
-        .app-header { align-items: flex-start; padding: 14px 20px; }
-        .header-left { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+        .app-header { align-items: center; padding: 14px 20px; }
+        .header-left { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
         .header-title-row {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
+        }
+        .header-controls-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             flex-wrap: wrap;
+            justify-content: center;
         }
         .header-meta-row {
             display: flex;
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
+            justify-content: center;
         }
-        .header-meta-row .location-search-container { flex: 1; min-width: 0; }
+        .header-meta-row .location-search-container { flex: none; min-width: 0; }
 
         /* ---- Outlook info button (shown near SPC/WPC/Fire outlook galleries) ---- */
         .outlook-info-btn {
@@ -627,19 +677,21 @@
             <div class="header-left">
                 <div class="header-title-row">
                     <h1>Ephrata Weather</h1>
-                    <div class="source-toggle" title="Select weather data source">
-                        <button class="source-btn" id="btn-src-nws" onclick="setWeatherDataSource('nws')">NWS</button>
-                        <button class="source-btn" id="btn-src-google" onclick="setWeatherDataSource('google')">Google</button>
-                        <button class="source-btn" id="btn-src-open-meteo" onclick="setWeatherDataSource('open-meteo')">Open-Meteo</button>
-                        <button class="source-btn" id="btn-src-owm" onclick="setWeatherDataSource('owm')">OWM</button>
+                    <div class="header-controls-row">
+                        <div class="source-toggle" title="Select weather data source">
+                            <button class="source-btn" id="btn-src-nws" onclick="setWeatherDataSource('nws')">NWS</button>
+                            <button class="source-btn" id="btn-src-google" onclick="setWeatherDataSource('google')">Google</button>
+                            <button class="source-btn" id="btn-src-open-meteo" onclick="setWeatherDataSource('open-meteo')">Open-Meteo</button>
+                            <button class="source-btn" id="btn-src-owm" onclick="setWeatherDataSource('owm')">OWM</button>
+                        </div>
+                        <button class="source-info-btn" onclick="openSourceInfoModal()" title="About weather data sources" aria-label="Learn about weather data sources">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="16" x2="12" y2="12"/>
+                                <line x1="12" y1="8" x2="12.01" y2="8"/>
+                            </svg>
+                        </button>
                     </div>
-                    <button class="source-info-btn" onclick="openSourceInfoModal()" title="About weather data sources" aria-label="Learn about weather data sources">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="16" x2="12" y2="12"/>
-                            <line x1="12" y1="8" x2="12.01" y2="8"/>
-                        </svg>
-                    </button>
                 </div>
                 <div class="header-meta-row">
                     <div class="location-search-container" id="location-search-container">
@@ -803,13 +855,22 @@
 
             <!-- Hourly Charts -->
             <div id="hourly-charts-container" class="glass-static fade-in" style="display:none;margin-bottom:24px;padding:16px 16px 8px;">
-                <div class="chart-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-                    <button class="chart-tab active" data-metric="temp" onclick="switchHourlyChart('temp')">Temperature</button>
-                    <button class="chart-tab" data-metric="wind" onclick="switchHourlyChart('wind')">Wind Speed</button>
-                    <button class="chart-tab" data-metric="pressure" onclick="switchHourlyChart('pressure')">Pressure</button>
-                    <button class="chart-tab" data-metric="precip" onclick="switchHourlyChart('precip')">Precip Chance</button>
+                <div class="chart-toggle-header" onclick="toggleChart('hourly')">
+                    <span class="chart-toggle-title">Hourly Chart</span>
+                    <button class="chart-toggle-btn" title="Toggle chart">
+                        <span id="hourly-chart-toggle-label">Hide</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
                 </div>
-                <svg id="hourly-chart-svg" width="100%" height="160" style="display:block;overflow:visible;"></svg>
+                <div class="chart-collapse-body">
+                    <div class="chart-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                        <button class="chart-tab active" data-metric="temp" onclick="switchHourlyChart('temp')">Temperature</button>
+                        <button class="chart-tab" data-metric="wind" onclick="switchHourlyChart('wind')">Wind Speed</button>
+                        <button class="chart-tab" data-metric="pressure" onclick="switchHourlyChart('pressure')">Pressure</button>
+                        <button class="chart-tab" data-metric="precip" onclick="switchHourlyChart('precip')">Precip Chance</button>
+                    </div>
+                    <svg id="hourly-chart-svg" width="100%" height="160" style="display:block;overflow:visible;"></svg>
+                </div>
             </div>
 
             <!-- Details Cards -->
@@ -897,12 +958,21 @@
 
             <!-- 10-Day Charts -->
             <div class="glass-static fade-in" id="forecast-charts-container" style="display:none;margin-top:16px;padding:16px 16px 10px;">
-                <div class="chart-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-                    <button class="chart-tab active" data-fmetric="temp" onclick="switchForecastChart('temp')">Temperature</button>
-                    <button class="chart-tab" data-fmetric="wind" onclick="switchForecastChart('wind')">Wind Speed</button>
-                    <button class="chart-tab" data-fmetric="precip" onclick="switchForecastChart('precip')">Precip Chance</button>
+                <div class="chart-toggle-header" onclick="toggleChart('forecast')">
+                    <span class="chart-toggle-title">Forecast Chart</span>
+                    <button class="chart-toggle-btn" title="Toggle chart">
+                        <span id="forecast-chart-toggle-label">Hide</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
                 </div>
-                <svg id="forecast-chart-svg" width="100%" style="display:block;overflow:visible;"></svg>
+                <div class="chart-collapse-body">
+                    <div class="chart-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                        <button class="chart-tab active" data-fmetric="temp" onclick="switchForecastChart('temp')">Temperature</button>
+                        <button class="chart-tab" data-fmetric="wind" onclick="switchForecastChart('wind')">Wind Speed</button>
+                        <button class="chart-tab" data-fmetric="precip" onclick="switchForecastChart('precip')">Precip Chance</button>
+                    </div>
+                    <svg id="forecast-chart-svg" width="100%" style="display:block;overflow:visible;"></svg>
+                </div>
             </div>
 
             <!-- Expanded Day Detail -->
@@ -1024,15 +1094,17 @@
                 </div>
                 <!-- Radar Sub-Controls -->
                 <div class="radar-controls" id="radar-controls">
-                    <div class="ctrl-row" style="gap:8px;flex-wrap:nowrap;align-items:center;">
+                    <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <button id="radar-play-btn" class="day-btn active" onclick="toggleRadarAnimation()" style="flex-shrink:0;min-width:70px;">&#9654; Play</button>
-                        <span style="color:var(--text-muted);font-size:0.72rem;flex-shrink:0;">Older</span>
                         <input type="range" id="radar-frame-slider" min="0" max="14" value="14"
                                oninput="onRadarSliderChange(this.value)"
-                               style="flex:1;accent-color:var(--accent-blue);">
-                        <span style="color:var(--text-muted);font-size:0.72rem;flex-shrink:0;">Newer</span>
-                        <span id="radar-time-display" style="color:var(--text-secondary);font-weight:600;font-size:0.78rem;flex-shrink:0;min-width:90px;text-align:right;">—</span>
+                               style="flex:1;min-width:0;accent-color:var(--accent-blue);">
                         <button class="icon-action-btn" onclick="refreshRadar()" title="Refresh">&#8635;</button>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.72rem;padding:0 2px;margin-top:-2px;">
+                        <span style="color:var(--text-muted);">← Older</span>
+                        <span id="radar-time-display" style="color:var(--text-secondary);font-weight:600;">—</span>
+                        <span style="color:var(--text-muted);">Newer →</span>
                     </div>
                     <div class="opacity-row">
                         <span>Opacity:</span>
@@ -1670,7 +1742,7 @@
             map.addSource('mrms-radar', { type: 'image', url, coordinates: MRMS_COORDS });
             map.addLayer({
                 id: 'mrms-radar-layer', type: 'raster', source: 'mrms-radar',
-                paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 0 }
+                paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 300 }
             });
             _radarLoaded = true;
         }
@@ -1701,7 +1773,7 @@
         _radarAnimTimer = setInterval(() => {
             // Advance oldest→newest then loop: decrement index (0=newest, 14=oldest)
             showRadarFrame(_radarFrameIdx <= 0 ? MRMS_FRAMES - 1 : _radarFrameIdx - 1);
-        }, 400);
+        }, 600);
         const btn = document.getElementById('radar-play-btn');
         if (btn) btn.innerHTML = '&#9646;&#9646; Pause';
     }
@@ -2711,6 +2783,29 @@
             else if (currentLayer === 'radar') { _radarLoaded = false; showRadarFrame(_radarFrameIdx); }
         });
     }
+
+    function toggleChart(which) {
+        const id = which === 'hourly' ? 'hourly-charts-container' : 'forecast-charts-container';
+        const container = document.getElementById(id);
+        if (!container) return;
+        const collapsed = container.classList.toggle('chart-container-collapsed');
+        const label = document.getElementById(which + '-chart-toggle-label');
+        if (label) label.textContent = collapsed ? 'Show' : 'Hide';
+        localStorage.setItem('chart-' + which + '-collapsed', collapsed ? '1' : '0');
+    }
+
+    // Restore chart collapse states from localStorage
+    ['hourly', 'forecast'].forEach(function(which) {
+        if (localStorage.getItem('chart-' + which + '-collapsed') === '1') {
+            const id = which === 'hourly' ? 'hourly-charts-container' : 'forecast-charts-container';
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('chart-container-collapsed');
+                const label = document.getElementById(which + '-chart-toggle-label');
+                if (label) label.textContent = 'Show';
+            }
+        }
+    });
 
     function switchLayer(layer) {
         if (layer !== 'radar') clearRadarLayer(); // always clean up radar when leaving
