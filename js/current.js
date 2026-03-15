@@ -1201,11 +1201,18 @@ function renderHourlyForecast(data, forecastDays) {
         `;
     }).join('');
 
+    _updateMetricPills(_hourlyData);
     _renderMetricRow(_hourlyData, _activeMetric);
+    document.querySelectorAll('.metric-pill').forEach(btn =>
+        btn.classList.toggle('active', btn.dataset.metric === _activeMetric));
 }
 
-// ---- Hourly Metric Row ----
+// ---- Hourly Metric Chart ----
 let _activeMetric = 'temp';
+
+// Column geometry must match .hourly-strip layout (padding:20px, gap:4px, item min-width:72px)
+const _ITEM_COL = 76; // 72px item + 4px gap
+const _STRIP_PAD = 20;
 
 function _getMetricValue(hour, metric) {
     switch (metric) {
@@ -1226,26 +1233,99 @@ function _metricUnit(metric) {
         case 'humidity':
         case 'precip':    return '%';
         case 'wind':
-        case 'windgusts': return '';
+        case 'windgusts': return ' mph';
         default:          return '';
     }
 }
+
+const _METRIC_COLORS = {
+    temp:      '#FF7043',
+    feelslike: '#FFA726',
+    humidity:  '#42A5F5',
+    wind:      '#4DB6AC',
+    precip:    '#26C6DA',
+    windgusts: '#AB47BC'
+};
 
 function _renderMetricRow(hours, metric) {
     const row = document.getElementById('hourly-metric-row');
     if (!row || !hours.length) return;
 
+    const vals = hours.map(h => _getMetricValue(h, metric));
+    const validVals = vals.filter(v => v != null);
+    if (validVals.length === 0) { row.innerHTML = ''; return; }
+
     const unit = _metricUnit(metric);
-    const parts = [];
-    hours.forEach((hour, i) => {
-        const val = _getMetricValue(hour, metric);
-        const display = val != null ? `${val}${unit}` : '--';
-        parts.push(`<span class="hourly-mval">${display}</span>`);
-        if (i < hours.length - 1) {
-            parts.push(`<span class="hourly-mdash" aria-hidden="true">\u2014</span>`);
-        }
+    const color = _METRIC_COLORS[metric] || '#4DB6AC';
+
+    const H = 88;
+    const PAD_T = 26; // room for value labels above dots
+    const PAD_B = 6;
+    const plotH = H - PAD_T - PAD_B;
+    const n = hours.length;
+    const svgW = _STRIP_PAD + n * _ITEM_COL - 4 + _STRIP_PAD; // -4: no trailing gap
+
+    let minV = Math.min(...validVals);
+    let maxV = Math.max(...validVals);
+    const spread = maxV - minV || 1;
+    minV -= spread * 0.15;
+    maxV += spread * 0.15;
+
+    const xOf = i => _STRIP_PAD + i * _ITEM_COL + _ITEM_COL / 2 - 2;
+    const yOf = v => PAD_T + plotH - ((v - minV) / (maxV - minV)) * plotH;
+
+    // Line path and area fill
+    let linePath = '';
+    let areaPath = '';
+    let firstX = null, lastX = null, lastY = null;
+    vals.forEach((v, i) => {
+        if (v == null) return;
+        const x = xOf(i), y = yOf(v);
+        if (firstX === null) { linePath += `M${x.toFixed(1)},${y.toFixed(1)}`; areaPath += `M${x.toFixed(1)},${H} L${x.toFixed(1)},${y.toFixed(1)}`; firstX = x; }
+        else                 { linePath += ` L${x.toFixed(1)},${y.toFixed(1)}`; areaPath += ` L${x.toFixed(1)},${y.toFixed(1)}`; }
+        lastX = x; lastY = y;
     });
-    row.innerHTML = parts.join('');
+    if (lastX !== null) areaPath += ` L${lastX.toFixed(1)},${H} Z`;
+
+    // Dots and value labels
+    let dotsHtml = '';
+    vals.forEach((v, i) => {
+        if (v == null) return;
+        const x = xOf(i), y = yOf(v);
+        const label = `${v}${unit}`;
+        dotsHtml += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${color}" stroke="rgba(10,15,35,0.8)" stroke-width="1.5"/>`;
+        dotsHtml += `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-size="10.5" font-weight="500">${label}</text>`;
+    });
+
+    const gradId = `mg_${metric}`;
+    row.innerHTML = `<svg width="${svgW}" height="${H}" style="display:block;overflow:visible;">
+        <defs>
+            <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="${color}" stop-opacity="0.3"/>
+                <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+            </linearGradient>
+        </defs>
+        <path d="${areaPath}" fill="url(#${gradId})"/>
+        <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+        ${dotsHtml}
+    </svg>`;
+}
+
+function _updateMetricPills(hours) {
+    const allMetrics = ['temp', 'feelslike', 'humidity', 'wind', 'precip', 'windgusts'];
+    let firstVisible = null;
+    allMetrics.forEach(metric => {
+        const btn = document.querySelector(`#hourly-metric-selector [data-metric="${metric}"]`);
+        if (!btn) return;
+        const hasData = hours.some(h => _getMetricValue(h, metric) != null);
+        btn.style.display = hasData ? '' : 'none';
+        if (hasData && firstVisible === null) firstVisible = metric;
+    });
+    // If active metric has no data, switch to first available
+    const activeHasData = hours.some(h => _getMetricValue(h, _activeMetric) != null);
+    if (!activeHasData && firstVisible) {
+        _activeMetric = firstVisible;
+    }
 }
 
 function switchMetric(metric) {
