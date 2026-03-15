@@ -638,58 +638,80 @@ function _pointInSPCGeometry(lng, lat, geometry) {
     return false;
 }
 
+// Returns a human-readable day label for a given day offset from today.
+function _spcDayLabel(offset) {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+    const month   = d.toLocaleDateString('en-US', { month: 'short' });
+    const day     = d.getDate();
+    if (offset === 0) return `Today (${weekday}, ${month} ${day})`;
+    if (offset === 1) return `Tomorrow (${weekday}, ${month} ${day})`;
+    return `${weekday}, ${month} ${day}`;
+}
+
+async function _fetchSPCCatData(url) {
+    try {
+        const r = await fetch(url, { cache: 'no-store' });
+        if (r.ok) return r.json();
+    } catch (_) { /* fall through */ }
+    const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+    const r2 = await fetch(proxy, { cache: 'no-store' });
+    if (!r2.ok) throw new Error('SPC fetch failed (' + r2.status + ')');
+    return r2.json();
+}
+
 async function loadAndRenderSPCOutlook(lat, lng) {
     const container = document.getElementById('spc-banner-container');
     if (!container) return;
 
-    const SPC_CAT_URL = 'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson';
-    let data;
-    try {
-        const resp = await fetch(SPC_CAT_URL, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('SPC ' + resp.status);
-        data = await resp.json();
-    } catch (e) {
-        // CORS fallback
-        try {
-            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(SPC_CAT_URL);
-            const resp2 = await fetch(proxy, { cache: 'no-store' });
-            if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
-            data = await resp2.json();
-        } catch (e2) {
-            console.warn('SPC outlook unavailable:', e2.message);
+    const DAY_URLS = [
+        'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson',
+        'https://www.spc.noaa.gov/products/outlook/day2otlk_cat.nolyr.geojson',
+        'https://www.spc.noaa.gov/products/outlook/day3otlk_cat.nolyr.geojson',
+    ];
+
+    // Fetch all three days in parallel; use allSettled so one failure won't
+    // suppress results from the other days.
+    const settled = await Promise.allSettled(DAY_URLS.map(url => _fetchSPCCatData(url)));
+
+    const hits = [];
+    settled.forEach((result, i) => {
+        if (result.status !== 'fulfilled') {
+            console.warn('SPC Day ' + (i + 1) + ' unavailable:', result.reason?.message);
             return;
         }
-    }
-
-    const features = (data.features || []);
-    let highestRisk = null;
-
-    for (const feature of features) {
-        const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
-        const riskIdx = _SPC_RISK_ORDER.indexOf(label);
-        if (riskIdx < 1) continue; // skip TSTM and unknowns
-        if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
-            if (!highestRisk || riskIdx > _SPC_RISK_ORDER.indexOf(highestRisk)) {
-                highestRisk = label;
+        const features = result.value?.features || [];
+        let highestRisk = null;
+        for (const feature of features) {
+            const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
+            const riskIdx = _SPC_RISK_ORDER.indexOf(label);
+            if (riskIdx < 1) continue; // skip TSTM and unknowns
+            if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
+                if (!highestRisk || riskIdx > _SPC_RISK_ORDER.indexOf(highestRisk)) {
+                    highestRisk = label;
+                }
             }
         }
-    }
+        if (highestRisk) hits.push({ risk: highestRisk, dayLabel: _spcDayLabel(i) });
+    });
 
-    if (highestRisk) {
-        renderSPCBanner(highestRisk);
+    if (hits.length > 0) {
+        renderSPCBanners(hits);
     } else {
         container.style.display = 'none';
         container.innerHTML = '';
     }
 }
 
-function renderSPCBanner(risk) {
+function renderSPCBanners(entries) {
     const container = document.getElementById('spc-banner-container');
     if (!container) return;
-    const label = _SPC_RISK_LABELS[risk] || risk;
-    const cls = _SPC_RISK_CLASS[risk] || 'mrgl';
     container.style.display = 'block';
-    container.innerHTML = `
+    container.innerHTML = entries.map(({ risk, dayLabel }) => {
+        const label = _SPC_RISK_LABELS[risk] || risk;
+        const cls   = _SPC_RISK_CLASS[risk] || 'mrgl';
+        return `
         <button type="button" class="spc-risk-banner spc-risk-${cls} fade-in"
                 onclick="navigateToSPCMaps()"
                 title="Tap to view SPC Outlook maps">
@@ -698,13 +720,13 @@ function renderSPCBanner(risk) {
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                 <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
-            <span><strong>${label} Risk</strong> of Severe Weather – Day 1 SPC Outlook. Tap to view maps.</span>
+            <span><strong>${label} Risk</strong> of Severe Weather – ${dayLabel}. Tap to view maps.</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                  stroke-linecap="round" style="flex-shrink:0;">
                 <polyline points="9 18 15 12 9 6"/>
             </svg>
-        </button>
-    `;
+        </button>`;
+    }).join('');
 }
 
 function navigateToSPCMaps() {

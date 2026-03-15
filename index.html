@@ -1507,22 +1507,38 @@
         'fire-2': { url: 'https://www.spc.noaa.gov/products/fire_wx/day2otlk.txt',          label: 'SPC Day 2 Fire Weather Outlook' },
     };
 
+    // If a proxy returns the SPC .txt URL wrapped in HTML, extract the raw text.
+    function _cleanDiscussionText(raw) {
+        const trimmed = raw.trim();
+        if (!trimmed.startsWith('<')) return trimmed; // already plain text
+        // Try to pull content from <pre> tags (SPC HTML pages wrap the text in <pre>)
+        const preMatch = trimmed.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+        if (preMatch) {
+            return preMatch[1]
+                .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim();
+        }
+        // Fallback: strip all tags
+        return trimmed.replace(/<[^>]+>/g, '')
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').trim();
+    }
+
     async function fetchDiscussionText(url) {
-        // Try direct fetch first (SPC serves CORS headers)
+        // Try direct fetch first (SPC .txt files are served with CORS headers)
         try {
-            const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
-            if (r.ok) return r.text();
+            const r = await fetch(url, { cache: 'no-store' });
+            if (r.ok) return _cleanDiscussionText(await r.text());
         } catch (_) { /* fall through to proxy */ }
-        // Proxy fallback
+        // Proxy 1: codetabs
         try {
             const p1 = 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(url);
             const r1 = await fetch(p1, { cache: 'no-store' });
-            if (r1.ok) return r1.text();
+            if (r1.ok) return _cleanDiscussionText(await r1.text());
         } catch (_) { /* fall through */ }
+        // Proxy 2: corsproxy.io
         const p2 = 'https://corsproxy.io/?' + encodeURIComponent(url);
         const r2 = await fetch(p2, { cache: 'no-store' });
         if (!r2.ok) throw new Error('All fetches failed (' + r2.status + ')');
-        return r2.text();
+        return _cleanDiscussionText(await r2.text());
     }
 
     function openDiscussionModal(key) {
@@ -2674,6 +2690,10 @@
         // Show SPC images right away (no map needed for "All Days" view)
         _showSPCView();
         renderSPCImages(0);
+        // Ensure the SPC info row (discussion + category info buttons) is visible on init
+        // switchLayer() is not called on first load, so we set it explicitly here.
+        const spcInfoRow = document.getElementById('spc-info-row');
+        if (spcInfoRow) spcInfoRow.style.display = '';
 
         // Initialize Mapbox map now so it is ready when the user selects a
         // specific day (which shows the interactive SPC GeoJSON overlay).
