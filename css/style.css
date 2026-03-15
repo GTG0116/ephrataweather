@@ -327,28 +327,10 @@ body {
     scroll-snap-type: x mandatory;
 }
 
-/* --- Hourly Metric Values Row --- */
+/* --- Hourly Metric Chart Row --- */
 .hourly-metric-row {
-    display: flex;
-    align-items: center;
-    padding: 4px 20px 16px;
-    min-width: max-content;
-}
-
-.hourly-mval {
-    min-width: 72px;
-    text-align: center;
-    font-size: 1.3rem;
-    font-weight: 300;
-    color: var(--text-primary);
-    flex-shrink: 0;
-}
-
-.hourly-mdash {
-    color: rgba(100, 200, 160, 0.7);
-    font-size: 1rem;
-    flex-shrink: 0;
-    line-height: 1;
+    line-height: 0;
+    padding-bottom: 4px;
 }
 
 /* --- Hourly Metric Selector --- */
