@@ -693,7 +693,7 @@ async function loadAndRenderSPCOutlook(lat, lng) {
                 }
             }
         }
-        if (highestRisk) hits.push({ risk: highestRisk, dayLabel: _spcDayLabel(i) });
+        if (highestRisk) hits.push({ risk: highestRisk, dayLabel: _spcDayLabel(i), dayNum: i + 1 });
     });
 
     if (hits.length > 0) {
@@ -708,13 +708,13 @@ function renderSPCBanners(entries) {
     const container = document.getElementById('spc-banner-container');
     if (!container) return;
     container.style.display = 'block';
-    container.innerHTML = entries.map(({ risk, dayLabel }) => {
+    container.innerHTML = entries.map(({ risk, dayLabel, dayNum }) => {
         const label = _SPC_RISK_LABELS[risk] || risk;
         const cls   = _SPC_RISK_CLASS[risk] || 'mrgl';
         return `
         <button type="button" class="spc-risk-banner spc-risk-${cls} fade-in"
-                onclick="navigateToSPCMaps()"
-                title="Tap to view SPC Outlook maps">
+                onclick="navigateToSPCMaps(${dayNum})"
+                title="Tap to view SPC Day ${dayNum} Outlook map">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
                  stroke-linecap="round" style="flex-shrink:0;">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -729,7 +729,8 @@ function renderSPCBanners(entries) {
     }).join('');
 }
 
-function navigateToSPCMaps() {
+function navigateToSPCMaps(dayNum) {
+    if (dayNum) window._spcTargetDay = dayNum;
     window.location.hash = '#maps';
     if (typeof showView === 'function') showView('maps');
 }
