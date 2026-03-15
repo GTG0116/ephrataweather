@@ -1734,7 +1734,7 @@
             map.addLayer({
                 id: 'mrms-radar-layer', type: 'raster', source: 'mrms-radar',
                 paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 300 }
-            });
+            }, _overlayBefore());
             _radarLoaded = true;
         }
         _updateRadarUI(idx);
@@ -1896,6 +1896,21 @@
     let currentDay = 0;  // 0 = show all days
     let currentType = 'cat';
     let firstSymbolLayerId = undefined;
+    let firstBorderLayerId = undefined;
+
+    // Find the first admin/boundary line layer so overlays can be inserted below
+    // it, keeping state borders and town names rendered above outlook fills.
+    function _findFirstBorderLayer(styleLayers) {
+        const keys = ['admin', 'border', 'boundary', 'state-'];
+        for (const layer of styleLayers) {
+            const lid = layer.id.toLowerCase();
+            if (layer.type === 'line' && keys.some(k => lid.includes(k))) return layer.id;
+        }
+        return undefined;
+    }
+
+    // Best insertion point: below borders (and labels); falls back to just below labels
+    function _overlayBefore() { return firstBorderLayerId ?? firstSymbolLayerId; }
     let currentBasemap = localStorage.getItem('ephrataBasemap') || 'dark';
     const BASEMAP_STYLES = {
         dark: 'mapbox://styles/mapbox/dark-v11',
@@ -2294,10 +2309,10 @@
             map.addSource('wpc-data', { type: 'geojson', data: normalized });
             map.addLayer({ id: 'wpc-fill', type: 'fill', source: 'wpc-data',
                 paint: { 'fill-color': WPC_ERO_FILL_EXPR, 'fill-opacity': 0.55, 'fill-antialias': true }
-            }, firstSymbolLayerId);
+            }, _overlayBefore());
             map.addLayer({ id: 'wpc-line', type: 'line', source: 'wpc-data',
                 paint: { 'line-color': WPC_ERO_LINE_EXPR, 'line-width': 1.5 }
-            }, firstSymbolLayerId);
+            }, _overlayBefore());
             updateWPCLegend();
         } catch (e) {
             console.error('WPC ERO fetch error:', e);
@@ -2317,10 +2332,10 @@
             map.addSource('fire-data', { type: 'geojson', data: normalized });
             map.addLayer({ id: 'fire-fill', type: 'fill', source: 'fire-data',
                 paint: { 'fill-color': FIRE_FILL_EXPR, 'fill-opacity': 0.55, 'fill-antialias': true }
-            }, firstSymbolLayerId);
+            }, _overlayBefore());
             map.addLayer({ id: 'fire-line', type: 'line', source: 'fire-data',
                 paint: { 'line-color': FIRE_LINE_EXPR, 'line-width': 1.5 }
-            }, firstSymbolLayerId);
+            }, _overlayBefore());
             updateFireLegend();
         } catch (e) {
             console.error('Fire weather fetch error:', e);
@@ -2448,14 +2463,14 @@
                                : PROB_LINE_EXPR;
             map.addLayer({ id: 'spc-fill', type: 'fill', source: 'spc-data',
                 paint: { 'fill-color': isCat ? CAT_FILL_EXPR : probFillExpr, 'fill-antialias': true }
-            }, firstSymbolLayerId);
+            }, _overlayBefore());
             map.addLayer({ id: 'spc-line', type: 'line', source: 'spc-data',
                 paint: {
                     'line-color': isCat ? CAT_LINE_EXPR : probLineExpr,
                     'line-width': 1.2,
                     'line-dasharray': isCat ? ['literal', [1, 0]] : CIG_DASH_EXPR
                 }
-            }, firstSymbolLayerId);
+            }, _overlayBefore());
             if (!isCat) {
                 // CIG1 (Conditional Low) and CIG2 (Conditional Moderate) apply to tornado & wind
                 // CIG3 (Conditional High) does NOT apply to hail — SPC only uses it for torn/wind
@@ -2463,20 +2478,20 @@
                 map.addLayer({ id: 'spc-fill-cig1', type: 'fill', source: 'spc-data',
                     filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG1'],
                     paint: { 'fill-pattern': 'cig1-pattern' }
-                }, firstSymbolLayerId);
+                }, _overlayBefore());
                 map.addLayer({ id: 'spc-fill-cig2', type: 'fill', source: 'spc-data',
                     filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG2'],
                     paint: { 'fill-pattern': 'cig2-pattern' }
-                }, firstSymbolLayerId);
+                }, _overlayBefore());
                 if (hasCig3) {
                     map.addLayer({ id: 'spc-fill-cig3', type: 'fill', source: 'spc-data',
                         filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
                         paint: { 'fill-pattern': 'cig3-pattern' }
-                    }, firstSymbolLayerId);
+                    }, _overlayBefore());
                     map.addLayer({ id: 'spc-line-cig3-double', type: 'line', source: 'spc-data',
                         filter: ['==', ['upcase', ['coalesce', ['get', 'LABEL'], '']], 'CIG3'],
                         paint: { 'line-color': '#000000', 'line-width': 5, 'line-gap-width': 2 }
-                    }, firstSymbolLayerId);
+                    }, _overlayBefore());
                 }
             }
             updateSPCLegend(day, type);
@@ -2503,7 +2518,7 @@
         });
         map.addLayer({ id: 'owm-layer', type: 'raster', source: 'owm-source',
             paint: { 'raster-opacity': currentOWMOpacity }
-        }, firstSymbolLayerId);
+        }, _overlayBefore());
     }
     function setOWMOpacity(val) {
         currentOWMOpacity = val / 100;
@@ -2759,9 +2774,11 @@
         map.once('styledata', () => {
             const styleLayers = map.getStyle().layers || [];
             firstSymbolLayerId = undefined;
+            firstBorderLayerId = undefined;
             for (const layer of styleLayers) {
-                if (layer.type === 'symbol') { firstSymbolLayerId = layer.id; break; }
+                if (layer.type === 'symbol' && !firstSymbolLayerId) firstSymbolLayerId = layer.id;
             }
+            firstBorderLayerId = _findFirstBorderLayer(styleLayers);
             addCIGPatterns();
             map.off('click', handleOWMClick);
             map.on('click', handleOWMClick);
@@ -2973,9 +2990,12 @@
             map.addControl(new mapboxgl.NavigationControl(), 'top-right');
             map.on('load', () => {
                 const styleLayers = map.getStyle().layers;
+                firstSymbolLayerId = undefined;
+                firstBorderLayerId = undefined;
                 for (const layer of styleLayers) {
-                    if (layer.type === 'symbol') { firstSymbolLayerId = layer.id; break; }
+                    if (layer.type === 'symbol' && !firstSymbolLayerId) firstSymbolLayerId = layer.id;
                 }
+                firstBorderLayerId = _findFirstBorderLayer(styleLayers);
                 addCIGPatterns();
                 map.on('click', handleOWMClick);
                 map.on('click', handleOutlookClick);
