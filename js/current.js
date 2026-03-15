@@ -593,7 +593,7 @@ function _drawAlertMap(alert) {
                     paint: { 'line-color': '#ffab91', 'line-width': 2.2 }
                 });
             }
-            _loadIEMRadarToAlertMap();
+            _loadMRMSToAlertMap();
             if (geojson.features.length && window.turf) {
                 const bounds = turf.bbox(geojson);
                 _alertMap.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 30, duration: 0 });
@@ -636,25 +636,24 @@ function _drawAlertMap(alert) {
     }
 }
 
-// ---- IEM NEXRAD radar layer on the alert map ----
-// Uses Iowa Environmental Mesonet (IEM) NEXRAD composite tiles — no API
-// fetch required, the URL always serves the latest radar frame.
-function _loadIEMRadarToAlertMap() {
+// ---- MRMS Precip Type radar layer on the alert map ----
+// Uses the GitHub-hosted MRMS master.png image overlay (same source as the main map).
+const _ALERT_MRMS_BASE   = 'https://raw.githubusercontent.com/EphrataWeather/MRMS/main/public/data/';
+const _ALERT_MRMS_COORDS = [[-130, 50], [-60, 50], [-60, 24], [-130, 24]];
+
+function _loadMRMSToAlertMap() {
     if (!_alertMap) return;
     try {
-        // IEM NEXRAD N0Q composite (highest resolution base reflectivity)
-        const tileUrl = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
+        // 1-minute cache-bust to always fetch the latest frame
+        const url = _ALERT_MRMS_BASE + 'master.png?cb=' + Math.floor(Date.now() / 60000);
 
         if (_alertMap.getSource('alert-mrms')) {
-            // Source already exists — update tiles in place
-            _alertMap.getSource('alert-mrms').setTiles([tileUrl]);
+            _alertMap.getSource('alert-mrms').updateImage({ url });
         } else {
             _alertMap.addSource('alert-mrms', {
-                type: 'raster',
-                tiles: [tileUrl],
-                tileSize: 256,
-                maxzoom: 10,
-                attribution: 'Radar © <a href="https://mesonet.agron.iastate.edu/">IEM</a>'
+                type: 'image',
+                url,
+                coordinates: _ALERT_MRMS_COORDS
             });
             // Insert radar BEFORE the alert-fill layer so it renders underneath
             const beforeId = _alertMap.getLayer('alert-fill') ? 'alert-fill' : undefined;
@@ -663,13 +662,14 @@ function _loadIEMRadarToAlertMap() {
                 type: 'raster',
                 source: 'alert-mrms',
                 paint: {
-                    'raster-opacity': 0.72,
-                    'raster-fade-duration': 300
+                    'raster-opacity': 0.75,
+                    'raster-fade-duration': 300,
+                    'raster-resampling': 'nearest'
                 }
             }, beforeId);
         }
     } catch (e) {
-        console.warn('IEM radar unavailable on alert map:', e);
+        console.warn('MRMS radar unavailable on alert map:', e);
     }
 }
 
