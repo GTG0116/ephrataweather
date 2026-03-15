@@ -940,7 +940,7 @@
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                             What do these categories mean?
                         </button>
-                        <button onclick="openSPCDiscussion()" class="discussion-btn">
+                        <button id="spc-discussion-btn" onclick="openSPCDiscussion()" class="discussion-btn">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                             Forecaster Discussion
                         </button>
@@ -2701,7 +2701,7 @@
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
         document.getElementById('basemap-controls').classList.toggle('visible',
-            mapLayer || layer === 'spc' || layer === 'radar');
+            mapLayer || layer === 'spc' || layer === 'radar' || layer === 'wpc-rain' || layer === 'fire-wx');
 
         if (layer === 'spc') {
             clearOWMLayers(); clearWPCLayers(); clearFireLayers();
@@ -2751,7 +2751,9 @@
         if (currentLayer !== 'spc') return;
 
         if (day === 0) {
-            // All Days: image gallery only, no interactive map
+            // All Days: image gallery only, hide discussion (no specific day selected)
+            const discBtn = document.getElementById('spc-discussion-btn');
+            if (discBtn) discBtn.style.display = 'none';
             document.getElementById('type-row').style.display = 'none';
             clearSPCLayers(); hideSPCLegend();
             _showSPCView();
@@ -2765,6 +2767,10 @@
     }
 
     function buildTypeButtons(day) {
+        // Hide forecaster discussion button for Days 4-8 (no discussion text available)
+        const discBtn = document.getElementById('spc-discussion-btn');
+        if (discBtn) discBtn.style.display = day >= 4 ? 'none' : '';
+
         const types = DAY_TYPES[day] || [];
         const typeRow = document.getElementById('type-row');
 
