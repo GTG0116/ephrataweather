@@ -1194,14 +1194,17 @@ function applyWeatherBackground(condType, isNight) {
     }
 
     if (!cls) return;
+    if (el.classList.contains(cls)) return; // already correct, nothing to do
 
-    el.style.transition = 'opacity 0.7s ease';
+    el.style.transition = 'opacity 0.6s ease';
+    void el.offsetHeight; // flush styles so transition is registered before opacity change
     el.style.opacity = '0';
     setTimeout(() => {
         el.className = el.className.replace(/\bbg-cond-\S+/g, '').trim();
         el.classList.add(cls);
+        void el.offsetHeight; // flush again so the new class is painted before fade-in
         el.style.opacity = '1';
-    }, 700);
+    }, 650);
 }
 
 function renderHourlyForecast(data, forecastDays) {

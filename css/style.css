@@ -86,12 +86,12 @@ body {
 
 /* --- Weather Condition Backgrounds ---
    Applied dynamically via applyWeatherBackground() in current.js.
-   Each class overrides the base gradient; the gradientShift animation
-   continues to run so the colours gently pulse on every theme.        */
+   Uses background-image (not the shorthand) so background-size: 400% 400%
+   and the gradientShift animation defined on .bg-gradient are preserved.  */
 
 /* Clear sky — day: vivid blue */
 .bg-gradient.bg-cond-clear-day {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #041632 0%, #0b3068 20%, #155caa 40%, #1a6cc0 60%, #104ea0 80%, #041632 100%);
 }
 .bg-gradient.bg-cond-clear-day::before {
@@ -103,7 +103,7 @@ body {
 
 /* Clear sky — night: deep midnight */
 .bg-gradient.bg-cond-clear-night {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #010309 0%, #040812 20%, #06101e 40%, #081222 60%, #05091a 80%, #010309 100%);
 }
 .bg-gradient.bg-cond-clear-night::before {
@@ -115,19 +115,19 @@ body {
 
 /* Partly cloudy — day: softer hazy blue */
 .bg-gradient.bg-cond-partly-cloudy-day {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #0c1e38 0%, #152e54 20%, #1c3e6c 40%, #1a3a64 60%, #12283e 80%, #0c1e38 100%);
 }
 
 /* Partly cloudy — night: dark navy haze */
 .bg-gradient.bg-cond-partly-cloudy-night {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #060a14 0%, #0a1220 20%, #0e1a2c 40%, #0c1828 60%, #080e1c 80%, #060a14 100%);
 }
 
 /* Cloudy / overcast: heavy blue-gray */
 .bg-gradient.bg-cond-cloudy {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #0e1220 0%, #151a2c 20%, #1a2034 40%, #181e30 60%, #121624 80%, #0e1220 100%);
 }
 .bg-gradient.bg-cond-cloudy::before {
@@ -139,7 +139,7 @@ body {
 
 /* Rain (drizzle, light rain, heavy rain): dark steel blue */
 .bg-gradient.bg-cond-rain {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #070c14 0%, #0c1320 20%, #101a28 40%, #0e1724 60%, #090d18 80%, #070c14 100%);
 }
 .bg-gradient.bg-cond-rain::before {
@@ -151,7 +151,7 @@ body {
 
 /* Thunderstorm: very dark purple-navy */
 .bg-gradient.bg-cond-storm {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #060410 0%, #0c0820 20%, #140a2c 40%, #100826 60%, #08061a 80%, #060410 100%);
 }
 .bg-gradient.bg-cond-storm::before {
@@ -163,7 +163,7 @@ body {
 
 /* Snow / sleet: icy pale blue */
 .bg-gradient.bg-cond-snow {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #0e1e32 0%, #172c48 20%, #1d3658 40%, #1b3252 60%, #142840 80%, #0e1e32 100%);
 }
 .bg-gradient.bg-cond-snow::before {
@@ -175,7 +175,7 @@ body {
 
 /* Fog / haze: muted cool gray */
 .bg-gradient.bg-cond-fog {
-    background: linear-gradient(135deg,
+    background-image: linear-gradient(135deg,
         #0c0e12 0%, #141618 20%, #181b20 40%, #161920 60%, #101214 80%, #0c0e12 100%);
 }
 .bg-gradient.bg-cond-fog::before {
