@@ -1165,6 +1165,43 @@ function renderCurrentConditions(data, dailyData) {
         document.getElementById('cloud-value').innerHTML =
             `${Math.round(clouds)}<span class="unit">%</span>`;
     }
+
+    applyWeatherBackground(condType, isNight);
+}
+
+// Maps a condition type to one of the bg-cond-* CSS classes and applies it
+// to the .bg-gradient element with a brief opacity cross-fade.
+function applyWeatherBackground(condType, isNight) {
+    const el = document.querySelector('.bg-gradient');
+    if (!el) return;
+    const ct = (condType || '').toUpperCase();
+
+    let cls = '';
+    if (ct === 'CLEAR' || ct === 'MOSTLY_CLEAR') {
+        cls = isNight ? 'bg-cond-clear-night' : 'bg-cond-clear-day';
+    } else if (ct === 'PARTLY_CLOUDY') {
+        cls = isNight ? 'bg-cond-partly-cloudy-night' : 'bg-cond-partly-cloudy-day';
+    } else if (ct === 'MOSTLY_CLOUDY' || ct === 'OVERCAST') {
+        cls = 'bg-cond-cloudy';
+    } else if (ct.includes('THUNDER')) {
+        cls = 'bg-cond-storm';
+    } else if (ct.includes('RAIN') || ct === 'DRIZZLE' || ct === 'FREEZING_RAIN') {
+        cls = 'bg-cond-rain';
+    } else if (ct.includes('SNOW') || ct === 'SLEET') {
+        cls = 'bg-cond-snow';
+    } else if (ct === 'FOG') {
+        cls = 'bg-cond-fog';
+    }
+
+    if (!cls) return;
+
+    el.style.transition = 'opacity 0.7s ease';
+    el.style.opacity = '0';
+    setTimeout(() => {
+        el.className = el.className.replace(/\bbg-cond-\S+/g, '').trim();
+        el.classList.add(cls);
+        el.style.opacity = '1';
+    }, 700);
 }
 
 function renderHourlyForecast(data, forecastDays) {
