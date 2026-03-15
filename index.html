@@ -1086,14 +1086,16 @@
                 <!-- Radar Sub-Controls -->
                 <div class="radar-controls" id="radar-controls">
                     <!-- Product Selector -->
-                    <div class="ctrl-row" style="flex-wrap:wrap;gap:5px;">
-                        <button class="type-btn active" data-product="precip_type" onclick="setRadarProduct('precip_type')">Precip Type</button>
-                        <button class="type-btn" data-product="refl" onclick="setRadarProduct('refl')">Reflectivity</button>
-                        <button class="type-btn" data-product="mesh" onclick="setRadarProduct('mesh')">Hail (MESH)</button>
-                        <button class="type-btn" data-product="qpe6h" onclick="setRadarProduct('qpe6h')">6hr Precip</button>
-                        <button class="type-btn" data-product="qpe24h" onclick="setRadarProduct('qpe24h')">24hr Precip</button>
-                        <button class="type-btn" data-product="lightning" onclick="setRadarProduct('lightning')">Lightning</button>
-                        <button class="type-btn" data-product="rotation" onclick="setRadarProduct('rotation')">Az Shear</button>
+                    <div class="ctrl-row" style="gap:8px;align-items:center;">
+                        <select id="radar-product-select" class="ctrl-select" onchange="setRadarProduct(this.value)">
+                            <option value="precip_type">Precip Type</option>
+                            <option value="refl">Reflectivity</option>
+                            <option value="mesh">Hail Size (MESH)</option>
+                            <option value="qpe6h">6hr Total Precip</option>
+                            <option value="qpe24h">24hr Total Precip</option>
+                            <option value="lightning">CG Lightning Prob</option>
+                            <option value="rotation">Az Shear / Rotation</option>
+                        </select>
                     </div>
                     <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <button id="radar-play-btn" class="day-btn active" onclick="toggleRadarAnimation()" style="flex-shrink:0;min-width:70px;">&#9654; Play</button>
@@ -1175,7 +1177,7 @@
                     <div class="legend-title" id="legend-title">Categorical Risk</div>
                     <div id="legend-items"></div>
                 </div>
-                <div class="spc-legend radar-legend" id="radar-legend" style="display:none;">
+                <div class="spc-legend" id="radar-legend">
                     <div class="legend-title" id="radar-legend-title">Reflectivity</div>
                     <div id="radar-legend-items"></div>
                 </div>
@@ -1846,7 +1848,7 @@
             if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
         }
         const legend = document.getElementById('radar-legend');
-        if (legend) legend.style.display = 'none';
+        if (legend) legend.classList.remove('visible');
     }
 
     async function loadRadarLayer() {
@@ -1896,16 +1898,15 @@
             items.appendChild(wrap);
         });
 
-        legend.style.display = '';
+        legend.classList.add('visible');
     }
 
     function setRadarProduct(product) {
         if (!MRMS_PRODUCT_DEFS[product]) return;
         _currentRadarProduct = product;
         _radarLoaded = false;
-        document.querySelectorAll('[data-product]').forEach(btn =>
-            btn.classList.toggle('active', btn.dataset.product === product)
-        );
+        const sel = document.getElementById('radar-product-select');
+        if (sel) sel.value = product;
         if (currentLayer === 'radar') {
             stopRadarAnimation();
             if (map) {
