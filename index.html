@@ -1041,14 +1041,30 @@
                     </div>
                 </div>
                 <!-- Satellite Sub-Controls -->
-                <div class="spc-controls" id="satellite-controls">
-                    <div class="ctrl-row">
+                <div class="radar-controls" id="satellite-controls">
+                    <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <select id="sat-band-select" class="ctrl-select" onchange="selectSatBand(this.value)">
                             <option value="geocolor">GeoColor</option>
                             <option value="visible">Visible</option>
                             <option value="infrared">Infrared</option>
                             <option value="watervapor">Water Vapor</option>
                         </select>
+                    </div>
+                    <div class="ctrl-row" style="gap:8px;align-items:center;">
+                        <button id="sat-play-btn" class="day-btn active" onclick="toggleSatAnimation()" style="flex-shrink:0;min-width:70px;">&#9654; Play</button>
+                        <input type="range" id="sat-frame-slider" min="0" max="9" value="9"
+                               oninput="onSatSliderChange(this.value)"
+                               style="flex:1;min-width:0;accent-color:var(--accent-blue);">
+                        <button class="icon-action-btn" onclick="refreshSat()" title="Refresh">&#8635;</button>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.72rem;padding:0 2px;margin-top:-2px;">
+                        <span style="color:var(--text-muted);">← Older</span>
+                        <span id="sat-time-display" style="color:var(--text-secondary);font-weight:600;">—</span>
+                        <span style="color:var(--text-muted);">Newer →</span>
+                    </div>
+                    <div class="opacity-row">
+                        <span>Opacity:</span>
+                        <input type="range" min="0" max="100" value="90" oninput="setSatOpacity(this.value)" id="sat-opacity">
                     </div>
                 </div>
                 <!-- WPC Excessive Rainfall Sub-Controls -->
@@ -1150,17 +1166,7 @@
                 <div id="spc-img-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
             </div>
 
-            <!-- Satellite Image View -->
-            <div id="satellite-image-view" class="glass-static" style="display:none;padding:16px;">
-                <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:14px;">
-                    GOES-East CONUS satellite imagery &mdash; click to zoom &bull;
-                    <span id="sat-timestamp" style="color:var(--text-secondary);">Images refresh every ~5 min from NOAA.</span>
-                </p>
-                <div id="sat-img-wrap" style="text-align:center;">
-                    <img id="sat-main-img" src="" alt="Satellite" style="max-width:100%;border-radius:8px;cursor:zoom-in;"
-                         onclick="openImageZoom(this.src, this.alt)" />
-                </div>
-            </div>
+
 
             <!-- MRMS Radar Viewer -->
             <div id="radar-image-view" style="display:none;">
@@ -2844,32 +2850,170 @@
     }
 
     // ============================================================
-    // SATELLITE VIEWER
+    // SATELLITE VIEWER (interactive map, GitHub-hosted frames)
     // ============================================================
-    const SAT_BANDS = {
-        geocolor:   { url: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/CONUS/GEOCOLOR/1250x750.jpg', label: 'GeoColor (True Color)' },
-        visible:    { url: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/CONUS/02/1250x750.jpg',       label: 'Visible (Band 2)' },
-        infrared:   { url: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/CONUS/13/1250x750.jpg',       label: 'Clean Longwave IR (Band 13)' },
-        watervapor: { url: 'https://cdn.star.nesdis.noaa.gov/GOES16/ABI/CONUS/09/1250x750.jpg',       label: 'Mid-Level Water Vapor (Band 9)' },
-    };
-    let currentSatBand = 'geocolor';
+    const SAT_BASE = 'https://raw.githubusercontent.com/GTG0116/Satellite/main/site/data/';
+    // GOES-East CONUS image corners [lng, lat]: NW, NE, SE, SW
+    const SAT_COORDS = [[-135.0, 50.0], [-60.0, 50.0], [-60.0, 20.0], [-135.0, 20.0]];
+    const SAT_MAX_FRAMES = 10;
 
-    function selectSatBand(band) {
-        currentSatBand = band;
-        const satSel = document.getElementById('sat-band-select');
-        if (satSel) satSel.value = band;
-        loadSatelliteImage(band);
+    const SAT_PRODUCTS = {
+        geocolor:   { label: 'GeoColor',    prefix: 'geocolor'    },
+        visible:    { label: 'Visible',      prefix: 'visible'     },
+        infrared:   { label: 'Infrared',     prefix: 'infrared'    },
+        watervapor: { label: 'Water Vapor',  prefix: 'water_vapor' },
+    };
+
+    let _currentSatProduct = 'geocolor';
+    let _satFrameIdx       = 0;      // 0 = newest
+    let _satFrameCount     = 1;      // determined on load
+    let _satAnimTimer      = null;
+    let _satLoaded         = false;
+    let _satFrames         = [];     // ordered list of available frame indices (newest first)
+
+    function _satFrameUrl(idx, product) {
+        const prod = SAT_PRODUCTS[product || _currentSatProduct];
+        const frame = String(idx).padStart(2, '0');
+        const cb = Math.floor(Date.now() / 60000);
+        return SAT_BASE + prod.prefix + '_' + frame + '.png?cb=' + cb;
     }
 
-    function loadSatelliteImage(band) {
-        const info = SAT_BANDS[band];
-        if (!info) return;
-        const img = document.getElementById('sat-main-img');
-        if (!img) return;
-        img.alt = info.label;
-        // Cache-bust so we always get the latest
-        img.src = info.url + '?cb=' + Date.now();
-        img.title = 'Click to zoom – ' + info.label;
+    async function _probeSatFrames(product) {
+        const cb = Math.floor(Date.now() / 60000);
+        const prod = SAT_PRODUCTS[product || _currentSatProduct];
+        const checks = Array.from({ length: SAT_MAX_FRAMES }, (_, i) => {
+            const frame = String(i).padStart(2, '0');
+            const url = SAT_BASE + prod.prefix + '_' + frame + '.png?cb=' + cb;
+            return fetch(url, { method: 'HEAD', cache: 'no-store' })
+                .then(r => r.ok ? i : null).catch(() => null);
+        });
+        const results = await Promise.all(checks);
+        // newest first: lower index = newer
+        return results.filter(i => i !== null).sort((a, b) => a - b);
+    }
+
+    function _updateSatUI(pos) {
+        // pos: position in _satFrames array (0 = newest)
+        const slider = document.getElementById('sat-frame-slider');
+        const timeEl = document.getElementById('sat-time-display');
+        if (slider) slider.value = _satFrames.length - 1 - pos;
+        if (timeEl) {
+            const frameIdx = _satFrames[pos];
+            if (frameIdx === 0) {
+                timeEl.textContent = 'Latest';
+            } else {
+                timeEl.textContent = frameIdx === null ? '—' : 'Frame -' + frameIdx;
+            }
+        }
+    }
+
+    function showSatFrame(pos) {
+        if (!map) return;
+        _satFrameIdx = pos;
+        const frameIdx = _satFrames[pos];
+        const url = _satFrameUrl(frameIdx);
+        if (_satLoaded && map.getSource('sat-overlay')) {
+            map.getSource('sat-overlay').updateImage({ url });
+        } else {
+            if (map.getLayer('sat-overlay-layer')) map.removeLayer('sat-overlay-layer');
+            if (map.getSource('sat-overlay'))      map.removeSource('sat-overlay');
+            map.addSource('sat-overlay', { type: 'image', url, coordinates: SAT_COORDS });
+            map.addLayer({
+                id: 'sat-overlay-layer', type: 'raster', source: 'sat-overlay',
+                paint: {
+                    'raster-opacity': 0.9,
+                    'raster-fade-duration': 0,
+                    'raster-resampling': 'nearest'
+                }
+            }, _overlayBefore());
+            _satLoaded = true;
+        }
+        _updateSatUI(pos);
+    }
+
+    function clearSatLayer() {
+        stopSatAnimation();
+        _satLoaded = false;
+        if (map) {
+            if (map.getLayer('sat-overlay-layer')) map.removeLayer('sat-overlay-layer');
+            if (map.getSource('sat-overlay'))      map.removeSource('sat-overlay');
+        }
+    }
+
+    async function loadSatLayer() {
+        showLoading('Loading satellite\u2026');
+        try {
+            _satLoaded = false;
+            if (map) {
+                if (map.getLayer('sat-overlay-layer')) map.removeLayer('sat-overlay-layer');
+                if (map.getSource('sat-overlay'))      map.removeSource('sat-overlay');
+            }
+            _satFrames = await _probeSatFrames(_currentSatProduct);
+            if (_satFrames.length === 0) _satFrames = [0]; // fallback
+            _satFrameIdx = 0;
+            const slider = document.getElementById('sat-frame-slider');
+            if (slider) { slider.max = _satFrames.length - 1; slider.value = _satFrames.length - 1; }
+            showSatFrame(0);
+            // Fetch timestamp from last_updated.txt
+            const cb = Math.floor(Date.now() / 60000);
+            fetch(SAT_BASE + 'last_updated.txt?cb=' + cb, { cache: 'no-store' })
+                .then(r => r.ok ? r.text() : null)
+                .then(txt => {
+                    const timeEl = document.getElementById('sat-time-display');
+                    if (timeEl && txt) timeEl.textContent = txt.trim();
+                }).catch(() => {});
+        } finally { hideLoading(); }
+    }
+
+    function playSatAnimation() {
+        if (_satAnimTimer) return;
+        _satAnimTimer = setInterval(() => {
+            // Advance oldest→newest then loop (pos 0 = newest)
+            showSatFrame(_satFrameIdx <= 0 ? _satFrames.length - 1 : _satFrameIdx - 1);
+        }, 600);
+        const btn = document.getElementById('sat-play-btn');
+        if (btn) btn.innerHTML = '&#9646;&#9646; Pause';
+    }
+
+    function stopSatAnimation() {
+        if (_satAnimTimer) { clearInterval(_satAnimTimer); _satAnimTimer = null; }
+        const btn = document.getElementById('sat-play-btn');
+        if (btn) btn.innerHTML = '&#9654; Play';
+    }
+
+    function toggleSatAnimation() {
+        if (_satAnimTimer) stopSatAnimation(); else playSatAnimation();
+    }
+
+    function onSatSliderChange(val) {
+        stopSatAnimation();
+        // slider 0=oldest → pos _satFrames.length-1;  slider max=newest → pos 0
+        showSatFrame(_satFrames.length - 1 - parseInt(val, 10));
+    }
+
+    function setSatOpacity(val) {
+        if (map && map.getLayer('sat-overlay-layer'))
+            map.setPaintProperty('sat-overlay-layer', 'raster-opacity', parseInt(val, 10) / 100);
+    }
+
+    function selectSatBand(band) {
+        if (!SAT_PRODUCTS[band]) return;
+        _currentSatProduct = band;
+        const satSel = document.getElementById('sat-band-select');
+        if (satSel) satSel.value = band;
+        if (currentLayer === 'satellite') {
+            stopSatAnimation();
+            _satLoaded = false;
+            _ensureMapReady().then(() => loadSatLayer());
+        }
+    }
+
+    async function refreshSat() {
+        stopSatAnimation();
+        _satLoaded = false;
+        _satFrames = [];
+        await _ensureMapReady();
+        await loadSatLayer();
     }
 
     // ============================================================
@@ -2899,7 +3043,6 @@
 
     function _hideAllViews() {
         document.getElementById('spc-image-view').style.display = 'none';
-        document.getElementById('satellite-image-view').style.display = 'none';
         document.getElementById('radar-image-view').style.display = 'none';
         document.getElementById('map-view-wrap').style.display = 'none';
         document.getElementById('wpc-rain-view').style.display = 'none';
@@ -2914,7 +3057,7 @@
         if (withImages) document.getElementById('spc-image-view').style.display = '';
         if (map) setTimeout(() => map.resize(), 50);
     }
-    function _showSatelliteView() { _hideAllViews(); document.getElementById('satellite-image-view').style.display = ''; }
+    function _showSatelliteView() { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; if (map) setTimeout(() => map.resize(), 50); }
     function _showRadarView()     { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; if (map) setTimeout(() => map.resize(), 50); }
     function _showMapView()       { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; }
     function _showWPCRainView()   { _hideAllViews(); document.getElementById('map-view-wrap').style.display = ''; document.getElementById('wpc-rain-view').style.display = ''; if (map) setTimeout(() => map.resize(), 50); }
@@ -2949,6 +3092,7 @@
             else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
             else if (currentLayer === 'fire-wx') loadFireLayer(currentFireDay, currentFireType);
             else if (currentLayer === 'radar') { _radarLoaded = false; showRadarFrame(_radarFrameIdx); }
+            else if (currentLayer === 'satellite') { _satLoaded = false; showSatFrame(_satFrameIdx); }
         });
     }
 
@@ -2974,6 +3118,7 @@
 
     function switchLayer(layer) {
         if (layer !== 'radar') clearRadarLayer(); // always clean up radar when leaving
+        if (layer !== 'satellite') clearSatLayer(); // always clean up satellite when leaving
         currentLayer = layer;
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
@@ -2986,7 +3131,7 @@
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
         document.getElementById('basemap-controls').classList.toggle('visible',
-            mapLayer || layer === 'spc' || layer === 'radar' || layer === 'wpc-rain' || layer === 'fire-wx');
+            mapLayer || layer === 'spc' || layer === 'radar' || layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx');
 
         if (layer === 'spc') {
             clearOWMLayers(); clearWPCLayers(); clearFireLayers();
@@ -3003,9 +3148,9 @@
                 renderSPCImages(0);
             }
         } else if (layer === 'satellite') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showSatelliteView();
-            loadSatelliteImage(currentSatBand);
+            _ensureMapReady().then(() => loadSatLayer());
         } else if (layer === 'radar') {
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showRadarView();
