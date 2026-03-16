@@ -2853,8 +2853,8 @@
     // SATELLITE VIEWER (interactive map, GitHub-hosted frames)
     // ============================================================
     const SAT_BASE = 'https://raw.githubusercontent.com/GTG0116/Satellite/main/site/data/';
-    // GOES-East CONUS image corners [lng, lat]: NW, NE, SE, SW
-    const SAT_COORDS = [[-135.0, 50.0], [-60.0, 50.0], [-60.0, 20.0], [-135.0, 20.0]];
+    // GOES-East CONUS image corners [lng, lat]: NW, NE, SE, SW  (must match EXTENT in process_data.py: [-135, -60, 20, 55])
+    const SAT_COORDS = [[-135.0, 55.0], [-60.0, 55.0], [-60.0, 20.0], [-135.0, 20.0]];
     const SAT_MAX_FRAMES = 10;
 
     const SAT_PRODUCTS = {
