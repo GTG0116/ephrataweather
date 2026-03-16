@@ -2365,23 +2365,27 @@
         // Guard against duplicate registration (e.g. if called twice before a
         // style reset clears images).
         if (map.hasImage('cig1-pattern')) return;
+        // Use 2× canvas dimensions and pixelRatio:2 so Mapbox renders a
+        // crisp 20×12 (stripe) / 20×20 (cross) logical-pixel tile using the
+        // full 40×24 / 40×40 pixel budget, giving sharp lines on all displays.
+        // All drawing coordinates are in canvas-pixel space (within the canvas size).
         // cig1: dashed horizontal line — black like SPC Conditional Low
-        map.addImage('cig1-pattern', makePattern(20, 12, ctx => {
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2;
-            ctx.setLineDash([3, 4]);
-            ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(20, 6); ctx.stroke();
-        }));
+        map.addImage('cig1-pattern', makePattern(40, 24, ctx => {
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 3;
+            ctx.setLineDash([8, 9]);
+            ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(40, 12); ctx.stroke();
+        }), { pixelRatio: 2 });
         // cig2: solid horizontal line — black like SPC Conditional Moderate
-        map.addImage('cig2-pattern', makePattern(20, 12, ctx => {
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(0, 6); ctx.lineTo(20, 6); ctx.stroke();
-        }));
+        map.addImage('cig2-pattern', makePattern(40, 24, ctx => {
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(40, 12); ctx.stroke();
+        }), { pixelRatio: 2 });
         // cig3: crosshatch — solid horizontal + vertical lines — black like SPC Conditional High
-        map.addImage('cig3-pattern', makePattern(20, 20, ctx => {
-            ctx.strokeStyle = '#000000'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(20, 10); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(10, 20); ctx.stroke();
-        }));
+        map.addImage('cig3-pattern', makePattern(40, 40, ctx => {
+            ctx.strokeStyle = '#000000'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(40, 20); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(20, 40); ctx.stroke();
+        }), { pixelRatio: 2 });
     }
 
     function removeLayer(id) { if (map && map.getLayer(id))  map.removeLayer(id); }
@@ -3159,14 +3163,75 @@
         vis:      { label: 'Visibility',       unit: ' mi', file: 'vis.png',      binFile: 'vis_data.bin'      },
     };
 
-    // Approximate color gradient legends matching typical RTMA color scales
+    // Accurate matplotlib colormap gradients matching the PNG outputs exactly.
+    // Each entry: gradient CSS string, ticks array [{pct, label}] for legend tick marks.
     const RTMA_LEGENDS = {
-        temp:     { low: '-20°F', high: '110°F',  gradient: 'linear-gradient(to right,#3b1d8a,#5555cc,#3399ff,#00ccff,#00ffcc,#88ff00,#ffff00,#ffaa00,#ff5500,#cc0000,#880000)' },
-        apparent: { low: '-20°F', high: '110°F',  gradient: 'linear-gradient(to right,#3b1d8a,#5555cc,#3399ff,#00ccff,#00ffcc,#88ff00,#ffff00,#ffaa00,#ff5500,#cc0000,#880000)' },
-        wind:     { low: 'Calm',  high: '60+ mph',gradient: 'linear-gradient(to right,#dff6ff,#85c9e8,#3b82f6,#1d4ed8,#6d28d9,#7c1818)' },
-        rh:       { low: '0%',    high: '100%',   gradient: 'linear-gradient(to right,#c8a000,#ffff80,#c8f0a0,#80d060,#209840,#006020)' },
-        cloud:    { low: 'Clear', high: 'Overcast',gradient: 'linear-gradient(to right,#101030,#303070,#6060a0,#9090c0,#c0c0d8,#e8e8f0)' },
-        vis:      { low: '<1 mi', high: '10+ mi', gradient: 'linear-gradient(to right,#880000,#ff8800,#ffdd00,#88ff00,#00cc88,#00aaff)' },
+        // turbo colormap, -20 → 110 °F
+        temp: {
+            gradient: 'linear-gradient(to right,#30123b,#4145ab,#4675ed,#39a8f8,#1bcfd4,#24eba6,#61fc6c,#aef84f,#e2dc37,#f8a91c,#f65f0b,#d42708,#900701)',
+            ticks: [
+                { pct:   0, label: '-20°F' },
+                { pct:  15, label: '0°F'   },
+                { pct:  38, label: '30°F'  },
+                { pct:  62, label: '60°F'  },
+                { pct:  85, label: '90°F'  },
+                { pct: 100, label: '110°F' },
+            ]
+        },
+        // turbo colormap, -40 → 140 °F
+        apparent: {
+            gradient: 'linear-gradient(to right,#30123b,#4145ab,#4675ed,#39a8f8,#1bcfd4,#24eba6,#61fc6c,#aef84f,#e2dc37,#f8a91c,#f65f0b,#d42708,#900701)',
+            ticks: [
+                { pct:   0, label: '-40°F' },
+                { pct:  11, label: '-20°F' },
+                { pct:  22, label: '0°F'   },
+                { pct:  50, label: '60°F'  },
+                { pct:  78, label: '120°F' },
+                { pct: 100, label: '140°F' },
+            ]
+        },
+        // viridis colormap, 0 → 60 mph
+        wind: {
+            gradient: 'linear-gradient(to right,#440154,#482878,#3e4989,#31688e,#26838f,#1f9d89,#35b779,#6ece58,#b5de2b,#fde725)',
+            ticks: [
+                { pct:   0, label: '0 mph'  },
+                { pct:  25, label: '15 mph' },
+                { pct:  50, label: '30 mph' },
+                { pct:  75, label: '45 mph' },
+                { pct: 100, label: '60 mph' },
+            ]
+        },
+        // YlGnBu colormap, 0 → 100 %
+        rh: {
+            gradient: 'linear-gradient(to right,#ffffd9,#edf8b1,#c7e9b4,#7fcdbb,#41b6c4,#1d91c0,#225ea8,#253494,#081d58)',
+            ticks: [
+                { pct:   0, label: '0%'   },
+                { pct:  25, label: '25%'  },
+                { pct:  50, label: '50%'  },
+                { pct:  75, label: '75%'  },
+                { pct: 100, label: '100%' },
+            ]
+        },
+        // Blues colormap, 0 → 100 %
+        cloud: {
+            gradient: 'linear-gradient(to right,#f7fbff,#deebf7,#c6dbef,#9ecae1,#6baed6,#4292c6,#2171b5,#08519c,#08306b)',
+            ticks: [
+                { pct:   0, label: 'Clear' },
+                { pct:  50, label: '50%'   },
+                { pct: 100, label: 'Ovcst' },
+            ]
+        },
+        // plasma colormap, 0 → 10 miles
+        vis: {
+            gradient: 'linear-gradient(to right,#0d0887,#46039f,#7201a8,#9c179e,#bd3786,#d8576b,#ed7953,#fb9f3a,#fdcf25,#f0f921)',
+            ticks: [
+                { pct:   0, label: '0 mi'  },
+                { pct:  25, label: '2.5 mi'},
+                { pct:  50, label: '5 mi'  },
+                { pct:  75, label: '7.5 mi'},
+                { pct: 100, label: '10 mi' },
+            ]
+        },
     };
 
     let _rtmaLoaded = false;
@@ -3194,11 +3259,12 @@
         title.textContent = prod.label;
         const legendData = RTMA_LEGENDS[product];
         if (legendData) {
+            const ticksHtml = legendData.ticks.map(t =>
+                `<span style="position:absolute;left:${t.pct}%;transform:translateX(-50%);white-space:nowrap;">${t.label}</span>`
+            ).join('');
             items.innerHTML = `
-                <div style="width:100%;height:14px;border-radius:3px;background:${legendData.gradient};margin-bottom:4px;"></div>
-                <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:var(--text-muted);">
-                    <span>${legendData.low}</span><span>${legendData.high}</span>
-                </div>`;
+                <div style="width:100%;height:14px;border-radius:3px;background:${legendData.gradient};margin-bottom:6px;"></div>
+                <div style="position:relative;height:14px;font-size:0.62rem;color:var(--text-muted);">${ticksHtml}</div>`;
         }
         leg.style.display = '';
     }
@@ -3226,7 +3292,7 @@
                     paint: {
                         'raster-opacity': parseFloat(document.getElementById('rtma-opacity')?.value || 85) / 100,
                         'raster-fade-duration': 0,
-                        'raster-resampling': 'linear'
+                        'raster-resampling': 'nearest'
                     }
                 }, _overlayBefore());
                 _rtmaLoaded = true;
@@ -3270,21 +3336,23 @@
         const bounds = _rtmaMeta.bounds; // [[lat_min, lon_min], [lat_max, lon_max]]
         const rows = _rtmaMeta.data_rows;
         const cols = _rtmaMeta.data_cols;
-        const stride = _rtmaMeta.data_stride;
+        // data_stride is the spatial downsampling factor, NOT byte stride.
+        // Each value is float32 (4 bytes), little-endian, row-major.
+        // Row 0 = southernmost row (origin='lower' / NumPy default).
+        const BYTES_PER_VAL = 4;
         if (lat < bounds[0][0] || lat > bounds[1][0] || lng < bounds[0][1] || lng > bounds[1][1]) return;
-        // Row 0 = northernmost (lat_max), col 0 = westernmost (lon_min)
-        const row = Math.round((bounds[1][0] - lat) / (bounds[1][0] - bounds[0][0]) * (rows - 1));
+        const row = Math.round((lat - bounds[0][0]) / (bounds[1][0] - bounds[0][0]) * (rows - 1));
         const col = Math.round((lng - bounds[0][1]) / (bounds[1][1] - bounds[0][1]) * (cols - 1));
         const r = Math.max(0, Math.min(rows - 1, row));
         const c = Math.max(0, Math.min(cols - 1, col));
-        const offset = (r * cols + c) * stride;
+        const offset = (r * cols + c) * BYTES_PER_VAL;
         const prod = RTMA_PRODUCTS[_currentRtmaProduct];
         if (!_rtmaBinCache[_currentRtmaProduct]) await _fetchRtmaBin(_currentRtmaProduct);
         let valueStr = '—';
         const buf = _rtmaBinCache[_currentRtmaProduct];
-        if (buf && offset + stride <= buf.byteLength) {
+        if (buf && offset + BYTES_PER_VAL <= buf.byteLength) {
             const dv = new DataView(buf);
-            const val = stride === 8 ? dv.getFloat64(offset, true) : dv.getFloat32(offset, true);
+            const val = dv.getFloat32(offset, true); // little-endian float32
             if (isFinite(val) && val > -9000) {
                 valueStr = Math.round(val * 10) / 10 + prod.unit;
             }
