@@ -1012,7 +1012,6 @@
                     <button class="layer-btn" data-layer="clouds" onclick="switchLayer('clouds')">Clouds</button>
                     <button class="layer-btn" data-layer="wpc-rain" onclick="switchLayer('wpc-rain')">WPC Rainfall</button>
                     <button class="layer-btn" data-layer="fire-wx" onclick="switchLayer('fire-wx')">Fire Weather</button>
-                    <button class="layer-btn" data-layer="rtma" onclick="switchLayer('rtma')">RTMA</button>
                 </div>
                 <!-- SPC Sub-Controls -->
                 <div class="spc-controls visible" id="spc-controls">
@@ -1136,28 +1135,6 @@
                     <span>Opacity:</span>
                     <input type="range" min="0" max="100" value="70" oninput="setOWMOpacity(this.value)" id="owm-opacity">
                 </div>
-                <!-- RTMA Sub-Controls -->
-                <div class="radar-controls" id="rtma-controls">
-                    <div class="ctrl-row" style="gap:8px;align-items:center;">
-                        <select id="rtma-product-select" class="ctrl-select" onchange="selectRtmaProduct(this.value)">
-                            <option value="temp">Temperature</option>
-                            <option value="apparent">Apparent Temp</option>
-                            <option value="wind">Wind Speed</option>
-                            <option value="rh">Relative Humidity</option>
-                            <option value="cloud">Cloud Cover</option>
-                            <option value="vis">Visibility</option>
-                        </select>
-                        <button class="icon-action-btn" onclick="refreshRtma()" title="Refresh">&#8635;</button>
-                    </div>
-                    <div style="font-size:0.72rem;padding:2px 0;display:flex;justify-content:space-between;">
-                        <span style="color:var(--text-muted);">Valid:</span>
-                        <span id="rtma-time-display" style="color:var(--text-secondary);font-weight:600;">—</span>
-                    </div>
-                    <div class="opacity-row">
-                        <span>Opacity:</span>
-                        <input type="range" min="0" max="100" value="85" oninput="setRtmaOpacity(this.value)" id="rtma-opacity">
-                    </div>
-                </div>
                 <!-- Basemap -->
                 <div class="spc-controls" id="basemap-controls">
                     <div class="ctrl-row">
@@ -1209,10 +1186,6 @@
                 <div class="spc-legend" id="radar-legend">
                     <div class="legend-title" id="radar-legend-title">Reflectivity</div>
                     <div id="radar-legend-items"></div>
-                </div>
-                <div class="spc-legend" id="rtma-legend" style="display:none;">
-                    <div class="legend-title" id="rtma-legend-title">Temperature (°F)</div>
-                    <div id="rtma-legend-items"></div>
                 </div>
                 <div class="map-loading" id="map-loading" style="display:none;">
                     <div class="spinner"></div>
@@ -1864,11 +1837,10 @@
         if (currentLayer !== 'radar') return;
         const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
         if (!def?.hasBin) return;
-        const meta = (_radarMeta[_currentRadarProduct] || [])[_radarFrameIdx];
-        if (!meta?.bounds) return;
         const { lat, lng } = e.lngLat;
-        const bounds = meta.bounds; // [[lat_min, lon_min], [lat_max, lon_max]]
-        if (lat < bounds[0][0] || lat > bounds[1][0] || lng < bounds[0][1] || lng > bounds[1][1]) return;
+        // Use known fixed MRMS bounds: lat 24–50°N, lon 130–60°W
+        const LAT_MIN = 24, LAT_MAX = 50, LON_MIN = -130, LON_MAX = -60;
+        if (lat < LAT_MIN || lat > LAT_MAX || lng < LON_MIN || lng > LON_MAX) return;
         const key = _currentRadarProduct + '_' + _radarFrameIdx;
         if (!_mrmsBinCache[key]) await _fetchMrmsBin(_currentRadarProduct, _radarFrameIdx);
         const buf = _mrmsBinCache[key];
@@ -1880,8 +1852,8 @@
         if (rows <= 0 || cols <= 0) return;
         const HEADER = 8;
         const BYTES_PER_VAL = 4;
-        const row = Math.round((lat - bounds[0][0]) / (bounds[1][0] - bounds[0][0]) * (rows - 1));
-        const col = Math.round((lng - bounds[0][1]) / (bounds[1][1] - bounds[0][1]) * (cols - 1));
+        const row = Math.round((lat - LAT_MIN) / (LAT_MAX - LAT_MIN) * (rows - 1));
+        const col = Math.round((lng - LON_MIN) / (LON_MAX - LON_MIN) * (cols - 1));
         const r = Math.max(0, Math.min(rows - 1, row));
         const c = Math.max(0, Math.min(cols - 1, col));
         const offset = HEADER + (r * cols + c) * BYTES_PER_VAL;
@@ -1896,7 +1868,8 @@
         } else {
             valueStr = (Math.round(val * 100) / 100).toFixed(2) + def.unit;
         }
-        const timeStr = meta.time || '';
+        const meta = (_radarMeta[_currentRadarProduct] || [])[_radarFrameIdx];
+        const timeStr = meta?.time || '';
         new mapboxgl.Popup({ closeButton: true, maxWidth: '240px' })
             .setLngLat(e.lngLat)
             .setHTML(`<div class="popup-title">MRMS ${def.label}</div>
@@ -3182,8 +3155,6 @@
             map.on('click', handleOWMClick);
             map.off('click', handleOutlookClick);
             map.on('click', handleOutlookClick);
-            map.off('click', handleRtmaClick);
-            map.on('click', handleRtmaClick);
             map.off('click', handleMrmsClick);
             map.on('click', handleMrmsClick);
             if (currentLayer === 'spc' && currentDay > 0) loadSPCLayer(currentDay, currentType);
@@ -3192,7 +3163,6 @@
             else if (currentLayer === 'fire-wx') loadFireLayer(currentFireDay, currentFireType);
             else if (currentLayer === 'radar') { _radarLoaded = false; showRadarFrame(_radarFrameIdx); }
             else if (currentLayer === 'satellite') { _satLoaded = false; showSatFrame(_satFrameIdx); }
-            else if (currentLayer === 'rtma') { _rtmaLoaded = false; loadRtmaLayer(); }
         });
     }
 
@@ -3216,251 +3186,9 @@
         }
     }
 
-    // ============================================================
-    // RTMA (Real-Time Mesoscale Analysis) LAYER
-    // ============================================================
-    const RTMA_BASE = 'https://raw.githubusercontent.com/GTG0116/RTMA/main/site/data/';
-    const RTMA_PRODUCTS = {
-        temp:     { label: 'Temperature',      unit: '°F',  file: 'temp.png',     binFile: 'temp_data.bin'     },
-        apparent: { label: 'Apparent Temp',    unit: '°F',  file: 'apparent.png', binFile: 'apparent_data.bin' },
-        wind:     { label: 'Wind Speed',       unit: ' mph',file: 'wind.png',     binFile: 'wind_data.bin'     },
-        rh:       { label: 'Rel. Humidity',    unit: '%',   file: 'rh.png',       binFile: 'rh_data.bin'       },
-        cloud:    { label: 'Cloud Cover',      unit: '%',   file: 'cloud.png',    binFile: 'cloud_data.bin'    },
-        vis:      { label: 'Visibility',       unit: ' mi', file: 'vis.png',      binFile: 'vis_data.bin'      },
-    };
-
-    // Accurate matplotlib colormap gradients matching the PNG outputs exactly.
-    // Each entry: gradient CSS string, ticks array [{pct, label}] for legend tick marks.
-    const RTMA_LEGENDS = {
-        // turbo colormap, -20 → 110 °F
-        temp: {
-            gradient: 'linear-gradient(to right,#30123b,#4145ab,#4675ed,#39a8f8,#1bcfd4,#24eba6,#61fc6c,#aef84f,#e2dc37,#f8a91c,#f65f0b,#d42708,#900701)',
-            ticks: [
-                { pct:   0, label: '-20°F' },
-                { pct:  15, label: '0°F'   },
-                { pct:  38, label: '30°F'  },
-                { pct:  62, label: '60°F'  },
-                { pct:  85, label: '90°F'  },
-                { pct: 100, label: '110°F' },
-            ]
-        },
-        // turbo colormap, -40 → 140 °F
-        apparent: {
-            gradient: 'linear-gradient(to right,#30123b,#4145ab,#4675ed,#39a8f8,#1bcfd4,#24eba6,#61fc6c,#aef84f,#e2dc37,#f8a91c,#f65f0b,#d42708,#900701)',
-            ticks: [
-                { pct:   0, label: '-40°F' },
-                { pct:  11, label: '-20°F' },
-                { pct:  22, label: '0°F'   },
-                { pct:  50, label: '60°F'  },
-                { pct:  78, label: '120°F' },
-                { pct: 100, label: '140°F' },
-            ]
-        },
-        // viridis colormap, 0 → 60 mph
-        wind: {
-            gradient: 'linear-gradient(to right,#440154,#482878,#3e4989,#31688e,#26838f,#1f9d89,#35b779,#6ece58,#b5de2b,#fde725)',
-            ticks: [
-                { pct:   0, label: '0 mph'  },
-                { pct:  25, label: '15 mph' },
-                { pct:  50, label: '30 mph' },
-                { pct:  75, label: '45 mph' },
-                { pct: 100, label: '60 mph' },
-            ]
-        },
-        // YlGnBu colormap, 0 → 100 %
-        rh: {
-            gradient: 'linear-gradient(to right,#ffffd9,#edf8b1,#c7e9b4,#7fcdbb,#41b6c4,#1d91c0,#225ea8,#253494,#081d58)',
-            ticks: [
-                { pct:   0, label: '0%'   },
-                { pct:  25, label: '25%'  },
-                { pct:  50, label: '50%'  },
-                { pct:  75, label: '75%'  },
-                { pct: 100, label: '100%' },
-            ]
-        },
-        // Blues colormap, 0 → 100 %
-        cloud: {
-            gradient: 'linear-gradient(to right,#f7fbff,#deebf7,#c6dbef,#9ecae1,#6baed6,#4292c6,#2171b5,#08519c,#08306b)',
-            ticks: [
-                { pct:   0, label: 'Clear' },
-                { pct:  50, label: '50%'   },
-                { pct: 100, label: 'Ovcst' },
-            ]
-        },
-        // plasma colormap, 0 → 10 miles
-        vis: {
-            gradient: 'linear-gradient(to right,#0d0887,#46039f,#7201a8,#9c179e,#bd3786,#d8576b,#ed7953,#fb9f3a,#fdcf25,#f0f921)',
-            ticks: [
-                { pct:   0, label: '0 mi'  },
-                { pct:  25, label: '2.5 mi'},
-                { pct:  50, label: '5 mi'  },
-                { pct:  75, label: '7.5 mi'},
-                { pct: 100, label: '10 mi' },
-            ]
-        },
-    };
-
-    let _rtmaLoaded = false;
-    let _currentRtmaProduct = 'temp';
-    let _rtmaMeta = null;
-    let _rtmaBinCache = {};
-
-    function clearRtmaLayer() {
-        _rtmaLoaded = false;
-        _rtmaBinCache = {};
-        if (map) {
-            if (map.getLayer('rtma-overlay-layer')) map.removeLayer('rtma-overlay-layer');
-            if (map.getSource('rtma-overlay'))      map.removeSource('rtma-overlay');
-        }
-        const leg = document.getElementById('rtma-legend');
-        if (leg) leg.style.display = 'none';
-    }
-
-    function updateRtmaLegend(product) {
-        const prod = RTMA_PRODUCTS[product];
-        const leg = document.getElementById('rtma-legend');
-        const title = document.getElementById('rtma-legend-title');
-        const items = document.getElementById('rtma-legend-items');
-        if (!leg || !title || !items || !prod) return;
-        title.textContent = prod.label;
-        const legendData = RTMA_LEGENDS[product];
-        if (legendData) {
-            const ticksHtml = legendData.ticks.map(t =>
-                `<span style="position:absolute;left:${t.pct}%;transform:translateX(-50%);white-space:nowrap;">${t.label}</span>`
-            ).join('');
-            items.innerHTML = `
-                <div style="width:100%;height:14px;border-radius:3px;background:${legendData.gradient};margin-bottom:6px;"></div>
-                <div style="position:relative;height:14px;font-size:0.62rem;color:var(--text-muted);">${ticksHtml}</div>`;
-        }
-        leg.style.display = '';
-    }
-
-    async function loadRtmaLayer() {
-        if (!map) return;
-        showLoading('Loading RTMA data\u2026');
-        try {
-            const cb = Math.floor(Date.now() / 60000);
-            const metaResp = await fetch(RTMA_BASE + 'metadata.json?cb=' + cb, { cache: 'no-store' });
-            if (!metaResp.ok) throw new Error('RTMA metadata fetch failed (' + metaResp.status + ')');
-            _rtmaMeta = await metaResp.json();
-            // corners are [lng, lat] pairs: NW, NE, SE, SW
-            const coords = _rtmaMeta.corners;
-            const prod = RTMA_PRODUCTS[_currentRtmaProduct];
-            const url = RTMA_BASE + prod.file + '?cb=' + cb;
-            if (_rtmaLoaded && map.getSource('rtma-overlay')) {
-                map.getSource('rtma-overlay').updateImage({ url });
-            } else {
-                if (map.getLayer('rtma-overlay-layer')) map.removeLayer('rtma-overlay-layer');
-                if (map.getSource('rtma-overlay'))      map.removeSource('rtma-overlay');
-                map.addSource('rtma-overlay', { type: 'image', url, coordinates: coords });
-                map.addLayer({
-                    id: 'rtma-overlay-layer', type: 'raster', source: 'rtma-overlay',
-                    paint: {
-                        'raster-opacity': parseFloat(document.getElementById('rtma-opacity')?.value || 85) / 100,
-                        'raster-fade-duration': 0,
-                        'raster-resampling': 'nearest'
-                    }
-                }, _overlayBefore());
-                _rtmaLoaded = true;
-            }
-            // Update timestamp display
-            const timeEl = document.getElementById('rtma-time-display');
-            if (timeEl && _rtmaMeta.timestamp) {
-                try {
-                    const d = new Date(_rtmaMeta.timestamp);
-                    timeEl.textContent = d.toLocaleString('en-US', {
-                        month: 'short', day: 'numeric',
-                        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
-                    });
-                } catch (_) { timeEl.textContent = _rtmaMeta.timestamp; }
-            }
-            updateRtmaLegend(_currentRtmaProduct);
-            // Prefetch binary data for click value readout (non-blocking)
-            _fetchRtmaBin(_currentRtmaProduct);
-        } catch (e) {
-            console.error('RTMA load error:', e);
-            clearRtmaLayer();
-        } finally { hideLoading(); }
-    }
-
-    async function _fetchRtmaBin(product) {
-        if (_rtmaBinCache[product]) return;
-        const prod = RTMA_PRODUCTS[product];
-        if (!prod?.binFile) return;
-        try {
-            const cb = Math.floor(Date.now() / 60000);
-            const resp = await fetch(RTMA_BASE + prod.binFile + '?cb=' + cb, { cache: 'no-store' });
-            if (!resp.ok) return;
-            _rtmaBinCache[product] = await resp.arrayBuffer();
-        } catch (_) { /* non-fatal */ }
-    }
-
-    async function handleRtmaClick(e) {
-        if (currentLayer !== 'rtma') return;
-        if (!_rtmaMeta) return;
-        const { lat, lng } = e.lngLat;
-        const bounds = _rtmaMeta.bounds; // [[lat_min, lon_min], [lat_max, lon_max]]
-        const rows = _rtmaMeta.data_rows;
-        const cols = _rtmaMeta.data_cols;
-        // data_stride is the spatial downsampling factor, NOT byte stride.
-        // Each value is float32 (4 bytes), little-endian, row-major.
-        // Row 0 = southernmost row (origin='lower' / NumPy default).
-        const BYTES_PER_VAL = 4;
-        if (lat < bounds[0][0] || lat > bounds[1][0] || lng < bounds[0][1] || lng > bounds[1][1]) return;
-        const row = Math.round((lat - bounds[0][0]) / (bounds[1][0] - bounds[0][0]) * (rows - 1));
-        const col = Math.round((lng - bounds[0][1]) / (bounds[1][1] - bounds[0][1]) * (cols - 1));
-        const r = Math.max(0, Math.min(rows - 1, row));
-        const c = Math.max(0, Math.min(cols - 1, col));
-        const offset = (r * cols + c) * BYTES_PER_VAL;
-        const prod = RTMA_PRODUCTS[_currentRtmaProduct];
-        if (!_rtmaBinCache[_currentRtmaProduct]) await _fetchRtmaBin(_currentRtmaProduct);
-        let valueStr = '—';
-        const buf = _rtmaBinCache[_currentRtmaProduct];
-        if (buf && offset + BYTES_PER_VAL <= buf.byteLength) {
-            const dv = new DataView(buf);
-            const val = dv.getFloat32(offset, true); // little-endian float32
-            if (isFinite(val) && val > -9000) {
-                valueStr = Math.round(val * 10) / 10 + prod.unit;
-            }
-        }
-        let timeStr = '';
-        if (_rtmaMeta.timestamp) {
-            try { timeStr = new Date(_rtmaMeta.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }); }
-            catch (_) { timeStr = _rtmaMeta.timestamp; }
-        }
-        new mapboxgl.Popup({ closeButton: true, maxWidth: '240px' })
-            .setLngLat(e.lngLat)
-            .setHTML(`<div class="popup-title">RTMA Analysis</div>
-                      <div class="popup-stat"><span class="popup-key">${prod.label}</span><span class="popup-val">${valueStr}</span></div>
-                      ${timeStr ? `<div class="popup-stat"><span class="popup-key" style="font-size:0.72rem;">Valid</span><span class="popup-val" style="font-size:0.72rem;">${timeStr}</span></div>` : ''}`)
-            .addTo(map);
-    }
-
-    function setRtmaOpacity(val) {
-        if (map && map.getLayer('rtma-overlay-layer'))
-            map.setPaintProperty('rtma-overlay-layer', 'raster-opacity', parseInt(val, 10) / 100);
-    }
-
-    function selectRtmaProduct(product) {
-        _currentRtmaProduct = product;
-        const sel = document.getElementById('rtma-product-select');
-        if (sel) sel.value = product;
-        _rtmaLoaded = false;
-        if (currentLayer === 'rtma') _ensureMapReady().then(() => loadRtmaLayer());
-    }
-
-    async function refreshRtma() {
-        _rtmaMeta = null;
-        _rtmaBinCache = {};
-        _rtmaLoaded = false;
-        await _ensureMapReady();
-        await loadRtmaLayer();
-    }
-
     function switchLayer(layer) {
         if (layer !== 'radar') clearRadarLayer(); // always clean up radar when leaving
         if (layer !== 'satellite') clearSatLayer(); // always clean up satellite when leaving
-        if (layer !== 'rtma') clearRtmaLayer(); // always clean up RTMA when leaving
         currentLayer = layer;
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
@@ -3468,13 +3196,12 @@
         document.getElementById('wpc-controls').classList.toggle('visible', layer === 'wpc-rain');
         document.getElementById('fire-controls').classList.toggle('visible', layer === 'fire-wx');
         document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
-        document.getElementById('rtma-controls').classList.toggle('visible', layer === 'rtma');
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = layer === 'spc' ? '' : 'none';
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
         document.getElementById('basemap-controls').classList.toggle('visible',
-            mapLayer || layer === 'spc' || layer === 'radar' || layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx' || layer === 'rtma');
+            mapLayer || layer === 'spc' || layer === 'radar' || layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx');
 
         if (layer === 'spc') {
             clearOWMLayers(); clearWPCLayers(); clearFireLayers();
@@ -3508,11 +3235,6 @@
             _showFireWxView();
             renderFireWxImages();
             _ensureMapReady().then(() => loadFireLayer(currentFireDay, currentFireType));
-        } else if (layer === 'rtma') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
-            _showMapView();
-            if (map) setTimeout(() => map.resize(), 50);
-            _ensureMapReady().then(() => loadRtmaLayer());
         } else {
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
             _showMapView();
@@ -3652,7 +3374,6 @@
                 addCIGPatterns();
                 map.on('click', handleOWMClick);
                 map.on('click', handleOutlookClick);
-                map.on('click', handleRtmaClick);
                 map.on('click', handleMrmsClick);
             });
         }
