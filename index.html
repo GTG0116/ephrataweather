@@ -1865,23 +1865,27 @@
         const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
         if (!def?.hasBin) return;
         const meta = (_radarMeta[_currentRadarProduct] || [])[_radarFrameIdx];
-        if (!meta?.bounds || !meta?.data_rows || !meta?.data_cols) return;
+        if (!meta?.bounds) return;
         const { lat, lng } = e.lngLat;
         const bounds = meta.bounds; // [[lat_min, lon_min], [lat_max, lon_max]]
         if (lat < bounds[0][0] || lat > bounds[1][0] || lng < bounds[0][1] || lng > bounds[1][1]) return;
-        const rows = meta.data_rows;
-        const cols = meta.data_cols;
+        const key = _currentRadarProduct + '_' + _radarFrameIdx;
+        if (!_mrmsBinCache[key]) await _fetchMrmsBin(_currentRadarProduct, _radarFrameIdx);
+        const buf = _mrmsBinCache[key];
+        if (!buf || buf.byteLength < 8) return;
+        // Binary format: [int32 rows][int32 cols][float32 × rows×cols], all little-endian
+        const dv = new DataView(buf);
+        const rows = dv.getInt32(0, true);
+        const cols = dv.getInt32(4, true);
+        if (rows <= 0 || cols <= 0) return;
+        const HEADER = 8;
         const BYTES_PER_VAL = 4;
         const row = Math.round((lat - bounds[0][0]) / (bounds[1][0] - bounds[0][0]) * (rows - 1));
         const col = Math.round((lng - bounds[0][1]) / (bounds[1][1] - bounds[0][1]) * (cols - 1));
         const r = Math.max(0, Math.min(rows - 1, row));
         const c = Math.max(0, Math.min(cols - 1, col));
-        const offset = (r * cols + c) * BYTES_PER_VAL;
-        const key = _currentRadarProduct + '_' + _radarFrameIdx;
-        if (!_mrmsBinCache[key]) await _fetchMrmsBin(_currentRadarProduct, _radarFrameIdx);
-        const buf = _mrmsBinCache[key];
-        if (!buf || offset + BYTES_PER_VAL > buf.byteLength) return;
-        const dv = new DataView(buf);
+        const offset = HEADER + (r * cols + c) * BYTES_PER_VAL;
+        if (offset + BYTES_PER_VAL > buf.byteLength) return;
         const val = dv.getFloat32(offset, true); // little-endian float32
         if (!isFinite(val) || val < -9000) return;
         let valueStr;
