@@ -1743,11 +1743,11 @@
     const MRMS_PRODUCT_DEFS = {
         precip_type: { label: 'Precip Type',             filePrefix: 'master',    frames: 15, metaPrefix: ''           },
         refl:        { label: 'Reflectivity',             filePrefix: 'refl',      frames: 15, metaPrefix: 'refl_'      },
-        mesh:        { label: 'Max Hail Size (MESH)',     filePrefix: 'mesh',      frames: 15, metaPrefix: 'mesh_'      },
-        qpe6h:       { label: '6-Hr Precip Estimate',     filePrefix: 'qpe6h',     frames: 15, metaPrefix: 'qpe6h_'     },
-        qpe24h:      { label: '24-Hr Precip Estimate',    filePrefix: 'qpe24h',    frames: 15, metaPrefix: 'qpe24h_'    },
-        lightning:   { label: 'CG Lightning Probability', filePrefix: 'lightning', frames: 15, metaPrefix: 'lightning_' },
-        rotation:    { label: 'Azimuth Shear/Rotation',   filePrefix: 'rotation',  frames: 15, metaPrefix: 'rotation_'  },
+        mesh:        { label: 'Max Hail Size (MESH)',     filePrefix: 'mesh',      frames: 15, metaPrefix: 'mesh_',      unit: ' in',   hasBin: true },
+        qpe6h:       { label: '6-Hr Precip Estimate',     filePrefix: 'qpe6h',     frames: 15, metaPrefix: 'qpe6h_',     unit: ' in',   hasBin: true },
+        qpe24h:      { label: '24-Hr Precip Estimate',    filePrefix: 'qpe24h',    frames: 15, metaPrefix: 'qpe24h_',    unit: ' in',   hasBin: true },
+        lightning:   { label: 'CG Lightning Probability', filePrefix: 'lightning', frames: 15, metaPrefix: 'lightning_', unit: '%',     hasBin: true },
+        rotation:    { label: 'Azimuth Shear/Rotation',   filePrefix: 'rotation',  frames: 15, metaPrefix: 'rotation_',  unit: ' s\u207B\u00B9', hasBin: true },
     };
 
     // Legend color-bar definitions for each product
@@ -1820,6 +1820,7 @@
     let _radarAnimTimer      = null;
     let _radarLoaded         = false;
     let _currentRadarProduct = 'precip_type';
+    let _mrmsBinCache        = {};   // keyed by "product_frameIdx" → ArrayBuffer
 
     function _mrmsFrameUrl(idx, product) {
         const def = MRMS_PRODUCT_DEFS[product || _currentRadarProduct];
@@ -1843,6 +1844,61 @@
         );
         _radarMeta[product] = await Promise.all(requests);
         return _radarMeta[product];
+    }
+
+    async function _fetchMrmsBin(product, frameIdx) {
+        const def = MRMS_PRODUCT_DEFS[product];
+        if (!def?.hasBin) return;
+        const key = product + '_' + frameIdx;
+        if (_mrmsBinCache[key]) return;
+        try {
+            const cb = Math.floor(Date.now() / 60000);
+            const filename = def.filePrefix + '_' + frameIdx + '.bin';
+            const resp = await fetch(MRMS_BASE + filename + '?cb=' + cb, { cache: 'no-store' });
+            if (!resp.ok) return;
+            _mrmsBinCache[key] = await resp.arrayBuffer();
+        } catch (_) { /* non-fatal */ }
+    }
+
+    async function handleMrmsClick(e) {
+        if (currentLayer !== 'radar') return;
+        const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
+        if (!def?.hasBin) return;
+        const meta = (_radarMeta[_currentRadarProduct] || [])[_radarFrameIdx];
+        if (!meta?.bounds || !meta?.data_rows || !meta?.data_cols) return;
+        const { lat, lng } = e.lngLat;
+        const bounds = meta.bounds; // [[lat_min, lon_min], [lat_max, lon_max]]
+        if (lat < bounds[0][0] || lat > bounds[1][0] || lng < bounds[0][1] || lng > bounds[1][1]) return;
+        const rows = meta.data_rows;
+        const cols = meta.data_cols;
+        const BYTES_PER_VAL = 4;
+        const row = Math.round((lat - bounds[0][0]) / (bounds[1][0] - bounds[0][0]) * (rows - 1));
+        const col = Math.round((lng - bounds[0][1]) / (bounds[1][1] - bounds[0][1]) * (cols - 1));
+        const r = Math.max(0, Math.min(rows - 1, row));
+        const c = Math.max(0, Math.min(cols - 1, col));
+        const offset = (r * cols + c) * BYTES_PER_VAL;
+        const key = _currentRadarProduct + '_' + _radarFrameIdx;
+        if (!_mrmsBinCache[key]) await _fetchMrmsBin(_currentRadarProduct, _radarFrameIdx);
+        const buf = _mrmsBinCache[key];
+        if (!buf || offset + BYTES_PER_VAL > buf.byteLength) return;
+        const dv = new DataView(buf);
+        const val = dv.getFloat32(offset, true); // little-endian float32
+        if (!isFinite(val) || val < -9000) return;
+        let valueStr;
+        if (def.unit === '%') {
+            valueStr = Math.round(val) + '%';
+        } else if (def.unit === ' s\u207B\u00B9') {
+            valueStr = val.toFixed(4) + ' s\u207B\u00B9';
+        } else {
+            valueStr = (Math.round(val * 100) / 100).toFixed(2) + def.unit;
+        }
+        const timeStr = meta.time || '';
+        new mapboxgl.Popup({ closeButton: true, maxWidth: '240px' })
+            .setLngLat(e.lngLat)
+            .setHTML(`<div class="popup-title">MRMS ${def.label}</div>
+                      <div class="popup-stat"><span class="popup-key">${def.label}</span><span class="popup-val">${valueStr}</span></div>
+                      ${timeStr ? `<div class="popup-stat"><span class="popup-key" style="font-size:0.72rem;">Valid</span><span class="popup-val" style="font-size:0.72rem;">${timeStr}</span></div>` : ''}`)
+            .addTo(map);
     }
 
     function _updateRadarUI(idx) {
@@ -1871,11 +1927,14 @@
             _radarLoaded = true;
         }
         _updateRadarUI(idx);
+        // Prefetch binary data for click value readout (non-blocking)
+        _fetchMrmsBin(_currentRadarProduct, idx);
     }
 
     function clearRadarLayer() {
         stopRadarAnimation();
         _radarLoaded = false;
+        _mrmsBinCache = {};
         if (map) {
             if (map.getLayer('mrms-radar-layer')) map.removeLayer('mrms-radar-layer');
             if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
@@ -1938,6 +1997,7 @@
         if (!MRMS_PRODUCT_DEFS[product]) return;
         _currentRadarProduct = product;
         _radarLoaded = false;
+        _mrmsBinCache = {};
         const sel = document.getElementById('radar-product-select');
         if (sel) sel.value = product;
         if (currentLayer === 'radar') {
@@ -3120,6 +3180,8 @@
             map.on('click', handleOutlookClick);
             map.off('click', handleRtmaClick);
             map.on('click', handleRtmaClick);
+            map.off('click', handleMrmsClick);
+            map.on('click', handleMrmsClick);
             if (currentLayer === 'spc' && currentDay > 0) loadSPCLayer(currentDay, currentType);
             else if (currentLayer === 'temperature' || currentLayer === 'wind' || currentLayer === 'clouds') loadOWMLayer(currentLayer);
             else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
@@ -3587,6 +3649,7 @@
                 map.on('click', handleOWMClick);
                 map.on('click', handleOutlookClick);
                 map.on('click', handleRtmaClick);
+                map.on('click', handleMrmsClick);
             });
         }
     }
