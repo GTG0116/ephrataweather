@@ -9,6 +9,11 @@ async function initForecastView(lat, lng) {
         lng = loc.lng;
     }
 
+    _forecastLat = lat;
+    _forecastLng = lng;
+    _spcRiskCache = {};
+    _openDayDetailIndex = -1;
+
     const _src = WeatherAPI.getDataSource();
     try {
         let data;
@@ -17,6 +22,8 @@ async function initForecastView(lat, lng) {
         else if (_src === 'owm') data = await WeatherAPI.getOWMDailyForecast(lat, lng, 7);
         else data = await WeatherAPI.getDailyForecast(lat, lng, 10);
         renderForecast(data);
+        // Fetch SPC risk data in the background (non-blocking)
+        _loadSPCForecastData(lat, lng);
     } catch (err) {
         document.getElementById('forecast-list').innerHTML =
             '<div class="error-message" style="margin:24px;">Unable to load forecast data<div class="error-hint">Check your Google Weather API key in js/config.js</div></div>';
@@ -309,7 +316,7 @@ function renderForecast(data) {
 
         return `
             <div class="forecast-row fade-in" style="animation-delay:${i * 50}ms;cursor:pointer;" onclick="showDayDetail(${i})">
-                <span class="day ${isToday ? 'today' : ''}">${dayName}</span>
+                <span class="day ${isToday ? 'today' : ''}">${dayName}<span id="spc-badge-${i}" style="display:none;"></span></span>
                 <div style="width:32px;height:32px;">${iconSvg}</div>
                 <div class="temp-bar-col">
                     <div class="temp-bar-wrapper">
@@ -366,11 +373,14 @@ function _buildDayDescription(day) {
 function closeDayDetail() {
     const detail = document.getElementById('day-detail');
     if (detail) detail.style.display = 'none';
+    _openDayDetailIndex = -1;
 }
 
 function showDayDetail(index) {
     const day = forecastDays[index];
     if (!day) return;
+
+    _openDayDetailIndex = index;
 
     const detail = document.getElementById('day-detail');
     detail.style.display = 'block';
@@ -445,4 +455,214 @@ function showDayDetail(index) {
         sunrise ? new Date(sunrise).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'N/A';
     document.getElementById('detail-sunset').textContent =
         sunset ? new Date(sunset).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'N/A';
+
+    // Severe weather section (SPC outlook)
+    _refreshDayDetailSPCInfo();
+}
+
+// ============================================================
+// SPC SEVERE WEATHER OUTLOOK INTEGRATION
+// ============================================================
+
+let _forecastLat = null;
+let _forecastLng = null;
+let _spcRiskCache = {};   // keyed by SPC day number (1, 2, 3) → risk object
+let _openDayDetailIndex = -1;
+
+const _SPC_FORECAST_URLS = {
+    1: {
+        cat:  'https://www.spc.noaa.gov/products/outlook/day1otlk_cat.nolyr.geojson',
+        torn: 'https://www.spc.noaa.gov/products/outlook/day1otlk_torn.nolyr.geojson',
+        wind: 'https://www.spc.noaa.gov/products/outlook/day1otlk_wind.nolyr.geojson',
+        hail: 'https://www.spc.noaa.gov/products/outlook/day1otlk_hail.nolyr.geojson',
+    },
+    2: {
+        cat:  'https://www.spc.noaa.gov/products/outlook/day2otlk_cat.nolyr.geojson',
+        torn: 'https://www.spc.noaa.gov/products/outlook/day2otlk_torn.nolyr.geojson',
+        wind: 'https://www.spc.noaa.gov/products/outlook/day2otlk_wind.nolyr.geojson',
+        hail: 'https://www.spc.noaa.gov/products/outlook/day2otlk_hail.nolyr.geojson',
+    },
+    3: {
+        cat: 'https://www.spc.noaa.gov/products/outlook/day3otlk_cat.nolyr.geojson',
+    },
+};
+
+// Rank of each categorical label (higher = more severe)
+const _CAT_RANK = { TSTM: 1, MRGL: 2, SLGT: 3, ENH: 4, MDT: 5, HIGH: 6 };
+
+// Plain-language wording per risk category
+const _CAT_WORDING = {
+    MRGL: 'Isolated',
+    SLGT: 'A few scattered',
+    ENH:  'Scattered to numerous',
+    MDT:  'Numerous',
+    HIGH: 'An outbreak of',
+};
+
+// Badge/alert colors per risk category
+const _CAT_COLORS = {
+    MRGL: { bg: 'rgba(102,204,102,0.18)', border: '#44BB44', text: '#7dcc7d' },
+    SLGT: { bg: 'rgba(255,224,102,0.18)', border: '#DDBB00', text: '#e8cc55' },
+    ENH:  { bg: 'rgba(255,160,64,0.18)',  border: '#CC7700', text: '#f0a040' },
+    MDT:  { bg: 'rgba(255,96,96,0.18)',   border: '#CC2222', text: '#f07070' },
+    HIGH: { bg: 'rgba(255,64,255,0.18)',  border: '#CC00CC', text: '#f070f0' },
+};
+
+async function _fetchSPCGeoJSONForForecast(url) {
+    try {
+        const r = await fetch(url, { mode: 'cors', cache: 'no-store' });
+        if (r.ok) return r.json();
+        throw new Error('HTTP ' + r.status);
+    } catch (_) {
+        const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        const r = await fetch(proxy, { cache: 'no-store' });
+        if (!r.ok) throw new Error('Proxy HTTP ' + r.status);
+        return r.json();
+    }
+}
+
+// Ray-casting point-in-polygon for a single ring of [lng, lat] pairs
+function _spcPointInRing(lng, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        const cross = ((yi > lat) !== (yj > lat)) &&
+            (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+        if (cross) inside = !inside;
+    }
+    return inside;
+}
+
+function _spcPointInFeature(lng, lat, feature) {
+    const geom = feature.geometry;
+    if (!geom) return false;
+    if (geom.type === 'Polygon')
+        return _spcPointInRing(lng, lat, geom.coordinates[0]);
+    if (geom.type === 'MultiPolygon')
+        return geom.coordinates.some(poly => _spcPointInRing(lng, lat, poly[0]));
+    return false;
+}
+
+// Find the highest categorical risk label at a location
+function _highestCatRisk(lat, lng, geojson) {
+    if (!geojson?.features) return null;
+    let highest = null;
+    for (const feature of geojson.features) {
+        const label = String(feature.properties?.LABEL ?? '').toUpperCase();
+        if (!_CAT_RANK[label] || label === 'TSTM') continue;
+        if (!_spcPointInFeature(lng, lat, feature)) continue;
+        if (!highest || _CAT_RANK[label] > _CAT_RANK[highest]) highest = label;
+    }
+    return highest;
+}
+
+// Check if a location is inside any polygon in a hazard (torn/wind/hail) GeoJSON
+function _hasHazardAtLocation(lat, lng, geojson) {
+    if (!geojson?.features) return false;
+    return geojson.features.some(f => _spcPointInFeature(lng, lat, f));
+}
+
+// Fetch SPC data for one SPC day and return the risk object
+async function _fetchSPCRisk(lat, lng, spcDay) {
+    const urls = _SPC_FORECAST_URLS[spcDay];
+    if (!urls) return null;
+
+    let catData;
+    try { catData = await _fetchSPCGeoJSONForForecast(urls.cat); }
+    catch (_) { return null; }
+
+    const catRisk = _highestCatRisk(lat, lng, catData);
+    let hasTorn = false, hasWind = false, hasHail = false;
+
+    // Only check specific hazards for Days 1-2 with MRGL+ risk
+    if (catRisk && _CAT_RANK[catRisk] >= _CAT_RANK.MRGL && urls.torn && urls.wind && urls.hail) {
+        const [tornData, windData, hailData] = await Promise.all([
+            _fetchSPCGeoJSONForForecast(urls.torn).catch(() => null),
+            _fetchSPCGeoJSONForForecast(urls.wind).catch(() => null),
+            _fetchSPCGeoJSONForForecast(urls.hail).catch(() => null),
+        ]);
+        if (tornData) hasTorn = _hasHazardAtLocation(lat, lng, tornData);
+        if (windData) hasWind = _hasHazardAtLocation(lat, lng, windData);
+        if (hailData) hasHail = _hasHazardAtLocation(lat, lng, hailData);
+    }
+
+    return { catRisk, hasTorn, hasWind, hasHail };
+}
+
+// Build the user-facing severe weather sentence
+function _buildSPCText(risk) {
+    if (!risk?.catRisk || !_CAT_WORDING[risk.catRisk]) return null;
+    const wording = _CAT_WORDING[risk.catRisk];
+    const threats = [];
+    if (risk.hasWind)  threats.push('damaging winds');
+    if (risk.hasTorn)  threats.push('tornadoes');
+    if (risk.hasHail)  threats.push('hail');
+
+    let sentence = `${wording} severe weather is possible`;
+    if (threats.length > 0) {
+        const last = threats.pop();
+        sentence += threats.length > 0
+            ? `, and threats include ${threats.join(', ')}, and ${last}`
+            : `, and threats include ${last}`;
+    }
+    return sentence + '.';
+}
+
+// Return cached risk for the given forecast day index (0 = today)
+function _spcRiskForForecastDay(dayIndex) {
+    const spcDay = dayIndex + 1;  // forecast day 0 → SPC day 1
+    return spcDay <= 3 ? (_spcRiskCache[spcDay] || null) : null;
+}
+
+// Update the badge chip in a forecast row after SPC data loads
+function _updateSPCBadge(forecastDayIndex) {
+    const badge = document.getElementById('spc-badge-' + forecastDayIndex);
+    if (!badge) return;
+    const risk = _spcRiskForForecastDay(forecastDayIndex);
+    const col  = risk?.catRisk ? _CAT_COLORS[risk.catRisk] : null;
+    if (!col) { badge.style.display = 'none'; return; }
+
+    const label = risk.catRisk.charAt(0) + risk.catRisk.slice(1).toLowerCase();
+    badge.style.cssText =
+        `display:inline-block;font-size:0.6rem;font-weight:700;padding:1px 5px;` +
+        `border-radius:4px;background:${col.bg};border:1px solid ${col.border};` +
+        `color:${col.text};margin-left:5px;vertical-align:middle;white-space:nowrap;`;
+    badge.textContent = '\u26A1 ' + label;
+
+    // If this day's detail panel is open, refresh it too
+    if (_openDayDetailIndex === forecastDayIndex) _refreshDayDetailSPCInfo();
+}
+
+// Refresh (or clear) the SPC info block inside the day-detail panel
+function _refreshDayDetailSPCInfo() {
+    const el = document.getElementById('detail-severe-weather');
+    if (!el) return;
+    const risk    = _spcRiskForForecastDay(_openDayDetailIndex);
+    const spcText = _buildSPCText(risk);
+    if (spcText && risk?.catRisk) {
+        const col = _CAT_COLORS[risk.catRisk] || {};
+        el.style.cssText =
+            `display:block;margin-top:10px;padding:10px 12px;border-radius:8px;` +
+            `font-size:0.88rem;line-height:1.5;` +
+            `background:${col.bg || 'rgba(255,160,64,0.12)'};` +
+            `border:1px solid ${col.border || 'rgba(255,160,64,0.35)'};` +
+            `color:var(--text-secondary);`;
+        el.innerHTML =
+            `<strong style="color:${col.text || '#f0a040'};">\u26A1 Severe Weather Outlook</strong><br>${spcText}`;
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+// Kick off all SPC day fetches concurrently; update UI as each one resolves
+async function _loadSPCForecastData(lat, lng) {
+    await Promise.allSettled(
+        [1, 2, 3].map(async (spcDay) => {
+            try {
+                const risk = await _fetchSPCRisk(lat, lng, spcDay);
+                _spcRiskCache[spcDay] = risk;
+                _updateSPCBadge(spcDay - 1);  // forecast row index = spcDay - 1
+            } catch (_) { /* graceful degradation — no SPC info shown */ }
+        })
+    );
 }
