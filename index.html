@@ -983,6 +983,7 @@
                     </div>
                 </div>
                 <div id="detail-description">--</div>
+                <div id="detail-severe-weather" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:0.88rem;line-height:1.5;"></div>
                 <hr class="divider">
                 <div class="cards-grid cards-grid-3" style="margin-top:16px;">
                     <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Precipitation</div><div style="font-size:1.1rem;font-weight:500;" id="detail-precip">--</div></div>
@@ -1716,11 +1717,11 @@
     const MRMS_PRODUCT_DEFS = {
         precip_type: { label: 'Precip Type',             filePrefix: 'master',    frames: 15, metaPrefix: ''           },
         refl:        { label: 'Reflectivity',             filePrefix: 'refl',      frames: 15, metaPrefix: 'refl_'      },
-        mesh:        { label: 'Max Hail Size (MESH)',     filePrefix: 'mesh',      frames: 15, metaPrefix: 'mesh_',      unit: ' in',   hasBin: true },
-        qpe6h:       { label: '6-Hr Precip Estimate',     filePrefix: 'qpe6h',     frames: 15, metaPrefix: 'qpe6h_',     unit: ' in',   hasBin: true },
-        qpe24h:      { label: '24-Hr Precip Estimate',    filePrefix: 'qpe24h',    frames: 15, metaPrefix: 'qpe24h_',    unit: ' in',   hasBin: true },
-        lightning:   { label: 'CG Lightning Probability', filePrefix: 'lightning', frames: 15, metaPrefix: 'lightning_', unit: '%',     hasBin: true },
-        rotation:    { label: 'Azimuth Shear/Rotation',   filePrefix: 'rotation',  frames: 15, metaPrefix: 'rotation_',  unit: ' s\u207B\u00B9', hasBin: true },
+        mesh:        { label: 'Max Hail Size (MESH)',     filePrefix: 'mesh',      frames: 15, metaPrefix: 'mesh_'      },
+        qpe6h:       { label: '6-Hr Precip Estimate',     filePrefix: 'qpe6h',     frames: 15, metaPrefix: 'qpe6h_'     },
+        qpe24h:      { label: '24-Hr Precip Estimate',    filePrefix: 'qpe24h',    frames: 15, metaPrefix: 'qpe24h_'    },
+        lightning:   { label: 'CG Lightning Probability', filePrefix: 'lightning', frames: 15, metaPrefix: 'lightning_' },
+        rotation:    { label: 'Azimuth Shear/Rotation',   filePrefix: 'rotation',  frames: 15, metaPrefix: 'rotation_'  },
     };
 
     // Legend color-bar definitions for each product
@@ -1785,7 +1786,7 @@
                 gradient: 'linear-gradient(to right, #00FF00 0%, #AAFF00 20%, #FFFF00 38%, #FF8800 55%, #FF0000 70%, #FF00FF 85%, #8800AA 100%)',
                 ticks: ['0.003', '0.012', '0.030', '0.050']
             }]
-        }
+        },
     };
 
     let _radarMeta           = {};   // cached metadata keyed by product key
@@ -1793,7 +1794,7 @@
     let _radarAnimTimer      = null;
     let _radarLoaded         = false;
     let _currentRadarProduct = 'precip_type';
-    let _mrmsBinCache        = {};   // keyed by "product_frameIdx" → ArrayBuffer
+    let _mrmsImgCache        = {};   // keyed by base URL → { imgData, width, height }
 
     function _mrmsFrameUrl(idx, product) {
         const def = MRMS_PRODUCT_DEFS[product || _currentRadarProduct];
@@ -1819,63 +1820,192 @@
         return _radarMeta[product];
     }
 
-    async function _fetchMrmsBin(product, frameIdx) {
-        const def = MRMS_PRODUCT_DEFS[product];
-        if (!def?.hasBin) return;
-        const key = product + '_' + frameIdx;
-        if (_mrmsBinCache[key]) return;
-        try {
-            const cb = Math.floor(Date.now() / 60000);
-            const filename = def.filePrefix + '_' + frameIdx + '.bin';
-            const resp = await fetch(MRMS_BASE + filename + '?cb=' + cb, { cache: 'no-store' });
-            if (!resp.ok) return;
-            _mrmsBinCache[key] = await resp.arrayBuffer();
-        } catch (_) { /* non-fatal */ }
+    // Fetch MRMS PNG image and return pixel data for click-to-value lookups.
+    async function _getMrmsPixelData(url) {
+        const baseUrl = url.split('?')[0];
+        if (_mrmsImgCache[baseUrl]) return _mrmsImgCache[baseUrl];
+        const resp = await fetch(url, { mode: 'cors' });
+        if (!resp.ok) throw new Error('MRMS image fetch failed: ' + resp.status);
+        const blob = await resp.blob();
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                try {
+                    const imgData = ctx.getImageData(0, 0, img.width, img.height);
+                    const result = { imgData, width: img.width, height: img.height };
+                    _mrmsImgCache[baseUrl] = result;
+                    resolve(result);
+                } catch (err) { reject(err); }
+            };
+            img.onerror = () => reject(new Error('MRMS image load error'));
+            img.src = URL.createObjectURL(blob);
+        });
+    }
+
+    // Approximate pixel color → human-readable value for each product.
+    function _colorToMrmsValue(product, r, g, b) {
+        function colorDist(r1, g1, b1, r2, g2, b2) {
+            return Math.sqrt((r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2);
+        }
+        function interpStops(stops) {
+            // Find the nearest stop
+            let best = 0, bestD = Infinity;
+            for (let i = 0; i < stops.length; i++) {
+                const d = colorDist(r, g, b, stops[i].r, stops[i].g, stops[i].b);
+                if (d < bestD) { bestD = d; best = i; }
+            }
+            if (stops.length === 1) return stops[0].val;
+            // Interpolate between the nearest and its closer neighbor
+            const prev = best > 0 ? best - 1 : 0;
+            const next = best < stops.length - 1 ? best + 1 : stops.length - 1;
+            const dp = colorDist(r, g, b, stops[prev].r, stops[prev].g, stops[prev].b);
+            const dn = colorDist(r, g, b, stops[next].r, stops[next].g, stops[next].b);
+            const total = dp + dn;
+            if (total === 0) return stops[best].val;
+            return stops[prev].val * (dn / total) + stops[next].val * (dp / total);
+        }
+
+        if (product === 'refl') {
+            // Reflectivity: gray→blue→green→yellow→orange→red→magenta
+            const stops = [
+                { r: 136, g: 136, b: 136, val:  0 },
+                { r:  68, g: 153, b: 255, val: 20 },
+                { r:   0, g: 187, b:   0, val: 35 },
+                { r:   0, g: 153, b:   0, val: 45 },
+                { r: 255, g: 255, b:   0, val: 55 },
+                { r: 255, g: 192, b:   0, val: 60 },
+                { r: 255, g: 128, b:   0, val: 65 },
+                { r: 255, g:  34, b:   0, val: 70 },
+                { r: 204, g:   0, b:   0, val: 75 },
+                { r: 255, g:   0, b: 255, val: 80 },
+            ];
+            const val = interpStops(stops);
+            return Math.round(val) + ' dBZ';
+        }
+
+        if (product === 'mesh') {
+            const stops = [
+                { r: 170, g: 255, b:   0, val: 0.25 },
+                { r: 255, g: 255, b:   0, val: 0.75 },
+                { r: 255, g: 136, b:   0, val: 1.75 },
+                { r: 255, g:  34, b:   0, val: 2.5  },
+                { r: 170, g:   0, b:   0, val: 3.25 },
+            ];
+            const val = interpStops(stops);
+            return val.toFixed(2) + '" diameter';
+        }
+
+        if (product === 'qpe6h') {
+            // 6-hr QPE: teal→green→yellow→orange→red→dark red
+            const stops = [
+                { r: 136, g: 255, b: 238, val:  0.05 },
+                { r:   0, g: 204, b: 170, val:  0.25 },
+                { r:   0, g: 204, b:   0, val:  0.75 },
+                { r: 255, g: 255, b:   0, val:  2.0  },
+                { r: 255, g: 136, b:   0, val:  4.0  },
+                { r: 255, g:   0, b:   0, val:  6.0  },
+                { r: 136, g:   0, b:   0, val:  8.0  },
+            ];
+            const val = interpStops(stops);
+            return val.toFixed(2) + '"';
+        }
+
+        if (product === 'qpe24h') {
+            // 24-hr QPE: same ramp, wider range
+            const stops = [
+                { r: 136, g: 255, b: 238, val:  0.25 },
+                { r:   0, g: 204, b: 170, val:  1.0  },
+                { r:   0, g: 204, b:   0, val:  2.5  },
+                { r: 255, g: 255, b:   0, val:  5.0  },
+                { r: 255, g: 136, b:   0, val:  8.0  },
+                { r: 255, g:   0, b:   0, val: 12.0  },
+                { r: 136, g:   0, b:   0, val: 16.0  },
+            ];
+            const val = interpStops(stops);
+            return val.toFixed(2) + '"';
+        }
+
+        if (product === 'lightning') {
+            const stops = [
+                { r: 255, g: 255, b: 170, val:  5 },
+                { r: 255, g: 221, b:  68, val: 30 },
+                { r: 255, g: 136, b:   0, val: 60 },
+                { r: 255, g:  34, b:   0, val: 80 },
+                { r: 136, g:   0, b:   0, val: 92 },
+            ];
+            const val = interpStops(stops);
+            return Math.round(val) + '% probability';
+        }
+
+        if (product === 'rotation') {
+            // Az Shear: green→yellow-green→yellow→orange→red→magenta→purple
+            const stops = [
+                { r:   0, g: 255, b:   0, val: 0.003 },
+                { r: 170, g: 255, b:   0, val: 0.008 },
+                { r: 255, g: 255, b:   0, val: 0.015 },
+                { r: 255, g: 136, b:   0, val: 0.025 },
+                { r: 255, g:   0, b:   0, val: 0.035 },
+                { r: 255, g:   0, b: 255, val: 0.045 },
+                { r: 136, g:   0, b: 170, val: 0.055 },
+            ];
+            const val = interpStops(stops);
+            return val.toFixed(4) + ' s\u207B\u00B9';
+        }
+
+        // precip_type: classify by dominant color channel
+        if (r > 150 && g < 80 && b > 150) return 'Ice / Mix';
+        if (b > r + 30 && b > g + 10)     return 'Snow';
+        if (r > 200 && g > 200)           return 'Light\u2013Moderate Rain';
+        if (r > 200 && g > 80 && g <= 200) return 'Moderate\u2013Heavy Rain';
+        if (r > 200 && g <= 80)           return 'Heavy Rain';
+        if (g > 180 && r < 80)            return 'Very Light Rain';
+        return 'Precipitation';
     }
 
     async function handleMrmsClick(e) {
         if (currentLayer !== 'radar') return;
-        const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
-        if (!def?.hasBin) return;
         const { lat, lng } = e.lngLat;
         // Use known fixed MRMS bounds: lat 24–50°N, lon 130–60°W
         const LAT_MIN = 24, LAT_MAX = 50, LON_MIN = -130, LON_MAX = -60;
         if (lat < LAT_MIN || lat > LAT_MAX || lng < LON_MIN || lng > LON_MAX) return;
-        const key = _currentRadarProduct + '_' + _radarFrameIdx;
-        if (!_mrmsBinCache[key]) await _fetchMrmsBin(_currentRadarProduct, _radarFrameIdx);
-        const buf = _mrmsBinCache[key];
-        if (!buf || buf.byteLength < 8) return;
-        // Binary format: [int32 rows][int32 cols][float32 × rows×cols], all little-endian
-        const dv = new DataView(buf);
-        const rows = dv.getInt32(0, true);
-        const cols = dv.getInt32(4, true);
-        if (rows <= 0 || cols <= 0) return;
-        const HEADER = 8;
-        const BYTES_PER_VAL = 4;
-        const row = Math.round((lat - LAT_MIN) / (LAT_MAX - LAT_MIN) * (rows - 1));
-        const col = Math.round((lng - LON_MIN) / (LON_MAX - LON_MIN) * (cols - 1));
-        const r = Math.max(0, Math.min(rows - 1, row));
-        const c = Math.max(0, Math.min(cols - 1, col));
-        const offset = HEADER + (r * cols + c) * BYTES_PER_VAL;
-        if (offset + BYTES_PER_VAL > buf.byteLength) return;
-        const val = dv.getFloat32(offset, true); // little-endian float32
-        if (!isFinite(val) || val < -9000) return;
-        let valueStr;
-        if (def.unit === '%') {
-            valueStr = Math.round(val) + '%';
-        } else if (def.unit === ' s\u207B\u00B9') {
-            valueStr = val.toFixed(4) + ' s\u207B\u00B9';
-        } else {
-            valueStr = (Math.round(val * 100) / 100).toFixed(2) + def.unit;
+
+        const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
+        const url = _mrmsFrameUrl(_radarFrameIdx);
+
+        try {
+            const { imgData, width, height } = await _getMrmsPixelData(url);
+            // Image is stored top-to-bottom (row 0 = northernmost lat)
+            const px = Math.round((lng - LON_MIN) / (LON_MAX - LON_MIN) * (width  - 1));
+            const py = Math.round((LAT_MAX - lat) / (LAT_MAX - LAT_MIN) * (height - 1));
+            const cx = Math.max(0, Math.min(width  - 1, px));
+            const cy = Math.max(0, Math.min(height - 1, py));
+            const idx = (cy * width + cx) * 4;
+            const r = imgData.data[idx], g = imgData.data[idx+1],
+                  b = imgData.data[idx+2], a = imgData.data[idx+3];
+
+            const meta    = (_radarMeta[_currentRadarProduct] || [])[_radarFrameIdx];
+            const timeStr = meta?.time || '';
+            let valueStr;
+            if (a < 10) {
+                valueStr = 'No data';
+            } else {
+                valueStr = _colorToMrmsValue(_currentRadarProduct, r, g, b);
+            }
+
+            new mapboxgl.Popup({ closeButton: true, maxWidth: '240px' })
+                .setLngLat(e.lngLat)
+                .setHTML(`<div class="popup-title">MRMS ${def.label}</div>
+                          <div class="popup-stat"><span class="popup-key">${def.label}</span><span class="popup-val">${valueStr}</span></div>
+                          ${timeStr ? `<div class="popup-stat"><span class="popup-key" style="font-size:0.72rem;">Valid</span><span class="popup-val" style="font-size:0.72rem;">${timeStr}</span></div>` : ''}`)
+                .addTo(map);
+        } catch (err) {
+            console.warn('MRMS click read error:', err);
         }
-        const meta = (_radarMeta[_currentRadarProduct] || [])[_radarFrameIdx];
-        const timeStr = meta?.time || '';
-        new mapboxgl.Popup({ closeButton: true, maxWidth: '240px' })
-            .setLngLat(e.lngLat)
-            .setHTML(`<div class="popup-title">MRMS ${def.label}</div>
-                      <div class="popup-stat"><span class="popup-key">${def.label}</span><span class="popup-val">${valueStr}</span></div>
-                      ${timeStr ? `<div class="popup-stat"><span class="popup-key" style="font-size:0.72rem;">Valid</span><span class="popup-val" style="font-size:0.72rem;">${timeStr}</span></div>` : ''}`)
-            .addTo(map);
     }
 
     function _updateRadarUI(idx) {
@@ -1904,14 +2034,12 @@
             _radarLoaded = true;
         }
         _updateRadarUI(idx);
-        // Prefetch binary data for click value readout (non-blocking)
-        _fetchMrmsBin(_currentRadarProduct, idx);
     }
 
     function clearRadarLayer() {
         stopRadarAnimation();
         _radarLoaded = false;
-        _mrmsBinCache = {};
+        _mrmsImgCache = {};
         if (map) {
             if (map.getLayer('mrms-radar-layer')) map.removeLayer('mrms-radar-layer');
             if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
@@ -1974,7 +2102,7 @@
         if (!MRMS_PRODUCT_DEFS[product]) return;
         _currentRadarProduct = product;
         _radarLoaded = false;
-        _mrmsBinCache = {};
+        _mrmsImgCache = {};
         const sel = document.getElementById('radar-product-select');
         if (sel) sel.value = product;
         if (currentLayer === 'radar') {
@@ -3210,7 +3338,10 @@
                 buildTypeButtons(currentDay);
             } else {
                 // All days — show image gallery only
-                document.getElementById('type-row').style.display = 'none';
+                const _typeRow = document.getElementById('type-row');
+                if (_typeRow) _typeRow.style.display = 'none';
+                const _typeSel = document.getElementById('spc-type-select');
+                if (_typeSel) _typeSel.style.display = 'none';
                 clearSPCLayers(); hideSPCLegend();
                 _showSPCView();
                 const hint = document.getElementById('spc-img-hint');
