@@ -1106,8 +1106,12 @@
                     <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <select id="radar-product-select" class="ctrl-select" onchange="setRadarProduct(this.value)">
                             <option value="precip_type">Precip Type</option>
+                            <option value="refl">Reflectivity</option>
                             <option value="mesh">Hail Size (MESH)</option>
+                            <option value="qpe6h">6hr Total Precip</option>
+                            <option value="qpe24h">24hr Total Precip</option>
                             <option value="lightning">CG Lightning Prob</option>
+                            <option value="rotation">Az Shear / Rotation</option>
                         </select>
                     </div>
                     <div class="ctrl-row" style="gap:8px;align-items:center;">
@@ -1710,11 +1714,14 @@
     const MRMS_COORDS = [[-130, 50], [-60, 50], [-60, 24], [-130, 24]];
 
     // Product definitions: filePrefix, frame count, metadata file prefix
-    // Only products with actual image files in the MRMS GitHub repo are included.
     const MRMS_PRODUCT_DEFS = {
         precip_type: { label: 'Precip Type',             filePrefix: 'master',    frames: 15, metaPrefix: ''           },
+        refl:        { label: 'Reflectivity',             filePrefix: 'refl',      frames: 15, metaPrefix: 'refl_'      },
         mesh:        { label: 'Max Hail Size (MESH)',     filePrefix: 'mesh',      frames: 15, metaPrefix: 'mesh_'      },
+        qpe6h:       { label: '6-Hr Precip Estimate',     filePrefix: 'qpe6h',     frames: 15, metaPrefix: 'qpe6h_'     },
+        qpe24h:      { label: '24-Hr Precip Estimate',    filePrefix: 'qpe24h',    frames: 15, metaPrefix: 'qpe24h_'    },
         lightning:   { label: 'CG Lightning Probability', filePrefix: 'lightning', frames: 15, metaPrefix: 'lightning_' },
+        rotation:    { label: 'Azimuth Shear/Rotation',   filePrefix: 'rotation',  frames: 15, metaPrefix: 'rotation_'  },
     };
 
     // Legend color-bar definitions for each product
@@ -1738,6 +1745,13 @@
                 }
             ]
         },
+        refl: {
+            sections: [{
+                label: 'REFLECTIVITY (dBZ)',
+                gradient: 'linear-gradient(to right, #888888 0%, #888888 7%, #4499FF 18%, #00BB00 28%, #009900 35%, #FFFF00 47%, #FFC000 54%, #FF8000 62%, #FF2200 70%, #CC0000 76%, #FF00FF 87%, #CC44CC 100%)',
+                ticks: ['0', '35', '55', '75']
+            }]
+        },
         mesh: {
             sections: [{
                 label: 'HAIL DIAMETER (IN)',
@@ -1745,11 +1759,32 @@
                 ticks: ['0.25"\nPea', '0.75"', '1.75"\nGolf', '3.0"\nBaseball']
             }]
         },
+        qpe6h: {
+            sections: [{
+                label: '6-HR ACCUMULATION (IN)',
+                gradient: 'linear-gradient(to right, #88FFEE 0%, #00CCAA 20%, #00CC00 38%, #FFFF00 57%, #FF8800 75%, #FF0000 90%, #880000 100%)',
+                ticks: ['0.05"', '0.5"', '2.0"', '8.0"']
+            }]
+        },
+        qpe24h: {
+            sections: [{
+                label: '24-HR ACCUMULATION (IN)',
+                gradient: 'linear-gradient(to right, #88FFEE 0%, #00CCAA 18%, #00CC00 35%, #FFFF00 55%, #FF8800 72%, #FF0000 88%, #880000 100%)',
+                ticks: ['0.25"', '2.0"', '6.0"', '16"']
+            }]
+        },
         lightning: {
             sections: [{
                 label: '1-HR CG LIGHTNING PROB (%)',
                 gradient: 'linear-gradient(to right, #FFFFAA 0%, #FFDD44 25%, #FF8800 50%, #FF2200 72%, #880000 100%)',
                 ticks: ['5%', '30%', '60%', '90%']
+            }]
+        },
+        rotation: {
+            sections: [{
+                label: 'AZ SHEAR (S\u207B\u00B9)',
+                gradient: 'linear-gradient(to right, #00FF00 0%, #AAFF00 20%, #FFFF00 38%, #FF8800 55%, #FF0000 70%, #FF00FF 85%, #8800AA 100%)',
+                ticks: ['0.003', '0.012', '0.030', '0.050']
             }]
         },
     };
@@ -1835,6 +1870,24 @@
             return stops[prev].val * (dn / total) + stops[next].val * (dp / total);
         }
 
+        if (product === 'refl') {
+            // Reflectivity: gray→blue→green→yellow→orange→red→magenta
+            const stops = [
+                { r: 136, g: 136, b: 136, val:  0 },
+                { r:  68, g: 153, b: 255, val: 20 },
+                { r:   0, g: 187, b:   0, val: 35 },
+                { r:   0, g: 153, b:   0, val: 45 },
+                { r: 255, g: 255, b:   0, val: 55 },
+                { r: 255, g: 192, b:   0, val: 60 },
+                { r: 255, g: 128, b:   0, val: 65 },
+                { r: 255, g:  34, b:   0, val: 70 },
+                { r: 204, g:   0, b:   0, val: 75 },
+                { r: 255, g:   0, b: 255, val: 80 },
+            ];
+            const val = interpStops(stops);
+            return Math.round(val) + ' dBZ';
+        }
+
         if (product === 'mesh') {
             const stops = [
                 { r: 170, g: 255, b:   0, val: 0.25 },
@@ -1845,6 +1898,36 @@
             ];
             const val = interpStops(stops);
             return val.toFixed(2) + '" diameter';
+        }
+
+        if (product === 'qpe6h') {
+            // 6-hr QPE: teal→green→yellow→orange→red→dark red
+            const stops = [
+                { r: 136, g: 255, b: 238, val:  0.05 },
+                { r:   0, g: 204, b: 170, val:  0.25 },
+                { r:   0, g: 204, b:   0, val:  0.75 },
+                { r: 255, g: 255, b:   0, val:  2.0  },
+                { r: 255, g: 136, b:   0, val:  4.0  },
+                { r: 255, g:   0, b:   0, val:  6.0  },
+                { r: 136, g:   0, b:   0, val:  8.0  },
+            ];
+            const val = interpStops(stops);
+            return val.toFixed(2) + '"';
+        }
+
+        if (product === 'qpe24h') {
+            // 24-hr QPE: same ramp, wider range
+            const stops = [
+                { r: 136, g: 255, b: 238, val:  0.25 },
+                { r:   0, g: 204, b: 170, val:  1.0  },
+                { r:   0, g: 204, b:   0, val:  2.5  },
+                { r: 255, g: 255, b:   0, val:  5.0  },
+                { r: 255, g: 136, b:   0, val:  8.0  },
+                { r: 255, g:   0, b:   0, val: 12.0  },
+                { r: 136, g:   0, b:   0, val: 16.0  },
+            ];
+            const val = interpStops(stops);
+            return val.toFixed(2) + '"';
         }
 
         if (product === 'lightning') {
@@ -1859,11 +1942,26 @@
             return Math.round(val) + '% probability';
         }
 
+        if (product === 'rotation') {
+            // Az Shear: green→yellow-green→yellow→orange→red→magenta→purple
+            const stops = [
+                { r:   0, g: 255, b:   0, val: 0.003 },
+                { r: 170, g: 255, b:   0, val: 0.008 },
+                { r: 255, g: 255, b:   0, val: 0.015 },
+                { r: 255, g: 136, b:   0, val: 0.025 },
+                { r: 255, g:   0, b:   0, val: 0.035 },
+                { r: 255, g:   0, b: 255, val: 0.045 },
+                { r: 136, g:   0, b: 170, val: 0.055 },
+            ];
+            const val = interpStops(stops);
+            return val.toFixed(4) + ' s\u207B\u00B9';
+        }
+
         // precip_type: classify by dominant color channel
         if (r > 150 && g < 80 && b > 150) return 'Ice / Mix';
         if (b > r + 30 && b > g + 10)     return 'Snow';
-        if (r > 200 && g > 200)           return 'Light–Moderate Rain';
-        if (r > 200 && g > 80 && g <= 200) return 'Moderate–Heavy Rain';
+        if (r > 200 && g > 200)           return 'Light\u2013Moderate Rain';
+        if (r > 200 && g > 80 && g <= 200) return 'Moderate\u2013Heavy Rain';
         if (r > 200 && g <= 80)           return 'Heavy Rain';
         if (g > 180 && r < 80)            return 'Very Light Rain';
         return 'Precipitation';
