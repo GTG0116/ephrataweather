@@ -978,6 +978,7 @@ function showHourlyDetail(idx) {
     const precip = h.precipitation?.probability;
     const windSpeed = h.wind?.speed;
     const windDir = h.wind?.direction != null ? WeatherAPI.windDirection(h.wind.direction) : null;
+    const windGust = h.wind?.gust;
     const humidity = h.relativeHumidity;
     const condType = h.weatherCondition?.type || '';
     const tsMs = Date.parse(h.interval?.startTime || h.displayDateTime || '');
@@ -989,6 +990,7 @@ function showHourlyDetail(idx) {
     if (feelsLike) rows.push(`<div class="hpop-row"><span class="hpop-key">Feels Like</span><span>${feelsLike}</span></div>`);
     if (precip != null) rows.push(`<div class="hpop-row"><span class="hpop-key">Precip</span><span>${Math.round(precip)}%</span></div>`);
     if (windSpeed != null) rows.push(`<div class="hpop-row"><span class="hpop-key">Wind</span><span>${Math.round(windSpeed)} mph${windDir ? ' ' + windDir : ''}</span></div>`);
+    if (windGust != null) rows.push(`<div class="hpop-row"><span class="hpop-key">Wind Gusts</span><span>${Math.round(windGust)} mph</span></div>`);
     if (humidity != null) rows.push(`<div class="hpop-row"><span class="hpop-key">Humidity</span><span>${Math.round(humidity)}%</span></div>`);
 
     const popup = document.createElement('div');
@@ -1005,9 +1007,11 @@ function showHourlyDetail(idx) {
         ${rows.join('')}
     `;
 
-    // Insert after the hourly strip container
+    // Insert after the whole hourly forecast card (outside it) to avoid
+    // double-overlay and scrollbar overlap
     const strip = document.getElementById('hourly-strip');
-    strip.parentNode.insertAdjacentElement('afterend', popup);
+    const card = strip.closest('.hourly-forecast-card') || strip.parentNode;
+    card.insertAdjacentElement('afterend', popup);
 
     // Auto-dismiss when clicking outside
     const dismiss = (e) => {

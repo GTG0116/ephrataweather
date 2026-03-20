@@ -129,8 +129,9 @@ function _drawForecastChart(metric, days) {
         days.forEach((d, i) => {
             const v = vals[i];
             if (v != null) {
+                const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
                 dots += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(v) - 7}" text-anchor="middle" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(v)}</text>`;
+                         <text x="${xOf(i)}" y="${yOf(v) - 7}" text-anchor="${anchor}" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(v)}</text>`;
             }
         });
 
@@ -207,13 +208,14 @@ function _drawForecastChart(metric, days) {
         days.forEach((d, i) => {
             const hi = d.maxTemperature?.degrees;
             const lo = d.minTemperature?.degrees;
+            const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
             if (hi != null) {
                 dots += `<circle cx="${xOf(i)}" cy="${yOf(hi)}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(hi) - 7}" text-anchor="middle" fill="#FF7043" font-size="8.5" font-weight="500">${Math.round(hi)}\u00B0</text>`;
+                         <text x="${xOf(i)}" y="${yOf(hi) - 7}" text-anchor="${anchor}" fill="#FF7043" font-size="8.5" font-weight="500">${Math.round(hi)}\u00B0</text>`;
             }
             if (lo != null) {
                 dots += `<circle cx="${xOf(i)}" cy="${yOf(lo)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(lo) + 15}" text-anchor="middle" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(lo)}\u00B0</text>`;
+                         <text x="${xOf(i)}" y="${yOf(lo) + 15}" text-anchor="${anchor}" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(lo)}\u00B0</text>`;
             }
         });
 

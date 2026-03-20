@@ -473,7 +473,7 @@ body {
 
 /* --- Hourly Detail Popup --- */
 .hourly-detail-popup {
-    margin: -8px 0 20px;
+    margin: 0 0 24px;
     padding: 14px 18px;
     border-radius: var(--radius-md);
     font-size: 0.85rem;
