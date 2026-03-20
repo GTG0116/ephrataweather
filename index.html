@@ -1892,9 +1892,13 @@
 
         try {
             const { imgData, width, height } = await _getMrmsPixelData(url);
-            // Image is stored top-to-bottom (row 0 = northernmost lat)
+            // Image rows are linearly spaced in Mercator Y (not latitude).
+            // Must project lat → Mercator Y to get the correct pixel row.
+            const mercY    = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 180 / 2));
+            const mercTop  = mercY(LAT_MAX);
+            const mercBot  = mercY(LAT_MIN);
             const px = Math.round((lng - LON_MIN) / (LON_MAX - LON_MIN) * (width  - 1));
-            const py = Math.round((LAT_MAX - lat) / (LAT_MAX - LAT_MIN) * (height - 1));
+            const py = Math.round((mercTop - mercY(lat)) / (mercTop - mercBot) * (height - 1));
             const cx = Math.max(0, Math.min(width  - 1, px));
             const cy = Math.max(0, Math.min(height - 1, py));
             const idx = (cy * width + cx) * 4;
