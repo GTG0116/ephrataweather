@@ -1808,6 +1808,14 @@
         return MRMS_BASE + filename + '?cb=' + cb;
     }
 
+    // URL for the value-encoded PNG (R=high byte, G=low byte of uint16 value).
+    // Available for: mesh, qpe6h, qpe24h, lightning, rotation.
+    function _mrmsValueFrameUrl(idx, product) {
+        const def = MRMS_PRODUCT_DEFS[product || _currentRadarProduct];
+        const cb  = Math.floor(Date.now() / 60000);
+        return MRMS_BASE + def.filePrefix + '_val_' + idx + '.png?cb=' + cb;
+    }
+
     async function _loadRadarMeta(product) {
         product = product || _currentRadarProduct;
         if (_radarMeta[product]) return _radarMeta[product];
@@ -1847,135 +1855,40 @@
         });
     }
 
-    // Approximate pixel color → human-readable value for each product.
-    function _colorToMrmsValue(product, r, g, b) {
-        function colorDist(r1, g1, b1, r2, g2, b2) {
-            return Math.sqrt((r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2);
-        }
-        function interpStops(stops) {
-            // Find the nearest stop
-            let best = 0, bestD = Infinity;
-            for (let i = 0; i < stops.length; i++) {
-                const d = colorDist(r, g, b, stops[i].r, stops[i].g, stops[i].b);
-                if (d < bestD) { bestD = d; best = i; }
-            }
-            if (stops.length === 1) return stops[0].val;
-            // Interpolate between the nearest and its closer neighbor
-            const prev = best > 0 ? best - 1 : 0;
-            const next = best < stops.length - 1 ? best + 1 : stops.length - 1;
-            const dp = colorDist(r, g, b, stops[prev].r, stops[prev].g, stops[prev].b);
-            const dn = colorDist(r, g, b, stops[next].r, stops[next].g, stops[next].b);
-            const total = dp + dn;
-            if (total === 0) return stops[best].val;
-            return stops[prev].val * (dn / total) + stops[next].val * (dp / total);
-        }
-
-        if (product === 'refl') {
-            // Reflectivity: gray→blue→green→yellow→orange→red→magenta
-            const stops = [
-                { r: 136, g: 136, b: 136, val:  0 },
-                { r:  68, g: 153, b: 255, val: 20 },
-                { r:   0, g: 187, b:   0, val: 35 },
-                { r:   0, g: 153, b:   0, val: 45 },
-                { r: 255, g: 255, b:   0, val: 55 },
-                { r: 255, g: 192, b:   0, val: 60 },
-                { r: 255, g: 128, b:   0, val: 65 },
-                { r: 255, g:  34, b:   0, val: 70 },
-                { r: 204, g:   0, b:   0, val: 75 },
-                { r: 255, g:   0, b: 255, val: 80 },
-            ];
-            const val = interpStops(stops);
-            return Math.round(val) + ' dBZ';
-        }
-
-        if (product === 'mesh') {
-            const stops = [
-                { r: 170, g: 255, b:   0, val: 0.25 },
-                { r: 255, g: 255, b:   0, val: 0.75 },
-                { r: 255, g: 136, b:   0, val: 1.75 },
-                { r: 255, g:  34, b:   0, val: 2.5  },
-                { r: 170, g:   0, b:   0, val: 3.25 },
-            ];
-            const val = interpStops(stops);
-            return val.toFixed(2) + '" diameter';
-        }
-
-        if (product === 'qpe6h') {
-            // 6-hr QPE: teal→green→yellow→orange→red→dark red
-            const stops = [
-                { r: 136, g: 255, b: 238, val:  0.05 },
-                { r:   0, g: 204, b: 170, val:  0.25 },
-                { r:   0, g: 204, b:   0, val:  0.75 },
-                { r: 255, g: 255, b:   0, val:  2.0  },
-                { r: 255, g: 136, b:   0, val:  4.0  },
-                { r: 255, g:   0, b:   0, val:  6.0  },
-                { r: 136, g:   0, b:   0, val:  8.0  },
-            ];
-            const val = interpStops(stops);
-            return val.toFixed(2) + '"';
-        }
-
-        if (product === 'qpe24h') {
-            // 24-hr QPE: same ramp, wider range
-            const stops = [
-                { r: 136, g: 255, b: 238, val:  0.25 },
-                { r:   0, g: 204, b: 170, val:  1.0  },
-                { r:   0, g: 204, b:   0, val:  2.5  },
-                { r: 255, g: 255, b:   0, val:  5.0  },
-                { r: 255, g: 136, b:   0, val:  8.0  },
-                { r: 255, g:   0, b:   0, val: 12.0  },
-                { r: 136, g:   0, b:   0, val: 16.0  },
-            ];
-            const val = interpStops(stops);
-            return val.toFixed(2) + '"';
-        }
-
-        if (product === 'lightning') {
-            const stops = [
-                { r: 255, g: 255, b: 170, val:  5 },
-                { r: 255, g: 221, b:  68, val: 30 },
-                { r: 255, g: 136, b:   0, val: 60 },
-                { r: 255, g:  34, b:   0, val: 80 },
-                { r: 136, g:   0, b:   0, val: 92 },
-            ];
-            const val = interpStops(stops);
-            return Math.round(val) + '% probability';
-        }
-
-        if (product === 'rotation') {
-            // Az Shear: green→yellow-green→yellow→orange→red→magenta→purple
-            const stops = [
-                { r:   0, g: 255, b:   0, val: 0.003 },
-                { r: 170, g: 255, b:   0, val: 0.008 },
-                { r: 255, g: 255, b:   0, val: 0.015 },
-                { r: 255, g: 136, b:   0, val: 0.025 },
-                { r: 255, g:   0, b:   0, val: 0.035 },
-                { r: 255, g:   0, b: 255, val: 0.045 },
-                { r: 136, g:   0, b: 170, val: 0.055 },
-            ];
-            const val = interpStops(stops);
-            return val.toFixed(4) + ' s\u207B\u00B9';
-        }
-
-        // precip_type: classify by dominant color channel
-        if (r > 150 && g < 80 && b > 150) return 'Ice / Mix';
-        if (b > r + 30 && b > g + 10)     return 'Snow';
-        if (r > 200 && g > 200)           return 'Light\u2013Moderate Rain';
-        if (r > 200 && g > 80 && g <= 200) return 'Moderate\u2013Heavy Rain';
-        if (r > 200 && g <= 80)           return 'Heavy Rain';
-        if (g > 180 && r < 80)            return 'Very Light Rain';
-        return 'Precipitation';
+    // Decode exact value from a value PNG pixel (R=high byte, G=low byte of uint16).
+    // Encoding: val = (R*256 + G) / 65535 * maxVal
+    function _decodeMrmsValue(product, r, g) {
+        const MAX_VALS = {
+            mesh:      3.00,
+            qpe6h:     8.00,
+            qpe24h:   16.00,
+            lightning: 90,
+            rotation:  0.050,
+        };
+        const maxVal = MAX_VALS[product];
+        if (maxVal === undefined) return 'Unknown';
+        const val = (r * 256 + g) / 65535 * maxVal;
+        if (product === 'mesh')      return val.toFixed(2) + '" diameter';
+        if (product === 'qpe6h')     return val.toFixed(2) + '"';
+        if (product === 'qpe24h')    return val.toFixed(2) + '"';
+        if (product === 'lightning') return Math.round(val) + '% probability';
+        if (product === 'rotation')  return val.toFixed(4) + ' s\u207B\u00B9';
+        return val.toFixed(2);
     }
 
     async function handleMrmsClick(e) {
         if (currentLayer !== 'radar') return;
+        // Reflectivity and precip type don't support click-to-value
+        if (_currentRadarProduct === 'refl' || _currentRadarProduct === 'precip_type') return;
+
         const { lat, lng } = e.lngLat;
         // Use known fixed MRMS bounds: lat 24–50°N, lon 130–60°W
         const LAT_MIN = 24, LAT_MAX = 50, LON_MIN = -130, LON_MAX = -60;
         if (lat < LAT_MIN || lat > LAT_MAX || lng < LON_MIN || lng > LON_MAX) return;
 
         const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
-        const url = _mrmsFrameUrl(_radarFrameIdx);
+        // Use the value PNG which encodes exact float data in R/G channels
+        const url = _mrmsValueFrameUrl(_radarFrameIdx);
 
         try {
             const { imgData, width, height } = await _getMrmsPixelData(url);
@@ -1986,7 +1899,7 @@
             const cy = Math.max(0, Math.min(height - 1, py));
             const idx = (cy * width + cx) * 4;
             const r = imgData.data[idx], g = imgData.data[idx+1],
-                  b = imgData.data[idx+2], a = imgData.data[idx+3];
+                  a = imgData.data[idx+3];
 
             const meta    = (_radarMeta[_currentRadarProduct] || [])[_radarFrameIdx];
             const timeStr = meta?.time || '';
@@ -1994,7 +1907,7 @@
             if (a < 10) {
                 valueStr = 'No data';
             } else {
-                valueStr = _colorToMrmsValue(_currentRadarProduct, r, g, b);
+                valueStr = _decodeMrmsValue(_currentRadarProduct, r, g);
             }
 
             new mapboxgl.Popup({ closeButton: true, maxWidth: '240px' })
