@@ -42,6 +42,10 @@ async function initCurrentView(lat, lng) {
         return WeatherAPI.getDailyForecast(lat, lng, days); // google
     }
 
+    // Start alerts loading concurrently — it renders to its own DOM sections
+    // so it doesn't need to block the main weather data rendering.
+    const _alertsTask = loadAndRenderAlerts(lat, lng).catch(err => console.warn('Alerts error:', err));
+
     // Fetch weather data in parallel
     const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult] = await Promise.allSettled([
         _getCurrentFn(),
@@ -52,13 +56,6 @@ async function initCurrentView(lat, lng) {
         WeatherAPI.getAirQuality(lat, lng),
         WeatherAPI.getPollen(lat, lng)
     ]);
-
-    // --- Weather Alerts (NWS for current + starred locations) ---
-    try {
-        await loadAndRenderAlerts(lat, lng);
-    } catch (err) {
-        console.warn('Alerts error:', err);
-    }
 
     // --- Current Conditions ---
     if (currentResult.status === 'fulfilled') {
@@ -314,26 +311,12 @@ async function loadAndRenderAlerts(lat, lng) {
     const currentAlerts = byLocation.find((x) => x.location.isCurrent)?.alerts || [];
     renderAlerts(currentAlerts);
 
-    // Check SPC Day 1 severe weather outlook
-    try {
-        await loadAndRenderSPCOutlook(lat, lng);
-    } catch (err) {
-        console.warn('SPC outlook error:', err);
-    }
-
-    // Check SPC Day 1 fire weather outlook
-    try {
-        await loadAndRenderSPCFireOutlook(lat, lng);
-    } catch (err) {
-        console.warn('SPC fire weather error:', err);
-    }
-
-    // Check WPC Day 1 excessive rainfall outlook
-    try {
-        await loadAndRenderWPCRainfallOutlook(lat, lng);
-    } catch (err) {
-        console.warn('WPC rainfall error:', err);
-    }
+    // Fetch SPC and WPC outlooks in parallel instead of sequentially
+    await Promise.allSettled([
+        loadAndRenderSPCOutlook(lat, lng).catch(err => console.warn('SPC outlook error:', err)),
+        loadAndRenderSPCFireOutlook(lat, lng).catch(err => console.warn('SPC fire weather error:', err)),
+        loadAndRenderWPCRainfallOutlook(lat, lng).catch(err => console.warn('WPC rainfall error:', err))
+    ]);
 }
 
 function _buildAlertBannerHTML(alert, i) {

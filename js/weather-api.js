@@ -697,8 +697,6 @@ const WeatherAPI = {
             });
             if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
             return await resp.json();
-            if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
-            return await resp.json();
         } catch (e) {
             console.warn('Google AQI failed, using Open-Meteo:', e.message);
         }
@@ -814,7 +812,26 @@ const WeatherAPI = {
             headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
         });
         if (!obsResp.ok) throw new Error(`NWS observations ${obsResp.status}`);
-        const obs = (await obsResp.json()).properties;
+        let obs = (await obsResp.json()).properties;
+
+        // The /observations/latest endpoint sometimes returns a stale or incomplete
+        // observation with null temperature. Fall back to recent observations list
+        // to find the most recent valid reading.
+        if (obs.temperature?.value == null) {
+            try {
+                const recentResp = await fetch(
+                    `https://api.weather.gov/stations/${stationId}/observations?limit=5`,
+                    { headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' } }
+                );
+                if (recentResp.ok) {
+                    const recentData = await recentResp.json();
+                    const validObs = (recentData.features || [])
+                        .map(f => f.properties)
+                        .find(p => p?.temperature?.value != null);
+                    if (validObs) obs = validObs;
+                }
+            } catch (e) { /* use original observation */ }
+        }
 
         // Convert SI units to imperial
         const toF = c => c != null ? c * 9 / 5 + 32 : null;
