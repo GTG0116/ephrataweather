@@ -3483,6 +3483,7 @@
             });
             window._spaMap = map;
             map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+            map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
             map.on('load', () => {
                 const styleLayers = map.getStyle().layers;
                 firstSymbolLayerId = undefined;
