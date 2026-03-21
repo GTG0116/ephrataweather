@@ -1153,31 +1153,7 @@
                 </div>
             </div>
 
-            <!-- SPC Outlook Image Gallery -->
-            <div id="spc-image-view" class="glass-static" style="padding:16px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
-                    <p id="spc-img-hint" style="font-size:0.78rem;color:var(--text-muted);margin:0;">
-                        Images from NOAA Storm Prediction Center &mdash; click any image to zoom in. Select a specific day above to view the interactive outlook map (Days 1&ndash;8).
-                    </p>
-                    <button onclick="openOutlookInfoModal('spc')" class="outlook-info-btn" title="What do these categories mean?">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        What does this mean?
-                    </button>
-                </div>
-                <div id="spc-img-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
-            </div>
-
-
-
-            <!-- MRMS Radar Viewer -->
-            <div id="radar-image-view" style="display:none;">
-                <iframe src="https://ephrataweather.github.io/MRMS/public/"
-                        style="width:100%;height:calc(100vh - 220px);min-height:500px;border:none;border-radius:var(--radius-lg);"
-                        title="MRMS Radar Viewer"
-                        allowfullscreen></iframe>
-            </div>
-
-            <!-- Map (for SPC / WPC / Fire / Temperature / Wind) -->
+            <!-- Map (for SPC / WPC / Fire / Temperature / Wind / Satellite / Radar) -->
             <div class="map-wrapper glass-static" id="map-view-wrap" style="display:none;">
                 <div id="map"></div>
                 <div class="spc-legend" id="spc-legend">
@@ -1192,6 +1168,28 @@
                     <div class="spinner"></div>
                     <p id="loading-msg" style="font-size:0.85rem;color:var(--text-secondary);">Loading outlook…</p>
                 </div>
+            </div>
+
+            <!-- SPC Outlook Image Gallery -->
+            <div id="spc-image-view" class="glass-static" style="padding:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+                    <p id="spc-img-hint" style="font-size:0.78rem;color:var(--text-muted);margin:0;">
+                        Images from NOAA Storm Prediction Center &mdash; click any image to zoom in. Select a specific day above to view the interactive outlook map (Days 1&ndash;8).
+                    </p>
+                    <button onclick="openOutlookInfoModal('spc')" class="outlook-info-btn" title="What do these categories mean?">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        What does this mean?
+                    </button>
+                </div>
+                <div id="spc-img-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
+            </div>
+
+            <!-- MRMS Radar Viewer -->
+            <div id="radar-image-view" style="display:none;">
+                <iframe src="https://ephrataweather.github.io/MRMS/public/"
+                        style="width:100%;height:calc(100vh - 220px);min-height:500px;border:none;border-radius:var(--radius-lg);"
+                        title="MRMS Radar Viewer"
+                        allowfullscreen></iframe>
             </div>
 
             <!-- WPC Excessive Rainfall Static Images (below interactive map) -->
@@ -2969,6 +2967,72 @@
     // GOES-East CONUS image corners [lng, lat]: NW, NE, SE, SW  (must match EXTENT in process_data.py: [-135, -60, 20, 55])
     const SAT_COORDS = [[-135.0, 55.0], [-60.0, 55.0], [-60.0, 20.0], [-135.0, 20.0]];
     const SAT_MAX_FRAMES = 10;
+    // Satellite extent constants (must match EXTENT in process_data.py)
+    const SAT_SOUTH = 20.0, SAT_NORTH = 55.0;
+
+    // Cache of reprojected blob URLs: raw url → blob url (or raw url on CORS failure)
+    const _satMercCache = new Map();
+
+    // Reproject a PlateCarree satellite image to Web Mercator so it aligns
+    // correctly on Mapbox's Mercator basemap. Returns a blob URL on success,
+    // or the original rawUrl as a fallback if cross-origin pixel access fails.
+    async function _toMercator(rawUrl) {
+        if (_satMercCache.has(rawUrl)) return _satMercCache.get(rawUrl);
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image();
+                i.crossOrigin = 'anonymous';
+                i.onload = () => res(i);
+                i.onerror = rej;
+                i.src = rawUrl;
+            });
+            const W = img.width, H = img.height;
+            // Mercator Y values for the latitude bounds
+            const mY  = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+            const mN  = mY(SAT_NORTH), mS = mY(SAT_SOUTH);
+            const mRng = mN - mS;
+            // Draw source (PlateCarree) image to an offscreen canvas
+            const sc = document.createElement('canvas');
+            sc.width = W; sc.height = H;
+            const sctx = sc.getContext('2d');
+            sctx.drawImage(img, 0, 0);
+            const sd = sctx.getImageData(0, 0, W, H).data;
+            // Build Mercator-projected output
+            const oc = document.createElement('canvas');
+            oc.width = W; oc.height = H;
+            const octx = oc.getContext('2d');
+            const od = octx.createImageData(W, H);
+            const oda = od.data;
+            const latRange = SAT_NORTH - SAT_SOUTH;
+            for (let y = 0; y < H; y++) {
+                // Mercator Y for this output row (top = north)
+                const my  = mN - (y / H) * mRng;
+                // Corresponding geographic latitude
+                const lat = (2 * Math.atan(Math.exp(my)) - Math.PI / 2) * 180 / Math.PI;
+                // Source row in the PlateCarree image (top = SAT_NORTH)
+                const sy  = Math.round((SAT_NORTH - lat) / latRange * H);
+                if (sy >= 0 && sy < H) {
+                    const so = sy * W * 4, oo = y * W * 4;
+                    oda.set(sd.subarray(so, so + W * 4), oo);
+                }
+            }
+            octx.putImageData(od, 0, 0);
+            const blobUrl = await new Promise(res => oc.toBlob(b => res(URL.createObjectURL(b))));
+            // Evict oldest entry to cap memory use
+            if (_satMercCache.size >= 20) {
+                const oldest = _satMercCache.keys().next().value;
+                const oldBlob = _satMercCache.get(oldest);
+                if (oldBlob && oldBlob.startsWith('blob:')) URL.revokeObjectURL(oldBlob);
+                _satMercCache.delete(oldest);
+            }
+            _satMercCache.set(rawUrl, blobUrl);
+            return blobUrl;
+        } catch (_) {
+            // CORS or other failure — fall back to original URL (no reprojection)
+            _satMercCache.set(rawUrl, rawUrl);
+            return rawUrl;
+        }
+    }
 
     const SAT_PRODUCTS = {
         geocolor:   { label: 'GeoColor',    prefix: 'geocolor'    },
@@ -3020,11 +3084,12 @@
         }
     }
 
-    function showSatFrame(pos) {
+    async function showSatFrame(pos) {
         if (!map) return;
         _satFrameIdx = pos;
         const frameIdx = _satFrames[pos];
-        const url = _satFrameUrl(frameIdx);
+        const rawUrl = _satFrameUrl(frameIdx);
+        const url = await _toMercator(rawUrl);
         if (_satLoaded && map.getSource('sat-overlay')) {
             map.getSource('sat-overlay').updateImage({ url });
         } else {
@@ -3066,7 +3131,11 @@
             _satFrameIdx = 0;
             const slider = document.getElementById('sat-frame-slider');
             if (slider) { slider.max = _satFrames.length - 1; slider.value = _satFrames.length - 1; }
-            showSatFrame(0);
+            await showSatFrame(0);
+            // Pre-load remaining frames in background for smooth animation
+            for (const frameIdx of _satFrames.slice(1)) {
+                _toMercator(_satFrameUrl(frameIdx)).catch(() => {});
+            }
             // Fetch timestamp from last_updated.txt
             const cb = Math.floor(Date.now() / 60000);
             fetch(SAT_BASE + 'last_updated.txt?cb=' + cb, { cache: 'no-store' })
@@ -3111,6 +3180,9 @@
 
     function selectSatBand(band) {
         if (!SAT_PRODUCTS[band]) return;
+        // Clear reprojection cache for old band
+        _satMercCache.forEach((v) => { if (v && v.startsWith('blob:')) URL.revokeObjectURL(v); });
+        _satMercCache.clear();
         _currentSatProduct = band;
         const satSel = document.getElementById('sat-band-select');
         if (satSel) satSel.value = band;
