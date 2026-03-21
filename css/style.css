@@ -137,6 +137,18 @@ body {
         radial-gradient(ellipse at 40% 80%, rgba(40, 60, 100, 0.06) 0%, transparent 50%);
 }
 
+/* Cloudy / overcast — night: darker blue-gray */
+.bg-gradient.bg-cond-cloudy-night {
+    background-image: linear-gradient(135deg,
+        #070910 0%, #0b0f1c 20%, #0e1220 40%, #0c1018 60%, #090c16 80%, #070910 100%);
+}
+.bg-gradient.bg-cond-cloudy-night::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(30, 45, 80, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(35, 50, 90, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 80%, rgba(25, 40, 70, 0.06) 0%, transparent 50%);
+}
+
 /* Rain (drizzle, light rain, heavy rain): dark steel blue */
 .bg-gradient.bg-cond-rain {
     background-image: linear-gradient(135deg,
@@ -147,6 +159,18 @@ body {
         radial-gradient(ellipse at 20% 50%, rgba(30, 80, 140, 0.14) 0%, transparent 50%),
         radial-gradient(ellipse at 75% 20%, rgba(40, 90, 150, 0.09) 0%, transparent 50%),
         radial-gradient(ellipse at 45% 80%, rgba(20, 70, 130, 0.07) 0%, transparent 50%);
+}
+
+/* Rain — night: very dark steel blue */
+.bg-gradient.bg-cond-rain-night {
+    background-image: linear-gradient(135deg,
+        #040810 0%, #07101a 20%, #0a1520 40%, #091218 60%, #060a14 80%, #040810 100%);
+}
+.bg-gradient.bg-cond-rain-night::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(20, 55, 100, 0.14) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 20%, rgba(25, 65, 110, 0.09) 0%, transparent 50%),
+        radial-gradient(ellipse at 45% 80%, rgba(15, 50, 95, 0.07) 0%, transparent 50%);
 }
 
 /* Thunderstorm: very dark purple-navy */
@@ -161,6 +185,18 @@ body {
         radial-gradient(ellipse at 45% 80%, rgba(60, 20, 140, 0.09) 0%, transparent 50%);
 }
 
+/* Thunderstorm — night: near-black purple-navy */
+.bg-gradient.bg-cond-storm-night {
+    background-image: linear-gradient(135deg,
+        #030208 0%, #060414 20%, #0a0620 40%, #08051a 60%, #050310 80%, #030208 100%);
+}
+.bg-gradient.bg-cond-storm-night::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(80, 25, 150, 0.20) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 20%, rgba(60, 18, 130, 0.14) 0%, transparent 50%),
+        radial-gradient(ellipse at 45% 80%, rgba(45, 12, 110, 0.10) 0%, transparent 50%);
+}
+
 /* Snow / sleet: icy pale blue */
 .bg-gradient.bg-cond-snow {
     background-image: linear-gradient(135deg,
@@ -173,6 +209,18 @@ body {
         radial-gradient(ellipse at 40% 80%, rgba(140, 190, 240, 0.07) 0%, transparent 50%);
 }
 
+/* Snow / sleet — night: darker icy blue */
+.bg-gradient.bg-cond-snow-night {
+    background-image: linear-gradient(135deg,
+        #080e1e 0%, #0e1a2c 20%, #121e34 40%, #101c30 60%, #0a1222 80%, #080e1e 100%);
+}
+.bg-gradient.bg-cond-snow-night::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(120, 160, 220, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(140, 180, 240, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 40% 80%, rgba(100, 150, 210, 0.06) 0%, transparent 50%);
+}
+
 /* Fog / haze: muted cool gray */
 .bg-gradient.bg-cond-fog {
     background-image: linear-gradient(135deg,
@@ -183,6 +231,18 @@ body {
         radial-gradient(ellipse at 20% 50%, rgba(80, 90, 110, 0.10) 0%, transparent 50%),
         radial-gradient(ellipse at 75% 20%, rgba(90, 100, 120, 0.07) 0%, transparent 50%),
         radial-gradient(ellipse at 45% 80%, rgba(70, 80, 100, 0.05) 0%, transparent 50%);
+}
+
+/* Fog / haze — night: near-black muted gray */
+.bg-gradient.bg-cond-fog-night {
+    background-image: linear-gradient(135deg,
+        #070809 0%, #0c0d10 20%, #0f1014 40%, #0d1012 60%, #090a0e 80%, #070809 100%);
+}
+.bg-gradient.bg-cond-fog-night::before {
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(55, 65, 80, 0.10) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 20%, rgba(60, 70, 88, 0.07) 0%, transparent 50%),
+        radial-gradient(ellipse at 45% 80%, rgba(50, 58, 74, 0.05) 0%, transparent 50%);
 }
 
 /* --- Glass Panel --- */

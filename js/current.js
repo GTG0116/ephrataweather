@@ -46,13 +46,26 @@ async function initCurrentView(lat, lng) {
     // so it doesn't need to block the main weather data rendering.
     const _alertsTask = loadAndRenderAlerts(lat, lng).catch(err => console.warn('Alerts error:', err));
 
-    // Fetch weather data in parallel
+    // Kick off current + daily first so the background can update ASAP
+    // without waiting for hourly, AQI, or pollen to resolve.
+    const currentPromise = _getCurrentFn();
+    const dailyPromise = _getDailyFn(3);
+
+    Promise.allSettled([currentPromise, dailyPromise]).then(([cur, daily]) => {
+        if (cur.status === 'fulfilled') {
+            const condType = cur.value.weatherCondition?.type || '';
+            const isNight = _isNighttime(daily.status === 'fulfilled' ? daily.value?.forecastDays?.[0] : null);
+            applyWeatherBackground(condType, isNight);
+        }
+    });
+
+    // Fetch all weather data in parallel (reuse the already-started promises)
     const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult] = await Promise.allSettled([
-        _getCurrentFn(),
+        currentPromise,
         _getHourlyFn(),
         // Pull a few days so hourly day/night selection can use
         // each hour's date-specific sunrise/sunset window.
-        _getDailyFn(3),
+        dailyPromise,
         WeatherAPI.getAirQuality(lat, lng),
         WeatherAPI.getPollen(lat, lng)
     ]);
@@ -1054,10 +1067,12 @@ function _dayForTimestamp(tsMs, forecastDays) {
 
 // Returns true if current time is between sunset and sunrise (nighttime).
 function _isNighttime(day0) {
-    if (!day0) return false;
+    // Fallback when solar data is unavailable: treat 8pm–6am as night.
+    const _timeFallback = () => { const h = new Date().getHours(); return h < 6 || h >= 20; };
+    if (!day0) return _timeFallback();
     const srMs = _parseSunTime(day0.sunrise);
     const ssMs = _parseSunTime(day0.sunset);
-    if (isNaN(srMs) || isNaN(ssMs)) return false;
+    if (isNaN(srMs) || isNaN(ssMs)) return _timeFallback();
     const now = Date.now();
     // Daytime = between sunrise and sunset; nighttime = everything else
     return now < srMs || now > ssMs;
@@ -1169,20 +1184,30 @@ function applyWeatherBackground(condType, isNight) {
     } else if (ct === 'PARTLY_CLOUDY') {
         cls = isNight ? 'bg-cond-partly-cloudy-night' : 'bg-cond-partly-cloudy-day';
     } else if (ct === 'MOSTLY_CLOUDY' || ct === 'OVERCAST') {
-        cls = 'bg-cond-cloudy';
+        cls = isNight ? 'bg-cond-cloudy-night' : 'bg-cond-cloudy';
     } else if (ct.includes('THUNDER')) {
-        cls = 'bg-cond-storm';
+        cls = isNight ? 'bg-cond-storm-night' : 'bg-cond-storm';
     } else if (ct.includes('RAIN') || ct === 'DRIZZLE' || ct === 'FREEZING_RAIN') {
-        cls = 'bg-cond-rain';
+        cls = isNight ? 'bg-cond-rain-night' : 'bg-cond-rain';
     } else if (ct.includes('SNOW') || ct === 'SLEET') {
-        cls = 'bg-cond-snow';
+        cls = isNight ? 'bg-cond-snow-night' : 'bg-cond-snow';
     } else if (ct === 'FOG') {
-        cls = 'bg-cond-fog';
+        cls = isNight ? 'bg-cond-fog-night' : 'bg-cond-fog';
     }
 
     if (!cls) return;
     if (el.classList.contains(cls)) return; // already correct, nothing to do
 
+    // On the very first application (no existing weather class), apply
+    // immediately without fading to avoid a flash of black/body background.
+    const hasExistingClass = /\bbg-cond-\S+/.test(el.className);
+    if (!hasExistingClass) {
+        el.className = el.className.replace(/\bbg-cond-\S+/g, '').trim();
+        el.classList.add(cls);
+        return;
+    }
+
+    // Subsequent changes (e.g. auto-refresh updating conditions): smooth fade.
     el.style.transition = 'opacity 0.6s ease';
     void el.offsetHeight; // flush styles so transition is registered before opacity change
     el.style.opacity = '0';
