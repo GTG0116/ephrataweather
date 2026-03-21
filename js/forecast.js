@@ -634,7 +634,8 @@ function _buildSPCText(risk) {
 
     // Use "severe storms" for SLGT; "severe weather" for all other risk levels
     const term = risk.catRisk === 'SLGT' ? 'severe storms' : 'severe weather';
-    let sentence = `${wording} ${term} is possible`;
+    const verb = term === 'severe storms' ? 'are' : 'is';
+    let sentence = `${wording} ${term} ${verb} possible`;
     if (threats.length > 0) {
         const last = threats.pop();
         sentence += threats.length > 0
