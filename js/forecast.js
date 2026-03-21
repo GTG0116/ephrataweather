@@ -558,24 +558,23 @@ function _highestCatRisk(lat, lng, geojson) {
     return highest;
 }
 
-// Check if a location is inside any polygon in a hazard (torn/wind/hail) GeoJSON
-function _hasHazardAtLocation(lat, lng, geojson) {
-    if (!geojson?.features) return false;
-    return geojson.features.some(f => _spcPointInFeature(lng, lat, f));
-}
-
-// Return the highest CIG level (1, 2, or 3) at a location from the categorical GeoJSON, or 0 if none
-function _getCigLevel(lat, lng, geojson) {
-    if (!geojson?.features) return 0;
-    let highest = 0;
+// For a hazard GeoJSON (torn/wind/hail), return { present, cig } at the given location.
+// CIG1/2/3 polygons live in the same file as the probability polygons.
+function _getHazardInfo(lat, lng, geojson) {
+    if (!geojson?.features) return { present: false, cig: 0 };
+    let present = false, cig = 0;
     for (const feature of geojson.features) {
+        if (!_spcPointInFeature(lng, lat, feature)) continue;
         const label = String(feature.properties?.LABEL ?? '').toUpperCase();
         const m = label.match(/^CIG(\d)$/);
-        if (!m) continue;
-        const level = parseInt(m[1], 10);
-        if (level > highest && _spcPointInFeature(lng, lat, feature)) highest = level;
+        if (m) {
+            const level = parseInt(m[1], 10);
+            if (level > cig) cig = level;
+        } else {
+            present = true;
+        }
     }
-    return highest;
+    return { present, cig };
 }
 
 // Fetch SPC data for one SPC day and return the risk object
@@ -588,8 +587,8 @@ async function _fetchSPCRisk(lat, lng, spcDay) {
     catch (_) { return null; }
 
     const catRisk = _highestCatRisk(lat, lng, catData);
-    const cigLevel = _getCigLevel(lat, lng, catData);
     let hasTorn = false, hasWind = false, hasHail = false;
+    let tornCig = 0, windCig = 0, hailCig = 0;
 
     // Only check specific hazards for Days 1-2 with MRGL+ risk
     if (catRisk && _CAT_RANK[catRisk] >= _CAT_RANK.MRGL && urls.torn && urls.wind && urls.hail) {
@@ -598,37 +597,39 @@ async function _fetchSPCRisk(lat, lng, spcDay) {
             _fetchSPCGeoJSONForForecast(urls.wind).catch(() => null),
             _fetchSPCGeoJSONForForecast(urls.hail).catch(() => null),
         ]);
-        if (tornData) hasTorn = _hasHazardAtLocation(lat, lng, tornData);
-        if (windData) hasWind = _hasHazardAtLocation(lat, lng, windData);
-        if (hailData) hasHail = _hasHazardAtLocation(lat, lng, hailData);
+        if (tornData) ({ present: hasTorn, cig: tornCig } = _getHazardInfo(lat, lng, tornData));
+        if (windData) ({ present: hasWind, cig: windCig } = _getHazardInfo(lat, lng, windData));
+        if (hailData) ({ present: hasHail, cig: hailCig } = _getHazardInfo(lat, lng, hailData));
     }
 
-    return { catRisk, hasTorn, hasWind, hasHail, cigLevel };
+    return { catRisk, hasTorn, hasWind, hasHail, tornCig, windCig, hailCig };
 }
 
 // Build the user-facing severe weather sentence
 function _buildSPCText(risk) {
     if (!risk?.catRisk || !_CAT_WORDING[risk.catRisk]) return null;
     const wording = _CAT_WORDING[risk.catRisk];
-    const cig = risk.cigLevel || 0;
 
     const threats = [];
     if (risk.hasWind) {
-        if      (cig >= 3) threats.push('wind gusts up to 80+ mph');
-        else if (cig === 2) threats.push('wind gusts up to 75 mph');
-        else if (cig === 1) threats.push('wind gusts up to 65 mph');
-        else                threats.push('damaging winds');
+        const c = risk.windCig || 0;
+        if      (c >= 3) threats.push('wind gusts up to 80+ mph');
+        else if (c === 2) threats.push('wind gusts up to 75 mph');
+        else if (c === 1) threats.push('wind gusts up to 65 mph');
+        else              threats.push('damaging winds');
     }
     if (risk.hasTorn) {
-        if      (cig >= 3) threats.push('violent tornadoes (EF4+)');
-        else if (cig === 2) threats.push('intense tornadoes (EF3+)');
-        else if (cig === 1) threats.push('strong tornadoes (EF2+)');
-        else                threats.push('tornadoes');
+        const c = risk.tornCig || 0;
+        if      (c >= 3) threats.push('violent tornadoes (EF4+)');
+        else if (c === 2) threats.push('intense tornadoes (EF3+)');
+        else if (c === 1) threats.push('strong tornadoes (EF2+)');
+        else              threats.push('tornadoes');
     }
     if (risk.hasHail) {
-        if      (cig >= 2) threats.push('large hail up to baseball size (2.75")');
-        else if (cig === 1) threats.push('large hail up to golf ball size (1.75")');
-        else                threats.push('large hail');
+        const c = risk.hailCig || 0;
+        if      (c >= 2) threats.push('large hail up to baseball size (2.75")');
+        else if (c === 1) threats.push('large hail up to golf ball size (1.75")');
+        else              threats.push('large hail');
     }
 
     // Use "severe storms" for SLGT; "severe weather" for all other risk levels
