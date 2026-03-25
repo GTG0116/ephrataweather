@@ -3309,7 +3309,7 @@
             map.addSource('rtma-overlay', { type: 'image', url, coordinates: RTMA_COORDS });
             map.addLayer({
                 id: 'rtma-overlay-layer', type: 'raster', source: 'rtma-overlay',
-                paint: { 'raster-opacity': _rtmaOpacity, 'raster-fade-duration': 0, 'raster-resampling': 'linear' }
+                paint: { 'raster-opacity': _rtmaOpacity, 'raster-fade-duration': 0, 'raster-resampling': 'nearest' }
             }, _overlayBefore());
             _rtmaLoaded = true;
             _updateRtmaLegend();
@@ -3395,10 +3395,13 @@
                 if (meta?.data_cols) cols = meta.data_cols;
             } catch (_) {}
 
-            // The binary data is on a regular geographic (lat/lon) grid, not Mercator.
-            // Use linear interpolation in lat/lon to find the correct row/col.
+            // The binary data rows are spaced evenly in Web Mercator Y, matching the PNG overlay.
+            // Use Mercator projection to find the correct row (lat/lon linear interpolation gives ~2° northward error).
+            const mercY  = φ => Math.log(Math.tan(Math.PI / 4 + φ * Math.PI / 360));
+            const mYMax  = mercY(RTMA_BOUNDS.latMax);
+            const mYMin  = mercY(RTMA_BOUNDS.latMin);
             const col    = Math.round((lng - RTMA_BOUNDS.lngMin) / (RTMA_BOUNDS.lngMax - RTMA_BOUNDS.lngMin) * (cols - 1));
-            const row    = Math.round((RTMA_BOUNDS.latMax - lat) / (RTMA_BOUNDS.latMax - RTMA_BOUNDS.latMin) * (rows - 1));
+            const row    = Math.round((mYMax - mercY(lat)) / (mYMax - mYMin) * (rows - 1));
             if (col < 0 || col >= cols || row < 0 || row >= rows) return;
 
             const data = await _fetchRtmaData(_currentRtmaProduct);
