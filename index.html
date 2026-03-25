@@ -1013,6 +1013,7 @@
                     <button class="layer-btn" data-layer="clouds" onclick="switchLayer('clouds')">Clouds</button>
                     <button class="layer-btn" data-layer="wpc-rain" onclick="switchLayer('wpc-rain')">WPC Rainfall</button>
                     <button class="layer-btn" data-layer="fire-wx" onclick="switchLayer('fire-wx')">Fire Weather</button>
+                    <button class="layer-btn" data-layer="rtma" onclick="switchLayer('rtma')">RTMA</button>
                 </div>
                 <!-- SPC Sub-Controls -->
                 <div class="spc-controls visible" id="spc-controls">
@@ -1100,6 +1101,28 @@
                         </div>
                     </div>
                 </div>
+                <!-- RTMA Sub-Controls -->
+                <div class="spc-controls" id="rtma-controls">
+                    <div class="ctrl-row">
+                        <select id="rtma-product-select" class="ctrl-select" onchange="selectRtmaProduct(this.value)">
+                            <option value="temp">Temperature</option>
+                            <option value="apparent">Feels Like (Apparent Temp)</option>
+                            <option value="rh">Relative Humidity</option>
+                            <option value="wind">Wind Speed</option>
+                            <option value="vis">Visibility</option>
+                            <option value="cloud">Cloud Cover</option>
+                        </select>
+                        <button class="icon-action-btn" onclick="refreshRtma()" title="Refresh">&#8635;</button>
+                    </div>
+                    <div class="ctrl-row" style="align-items:center;gap:8px;margin-top:-2px;">
+                        <span style="color:var(--text-muted);font-size:0.72rem;">Updated:</span>
+                        <span id="rtma-time-display" style="color:var(--text-secondary);font-size:0.72rem;font-weight:600;">—</span>
+                    </div>
+                    <div class="opacity-row">
+                        <span>Opacity:</span>
+                        <input type="range" min="0" max="100" value="85" oninput="setRtmaOpacity(this.value)" id="rtma-opacity">
+                    </div>
+                </div>
                 <!-- Radar Sub-Controls -->
                 <div class="radar-controls" id="radar-controls">
                     <!-- Product Selector -->
@@ -1163,6 +1186,10 @@
                 <div class="spc-legend" id="radar-legend">
                     <div class="legend-title" id="radar-legend-title">Reflectivity</div>
                     <div id="radar-legend-items"></div>
+                </div>
+                <div class="spc-legend" id="rtma-legend" style="display:none;">
+                    <div class="legend-title" id="rtma-legend-title">RTMA</div>
+                    <div id="rtma-legend-items"></div>
                 </div>
                 <div class="map-loading" id="map-loading" style="display:none;">
                     <div class="spinner"></div>
@@ -3202,6 +3229,199 @@
     }
 
     // ============================================================
+    // RTMA VIEWER (GitHub-hosted raster + binary data)
+    // ============================================================
+    const RTMA_BASE = 'https://raw.githubusercontent.com/GTG0116/RTMA/main/site/data/';
+    // Geographic bounds matching process_rtma.py EXTENT: [W, E, S, N]
+    const RTMA_BOUNDS = { lngMin: -138.37, lngMax: -59.04, latMin: 19.23, latMax: 57.09 };
+    // Mapbox image source corners: [NW, NE, SE, SW] as [lng, lat]
+    const RTMA_COORDS = [
+        [RTMA_BOUNDS.lngMin, RTMA_BOUNDS.latMax],
+        [RTMA_BOUNDS.lngMax, RTMA_BOUNDS.latMax],
+        [RTMA_BOUNDS.lngMax, RTMA_BOUNDS.latMin],
+        [RTMA_BOUNDS.lngMin, RTMA_BOUNDS.latMin]
+    ];
+    const RTMA_ROWS = 400, RTMA_COLS = 587;
+
+    const RTMA_PRODUCTS = {
+        temp:     { label: 'Temperature',       unit: '°F',  format: v => Math.round(v) + '°F'         },
+        apparent: { label: 'Feels Like',         unit: '°F',  format: v => Math.round(v) + '°F'         },
+        rh:       { label: 'Relative Humidity',  unit: '%',   format: v => Math.round(v) + '%'           },
+        wind:     { label: 'Wind Speed',         unit: 'mph', format: v => v.toFixed(1) + ' mph'        },
+        vis:      { label: 'Visibility',         unit: 'mi',  format: v => v.toFixed(1) + ' mi'         },
+        cloud:    { label: 'Cloud Cover',        unit: '%',   format: v => Math.round(v) + '%'           },
+    };
+
+    // Gradient colorbar definitions per product [value%, color]
+    const RTMA_LEGENDS = {
+        temp:     { stops: [['#1a237e','Cold'],['#42a5f5','Cool'],['#80cbc4','Mild'],['#ffeb3b','Warm'],['#ef5350','Hot'],['#b71c1c','Very Hot']] },
+        apparent: { stops: [['#1a237e','Cold'],['#42a5f5','Cool'],['#80cbc4','Mild'],['#ffeb3b','Warm'],['#ef5350','Hot'],['#b71c1c','Very Hot']] },
+        rh:       { stops: [['#bf360c','Very Dry'],['#ff8f00','Dry'],['#c5e1a5','Moderate'],['#1b5e20','Very Humid']] },
+        wind:     { stops: [['#e0f7fa','Calm'],['#4fc3f7','Light'],['#0288d1','Moderate'],['#6a1b9a','Strong'],['#4a148c','Very Strong']] },
+        vis:      { stops: [['#37474f','Near Zero'],['#90a4ae','Low'],['#b0bec5','Moderate'],['#eceff1','Clear']] },
+        cloud:    { stops: [['#1565c0','Clear'],['#78909c','Partly Cloudy'],['#b0bec5','Mostly Cloudy'],['#eceff1','Overcast']] },
+    };
+
+    let _currentRtmaProduct = 'temp';
+    let _rtmaLoaded = false;
+    let _rtmaDataCache = {};   // product key → Float32Array
+    let _rtmaMetadata  = null; // parsed metadata.json
+    let _rtmaOpacity   = 0.85;
+
+    function clearRtmaLayer() {
+        _rtmaLoaded = false;
+        if (map) {
+            if (map.getLayer('rtma-overlay-layer')) map.removeLayer('rtma-overlay-layer');
+            if (map.getSource('rtma-overlay'))      map.removeSource('rtma-overlay');
+        }
+        const legend = document.getElementById('rtma-legend');
+        if (legend) legend.style.display = 'none';
+    }
+
+    async function _fetchRtmaMetadata() {
+        if (_rtmaMetadata) return _rtmaMetadata;
+        const cb = Math.floor(Date.now() / 60000);
+        const r  = await fetch(RTMA_BASE + 'metadata.json?cb=' + cb, { cache: 'no-store' });
+        if (!r.ok) throw new Error('RTMA metadata fetch failed ' + r.status);
+        _rtmaMetadata = await r.json();
+        return _rtmaMetadata;
+    }
+
+    async function _fetchRtmaData(product) {
+        if (_rtmaDataCache[product]) return _rtmaDataCache[product];
+        const cb = Math.floor(Date.now() / 60000);
+        const r  = await fetch(RTMA_BASE + product + '_data.bin?cb=' + cb, { cache: 'no-store' });
+        if (!r.ok) throw new Error('RTMA data fetch failed ' + r.status);
+        const buf = await r.arrayBuffer();
+        _rtmaDataCache[product] = new Float32Array(buf);
+        return _rtmaDataCache[product];
+    }
+
+    async function loadRtmaLayer() {
+        if (!map) return;
+        const prod = RTMA_PRODUCTS[_currentRtmaProduct];
+        showLoading('Loading RTMA ' + (prod?.label || _currentRtmaProduct) + '\u2026');
+        try {
+            // Load image PNG (already Web Mercator-projected)
+            const cb  = Math.floor(Date.now() / 60000);
+            const url = RTMA_BASE + _currentRtmaProduct + '.png?cb=' + cb;
+            clearRtmaLayer();
+            map.addSource('rtma-overlay', { type: 'image', url, coordinates: RTMA_COORDS });
+            map.addLayer({
+                id: 'rtma-overlay-layer', type: 'raster', source: 'rtma-overlay',
+                paint: { 'raster-opacity': _rtmaOpacity, 'raster-fade-duration': 0, 'raster-resampling': 'linear' }
+            }, _overlayBefore());
+            _rtmaLoaded = true;
+            _updateRtmaLegend();
+            // Fetch timestamp asynchronously
+            _fetchRtmaMetadata().then(meta => {
+                const timeEl = document.getElementById('rtma-time-display');
+                if (timeEl && meta?.timestamp) {
+                    try {
+                        const d = new Date(meta.timestamp);
+                        timeEl.textContent = d.toLocaleString('en-US', {
+                            month: 'short', day: 'numeric',
+                            hour: 'numeric', minute: '2-digit',
+                            timeZoneName: 'short'
+                        });
+                    } catch (_) { timeEl.textContent = meta.timestamp; }
+                }
+            }).catch(() => {});
+        } catch (e) {
+            console.error('RTMA load error:', e);
+            clearRtmaLayer();
+        } finally { hideLoading(); }
+    }
+
+    function setRtmaOpacity(val) {
+        _rtmaOpacity = parseInt(val, 10) / 100;
+        if (map && map.getLayer('rtma-overlay-layer'))
+            map.setPaintProperty('rtma-overlay-layer', 'raster-opacity', _rtmaOpacity);
+    }
+
+    function selectRtmaProduct(product) {
+        if (!RTMA_PRODUCTS[product]) return;
+        _currentRtmaProduct = product;
+        const sel = document.getElementById('rtma-product-select');
+        if (sel) sel.value = product;
+        if (currentLayer === 'rtma') {
+            _rtmaLoaded = false;
+            _ensureMapReady().then(() => loadRtmaLayer());
+        }
+    }
+
+    async function refreshRtma() {
+        _rtmaDataCache = {};
+        _rtmaMetadata  = null;
+        _rtmaLoaded    = false;
+        await _ensureMapReady();
+        await loadRtmaLayer();
+    }
+
+    function _updateRtmaLegend() {
+        const legend   = document.getElementById('rtma-legend');
+        const titleEl  = document.getElementById('rtma-legend-title');
+        const itemsEl  = document.getElementById('rtma-legend-items');
+        if (!legend || !titleEl || !itemsEl) return;
+        const prod = RTMA_PRODUCTS[_currentRtmaProduct];
+        titleEl.textContent = (prod?.label || 'RTMA') + (prod?.unit ? ' (' + prod.unit + ')' : '');
+        const lgd  = RTMA_LEGENDS[_currentRtmaProduct];
+        if (lgd) {
+            const gradient = lgd.stops.map(s => s[0]).join(', ');
+            itemsEl.innerHTML =
+                `<div style="height:10px;border-radius:4px;background:linear-gradient(to right,${gradient});margin-bottom:5px;"></div>` +
+                `<div style="display:flex;justify-content:space-between;font-size:0.69rem;color:var(--text-muted);">` +
+                lgd.stops.map(s => `<span>${s[1]}</span>`).join('') +
+                `</div>` +
+                `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:5px;text-align:center;">Tap map for exact value</div>`;
+        } else {
+            itemsEl.innerHTML = `<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">Tap map for exact value</div>`;
+        }
+        legend.style.display = '';
+    }
+
+    async function handleRtmaClick(e) {
+        if (currentLayer !== 'rtma' || !_rtmaLoaded) return;
+        const { lat, lng } = e.lngLat;
+        // Outside RTMA coverage area
+        if (lat < RTMA_BOUNDS.latMin || lat > RTMA_BOUNDS.latMax ||
+            lng < RTMA_BOUNDS.lngMin || lng > RTMA_BOUNDS.lngMax) return;
+        try {
+            // Determine grid dimensions (prefer live metadata, fall back to constants)
+            let rows = RTMA_ROWS, cols = RTMA_COLS;
+            try {
+                const meta = await _fetchRtmaMetadata();
+                if (meta?.data_rows) rows = meta.data_rows;
+                if (meta?.data_cols) cols = meta.data_cols;
+            } catch (_) {}
+
+            // Convert lat/lng → Mercator-projected pixel row/col
+            // The PNG is reprojected to Web Mercator, so use Mercator Y for row lookup
+            const mercY  = φ => Math.log(Math.tan(Math.PI / 4 + φ * Math.PI / 360));
+            const mYMax  = mercY(RTMA_BOUNDS.latMax);
+            const mYMin  = mercY(RTMA_BOUNDS.latMin);
+            const col    = Math.round((lng - RTMA_BOUNDS.lngMin) / (RTMA_BOUNDS.lngMax - RTMA_BOUNDS.lngMin) * (cols - 1));
+            const row    = Math.round((mYMax - mercY(lat)) / (mYMax - mYMin) * (rows - 1));
+            if (col < 0 || col >= cols || row < 0 || row >= rows) return;
+
+            const data = await _fetchRtmaData(_currentRtmaProduct);
+            const val  = data[row * cols + col];
+            // Skip fill/NaN values (RTMA uses large sentinel values for ocean/missing)
+            if (!isFinite(val) || Math.abs(val) > 9e10) return;
+
+            const prod      = RTMA_PRODUCTS[_currentRtmaProduct];
+            const formatted = prod?.format ? prod.format(val) : val.toFixed(1);
+            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
+                .setLngLat(e.lngLat)
+                .setHTML(
+                    `<div class="popup-title">RTMA Analysis</div>` +
+                    `<div class="popup-stat"><span class="popup-key">${prod?.label || _currentRtmaProduct}</span>` +
+                    `<span class="popup-val">${formatted}</span></div>`
+                ).addTo(map);
+        } catch (err) { console.error('RTMA click error:', err); }
+    }
+
+    // ============================================================
     // IMAGE ZOOM OVERLAY
     // ============================================================
     function openImageZoom(src, caption) {
@@ -3274,12 +3494,15 @@
             map.on('click', handleOutlookClick);
             map.off('click', handleMrmsClick);
             map.on('click', handleMrmsClick);
+            map.off('click', handleRtmaClick);
+            map.on('click', handleRtmaClick);
             if (currentLayer === 'spc' && currentDay > 0) loadSPCLayer(currentDay, currentType);
             else if (currentLayer === 'temperature' || currentLayer === 'wind' || currentLayer === 'clouds') loadOWMLayer(currentLayer);
             else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
             else if (currentLayer === 'fire-wx') loadFireLayer(currentFireDay, currentFireType);
             else if (currentLayer === 'radar') { _radarLoaded = false; showRadarFrame(_radarFrameIdx); }
             else if (currentLayer === 'satellite') { _satLoaded = false; showSatFrame(_satFrameIdx); }
+            else if (currentLayer === 'rtma') { _rtmaLoaded = false; loadRtmaLayer(); }
         });
     }
 
@@ -3306,19 +3529,22 @@
     function switchLayer(layer) {
         if (layer !== 'radar') clearRadarLayer(); // always clean up radar when leaving
         if (layer !== 'satellite') clearSatLayer(); // always clean up satellite when leaving
+        if (layer !== 'rtma') clearRtmaLayer(); // always clean up RTMA when leaving
         currentLayer = layer;
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
         document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
         document.getElementById('wpc-controls').classList.toggle('visible', layer === 'wpc-rain');
         document.getElementById('fire-controls').classList.toggle('visible', layer === 'fire-wx');
+        document.getElementById('rtma-controls').classList.toggle('visible', layer === 'rtma');
         document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = layer === 'spc' ? '' : 'none';
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
         document.getElementById('basemap-controls').classList.toggle('visible',
-            mapLayer || layer === 'spc' || layer === 'radar' || layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx');
+            mapLayer || layer === 'spc' || layer === 'radar' || layer === 'satellite' ||
+            layer === 'wpc-rain' || layer === 'fire-wx' || layer === 'rtma');
 
         if (layer === 'spc') {
             clearOWMLayers(); clearWPCLayers(); clearFireLayers();
@@ -3355,6 +3581,10 @@
             _showFireWxView();
             renderFireWxImages();
             _ensureMapReady().then(() => loadFireLayer(currentFireDay, currentFireType));
+        } else if (layer === 'rtma') {
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
+            _showMapView();
+            _ensureMapReady().then(() => loadRtmaLayer());
         } else {
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
             _showMapView();
@@ -3496,6 +3726,7 @@
                 map.on('click', handleOWMClick);
                 map.on('click', handleOutlookClick);
                 map.on('click', handleMrmsClick);
+                map.on('click', handleRtmaClick);
             });
         }
     }
