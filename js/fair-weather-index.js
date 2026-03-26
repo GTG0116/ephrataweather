@@ -44,13 +44,34 @@ const FairWeatherIndex = (() => {
     // ── Component scorers ─────────────────────────────────────────────────────
 
     // Feels-like temperature, seasonally adjusted (max 25 pts)
+    //
+    // Scoring is asymmetric by season:
+    //   Cool months (Oct–Apr): being warmer than the seasonal center is a
+    //     welcome bonus — up to 18°F above center is treated as "within range"
+    //     before the penalty curve kicks in.
+    //   Warm months (May–Sep): being hotter than center is still penalized
+    //     normally; being slightly cooler (up to 5°F) gets a free pass.
     function _scoreTemperature(feelsLike, month) {
         if (feelsLike == null) return { pts: null, max: 25, available: false };
         const center = SEASONAL_CENTER[month];
-        const diff = Math.abs(feelsLike - center);
+        const delta = feelsLike - center; // positive = warmer than seasonal center
+
+        // Months 0–3 (Jan–Apr) and 9–11 (Oct–Dec) are cool season
+        const isCoolSeason = month <= 3 || month >= 9;
+
+        let diff;
+        if (isCoolSeason) {
+            // Warmer than expected → generous free buffer before penalizing
+            diff = delta > 0 ? Math.max(0, delta - 18) : Math.abs(delta);
+        } else {
+            // Cooler than expected in warm months → small free buffer (feels nice)
+            // Hotter than expected → penalize normally
+            diff = delta < 0 ? Math.max(0, Math.abs(delta) - 5) : delta;
+        }
+
         let pts;
-        if (diff <= COMFORT_WINDOW)          pts = 25;
-        else if (diff <= COMFORT_WINDOW + 7) pts = 25 - ((diff - COMFORT_WINDOW) / 7) * 10; // 25→15
+        if (diff <= COMFORT_WINDOW)           pts = 25;
+        else if (diff <= COMFORT_WINDOW + 7)  pts = 25 - ((diff - COMFORT_WINDOW) / 7) * 10; // 25→15
         else if (diff <= COMFORT_WINDOW + 17) pts = 15 - ((diff - COMFORT_WINDOW - 7) / 10) * 12; // 15→3
         else                                  pts = Math.max(0, 3 - (diff - COMFORT_WINDOW - 17) * 0.3);
         return { pts: _clamp(pts, 0, 25), max: 25, available: true };
@@ -69,18 +90,20 @@ const FairWeatherIndex = (() => {
     }
 
     // Wind speed + gust (max 20 pts)
+    // Full score up to 13 mph; gentle penalty curve to allow a nice breeze
+    // without tanking the rating; gusts only penalize when well above sustained.
     function _scoreWind(windSpeed, windGust) {
         if (windSpeed == null) return { pts: null, max: 20, available: false };
         let pts;
-        if      (windSpeed <=  8) pts = 20;
-        else if (windSpeed <= 15) pts = 20 - ((windSpeed -  8) /  7) * 6;   // 20→14
-        else if (windSpeed <= 25) pts = 14 - ((windSpeed - 15) / 10) * 9;   // 14→5
-        else if (windSpeed <= 35) pts =  5 - ((windSpeed - 25) / 10) * 5;   // 5→0
+        if      (windSpeed <= 13) pts = 20;
+        else if (windSpeed <= 22) pts = 20 - ((windSpeed - 13) /  9) * 7;   // 20→13
+        else if (windSpeed <= 32) pts = 13 - ((windSpeed - 22) / 10) * 8;   // 13→5
+        else if (windSpeed <= 42) pts =  5 - ((windSpeed - 32) / 10) * 5;   // 5→0
         else                      pts = 0;
 
-        // Extra penalty when gusts are much higher than sustained winds
-        if (windGust != null && windGust > windSpeed + 10) {
-            const extra = Math.min(6, (windGust - windSpeed - 10) * 0.4);
+        // Gust penalty only kicks in when gusts exceed sustained by 12+ mph
+        if (windGust != null && windGust > windSpeed + 12) {
+            const extra = Math.min(5, (windGust - windSpeed - 12) * 0.35);
             pts = Math.max(0, pts - extra);
         }
         return { pts: _clamp(pts, 0, 20), max: 20, available: true };
