@@ -348,7 +348,7 @@ const WeatherIcons = {
                 <ellipse cx="36" cy="16" rx="18" ry="14" fill="rgba(140,150,175,0.95)"/>
                 <ellipse cx="64" cy="18" rx="16" ry="13" fill="rgba(125,135,160,0.95)"/>
             </g>
-            ${[{x:28,d:0},{x:34,d:0.12},{x:40,d:0.28},{x:46,d:0.08},{x:52,d:0.22},{x:58,d:0.4},{x:64,d:0.16},{x:70,d:0.34},{x:37,d:0.45},{x:49,d:0.52},{x:55,d:0.3},{x:43,d:0.18}].map(drop =>
+            ${[{x:31,d:0},{x:43,d:0.25},{x:55,d:0.5},{x:67,d:0.12},{x:37,d:0.38}].map(drop =>
                 `<line x1="${drop.x}" y1="40" x2="${drop.x}" y2="50" stroke="rgba(40,120,255,0.85)" stroke-width="2.2" stroke-linecap="round">
                     <animate attributeName="y1" values="40;82" dur="0.75s" begin="${drop.d}s" repeatCount="indefinite"/>
                     <animate attributeName="y2" values="50;92" dur="0.75s" begin="${drop.d}s" repeatCount="indefinite"/>

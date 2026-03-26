@@ -72,7 +72,11 @@ function _drawForecastChart(metric, days) {
     const W = svg.clientWidth || 700;
     const isTemp = metric === 'temp';
     const isWind = metric === 'wind';
-    const H = isTemp ? 180 : 140;
+    const isUV = metric === 'uv';
+    const isFeelsLike = metric === 'feelslike';
+    const isHumidity = metric === 'humidity';
+    const isSunriseset = metric === 'sunriseset';
+    const H = isTemp || isFeelsLike ? 180 : isSunriseset ? 160 : 140;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('height', H);
 
@@ -265,6 +269,234 @@ function _drawForecastChart(metric, days) {
         });
 
         svg.innerHTML = `${yLabels}${bars}${xLabels}`;
+        return;
+    }
+
+    if (isUV) {
+        // UV Index bar chart
+        const vals = days.map(d => d.uvIndex ?? d.maxUvIndex ?? null);
+        const filtered = vals.filter(v => v != null);
+        if (!filtered.length) { svg.innerHTML = ''; return; }
+
+        const maxV = Math.max(...filtered, 11);
+        const xOf = (i) => PAD_L + i * barW + barW * 0.15;
+        const bw = barW * 0.7;
+        const yOf = (v) => PAD_T + plotH - (v / maxV) * plotH;
+
+        const uvColor = (v) => {
+            if (v <= 2) return 'rgba(76,175,80,0.85)';
+            if (v <= 5) return 'rgba(255,235,59,0.85)';
+            if (v <= 7) return 'rgba(255,152,0,0.85)';
+            if (v <= 10) return 'rgba(244,67,54,0.85)';
+            return 'rgba(156,39,176,0.85)';
+        };
+
+        let yLabels = '';
+        [0, 3, 6, 9, 11].forEach(v => {
+            const y = yOf(v);
+            yLabels += `<line x1="${PAD_L}" y1="${y}" x2="${PAD_L + plotW}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                        <text x="${PAD_L - 5}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.45)" font-size="9.5">${v}</text>`;
+        });
+
+        let bars = '', xLabels = '';
+        days.forEach((d, i) => {
+            const v = vals[i];
+            const x = xOf(i);
+            if (v != null) {
+                const y = yOf(v);
+                const bh = (v / maxV) * plotH;
+                bars += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${uvColor(v)}" rx="3" ry="3"/>
+                         <text x="${x + bw / 2}" y="${y - 5}" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="8.5" font-weight="500">${Math.round(v)}</text>`;
+            }
+            const dateStr = d.displayDate || d.interval?.startTime;
+            const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
+            xLabels += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
+        });
+
+        svg.innerHTML = `${yLabels}${bars}${xLabels}
+            <text x="${PAD_L - 5}" y="${PAD_T - 6}" text-anchor="end" fill="rgba(255,255,255,0.3)" font-size="8">UV</text>`;
+        return;
+    }
+
+    if (isFeelsLike) {
+        // Feels Like band chart (same style as temperature)
+        const hiVals = days.map(d => d.feelsLikeMax?.degrees ?? null);
+        const loVals = days.map(d => d.feelsLikeMin?.degrees ?? null);
+        const allVals = [...hiVals, ...loVals].filter(v => v != null);
+        if (allVals.length < 2) { svg.innerHTML = ''; return; }
+
+        let minV = Math.min(...allVals);
+        let maxV = Math.max(...allVals);
+        const spread = maxV - minV || 1;
+        minV -= spread * 0.12;
+        maxV += spread * 0.12;
+
+        const xOf = (i) => PAD_L + (i / (n - 1)) * plotW;
+        const yOf = (v) => PAD_T + plotH - ((v - minV) / (maxV - minV)) * plotH;
+
+        let yLabels = '';
+        for (let t = 0; t <= 4; t++) {
+            const v = minV + (maxV - minV) * (t / 4);
+            const y = yOf(v);
+            yLabels += `<line x1="${PAD_L}" y1="${y}" x2="${PAD_L + plotW}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                        <text x="${PAD_L - 5}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.45)" font-size="9.5">${Math.round(v)}\u00B0</text>`;
+        }
+
+        const hiPoints = days.map((d, i) => ({ x: xOf(i), y: hiVals[i] != null ? yOf(hiVals[i]) : null })).filter(p => p.y != null);
+        const loPoints = days.map((d, i) => ({ x: xOf(i), y: loVals[i] != null ? yOf(loVals[i]) : null })).filter(p => p.y != null);
+
+        let bandPath = '', hiLine = '', loLineFixed = '';
+        hiPoints.forEach((p, i) => {
+            hiLine += (i === 0 ? `M${p.x},${p.y}` : ` L${p.x},${p.y}`);
+            bandPath += (i === 0 ? `M${p.x},${p.y}` : ` L${p.x},${p.y}`);
+        });
+        [...loPoints].reverse().forEach((p) => { bandPath += ` L${p.x},${p.y}`; });
+        loLineFixed = loPoints.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : ` L${p.x},${p.y}`)).join('');
+        bandPath += ' Z';
+
+        let xLabels = '', dots = '';
+        days.forEach((d, i) => {
+            const dateStr = d.displayDate || d.interval?.startTime;
+            const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
+            xLabels += `<text x="${xOf(i)}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
+            const hi = hiVals[i];
+            const lo = loVals[i];
+            const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
+            if (hi != null) dots += `<circle cx="${xOf(i)}" cy="${yOf(hi)}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                         <text x="${xOf(i)}" y="${yOf(hi) - 7}" text-anchor="${anchor}" fill="#FF7043" font-size="8.5" font-weight="500">${Math.round(hi)}\u00B0</text>`;
+            if (lo != null) dots += `<circle cx="${xOf(i)}" cy="${yOf(lo)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                         <text x="${xOf(i)}" y="${yOf(lo) + 15}" text-anchor="${anchor}" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(lo)}\u00B0</text>`;
+        });
+
+        svg.innerHTML = `
+            <defs>
+                <linearGradient id="fg_feels" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#FF7043" stop-opacity="0.25"/>
+                    <stop offset="100%" stop-color="#42A5F5" stop-opacity="0.25"/>
+                </linearGradient>
+            </defs>
+            ${yLabels}${xLabels}
+            <path d="${bandPath}" fill="url(#fg_feels)"/>
+            <path d="${hiLine}" fill="none" stroke="#FF7043" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            <path d="${loLineFixed}" fill="none" stroke="#42A5F5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            ${dots}`;
+        return;
+    }
+
+    if (isHumidity) {
+        // Humidity line chart
+        const vals = days.map(d => d.relativeHumidity ?? d.avgHumidity ?? null);
+        const filtered = vals.filter(v => v != null);
+        if (filtered.length < 2) { svg.innerHTML = ''; return; }
+
+        const xOf = (i) => PAD_L + (i / (n - 1)) * plotW;
+        const yOf = (v) => PAD_T + plotH - ((v - 0) / 100) * plotH;
+
+        let yLabels = '';
+        [0, 25, 50, 75, 100].forEach(v => {
+            const y = yOf(v);
+            yLabels += `<line x1="${PAD_L}" y1="${y}" x2="${PAD_L + plotW}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                        <text x="${PAD_L - 5}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.45)" font-size="9.5">${v}%</text>`;
+        });
+
+        let xLabels = '';
+        days.forEach((d, i) => {
+            const dateStr = d.displayDate || d.interval?.startTime;
+            const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
+            xLabels += `<text x="${xOf(i)}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
+        });
+
+        const points = vals.map((v, i) => v != null ? { x: xOf(i), y: yOf(v) } : null).filter(Boolean);
+        let linePath = '', areaPath = '';
+        points.forEach((p, i) => {
+            if (i === 0) { linePath += `M${p.x},${p.y}`; areaPath += `M${p.x},${PAD_T + plotH} L${p.x},${p.y}`; }
+            else { linePath += ` L${p.x},${p.y}`; areaPath += ` L${p.x},${p.y}`; }
+        });
+        if (points.length) areaPath += ` L${points[points.length-1].x},${PAD_T + plotH} Z`;
+
+        let dots = '';
+        days.forEach((d, i) => {
+            const v = vals[i];
+            if (v != null) {
+                const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
+                dots += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="#26C6DA" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                         <text x="${xOf(i)}" y="${yOf(v) - 7}" text-anchor="${anchor}" fill="#26C6DA" font-size="8.5" font-weight="500">${Math.round(v)}%</text>`;
+            }
+        });
+
+        svg.innerHTML = `
+            <defs>
+                <linearGradient id="fg_hum" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#26C6DA" stop-opacity="0.3"/>
+                    <stop offset="100%" stop-color="#26C6DA" stop-opacity="0"/>
+                </linearGradient>
+            </defs>
+            ${yLabels}${xLabels}
+            <path d="${areaPath}" fill="url(#fg_hum)"/>
+            <path d="${linePath}" fill="none" stroke="#26C6DA" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            ${dots}`;
+        return;
+    }
+
+    if (isSunriseset) {
+        // Sunrise & Sunset — horizontal time bars per day
+        const sunriseVals = days.map(d => d.sunrise ? new Date(d.sunrise) : null);
+        const sunsetVals = days.map(d => d.sunset ? new Date(d.sunset) : null);
+        const hasData = sunriseVals.some(v => v != null);
+        if (!hasData) { svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="11">No sunrise/sunset data</text>'; return; }
+
+        // Convert time to minutes since midnight for positioning
+        const toMins = (dt) => dt ? dt.getHours() * 60 + dt.getMinutes() : null;
+        const rMins = sunriseVals.map(toMins);
+        const sMins = sunsetVals.map(toMins);
+        const allMins = [...rMins, ...sMins].filter(v => v != null);
+        const minM = Math.min(...allMins) - 30;
+        const maxM = Math.max(...allMins) + 30;
+
+        const xOf = (m) => PAD_L + ((m - minM) / (maxM - minM)) * plotW;
+        const rowH = plotH / n;
+        const barH = Math.min(rowH * 0.5, 14);
+        const yOf = (i) => PAD_T + i * rowH + rowH / 2;
+
+        // X-axis time labels
+        let xLabels = '';
+        const stepMins = Math.ceil((maxM - minM) / 5 / 30) * 30;
+        for (let m = Math.ceil(minM / stepMins) * stepMins; m <= maxM; m += stepMins) {
+            const x = xOf(m);
+            const h = Math.floor(m / 60) % 12 || 12;
+            const min = String(m % 60).padStart(2, '0');
+            const ampm = m < 720 ? 'a' : 'p';
+            xLabels += `<line x1="${x}" y1="${PAD_T}" x2="${x}" y2="${PAD_T + plotH}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                        <text x="${x}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9">${h}:${min}${ampm}</text>`;
+        }
+
+        let bars = '', dayLabels = '';
+        days.forEach((d, i) => {
+            const rm = rMins[i];
+            const sm = sMins[i];
+            const y = yOf(i);
+            const dateStr = d.displayDate || d.interval?.startTime;
+            const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
+            dayLabels += `<text x="${PAD_L - 5}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.55)" font-size="9.5">${label}</text>`;
+
+            if (rm != null && sm != null) {
+                const x1 = xOf(rm);
+                const x2 = xOf(sm);
+                // Day bar between sunrise and sunset
+                bars += `<rect x="${x1}" y="${y - barH / 2}" width="${x2 - x1}" height="${barH}" fill="rgba(255,213,79,0.25)" rx="3"/>`;
+                // Sunrise dot + label
+                bars += `<circle cx="${x1}" cy="${y}" r="4" fill="rgba(255,183,77,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>`;
+                const rTime = sunriseVals[i].toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                bars += `<text x="${x1}" y="${y - barH / 2 - 4}" text-anchor="middle" fill="rgba(255,183,77,0.9)" font-size="8">${rTime}</text>`;
+                // Sunset dot + label
+                bars += `<circle cx="${x2}" cy="${y}" r="4" fill="rgba(255,112,67,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>`;
+                const sTime = sunsetVals[i].toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                bars += `<text x="${x2}" y="${y - barH / 2 - 4}" text-anchor="middle" fill="rgba(255,112,67,0.9)" font-size="8">${sTime}</text>`;
+            }
+        });
+
+        svg.innerHTML = `${xLabels}${dayLabels}${bars}`;
+        return;
     }
 }
 
