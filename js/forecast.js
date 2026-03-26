@@ -76,7 +76,7 @@ function _drawForecastChart(metric, days) {
     const isFeelsLike = metric === 'feelslike';
     const isHumidity = metric === 'humidity';
     const isSunriseset = metric === 'sunriseset';
-    const H = isTemp || isFeelsLike ? 180 : isSunriseset ? 160 : 140;
+    const H = isTemp || isFeelsLike ? 180 : isSunriseset ? 220 : 140;
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.setAttribute('height', H);
 
@@ -455,20 +455,27 @@ function _drawForecastChart(metric, days) {
 
         const xOf = (m) => PAD_L + ((m - minM) / (maxM - minM)) * plotW;
         const rowH = plotH / n;
-        const barH = Math.min(rowH * 0.5, 14);
+        const barH = Math.min(rowH * 0.35, 10);
         const yOf = (i) => PAD_T + i * rowH + rowH / 2;
 
-        // X-axis time labels
+        // X-axis time labels (whole-hour steps, ~4-5 labels)
         let xLabels = '';
-        const stepMins = Math.ceil((maxM - minM) / 5 / 30) * 30;
+        const stepMins = Math.ceil((maxM - minM) / 5 / 60) * 60;
         for (let m = Math.ceil(minM / stepMins) * stepMins; m <= maxM; m += stepMins) {
             const x = xOf(m);
             const h = Math.floor(m / 60) % 12 || 12;
-            const min = String(m % 60).padStart(2, '0');
-            const ampm = m < 720 ? 'a' : 'p';
-            xLabels += `<line x1="${x}" y1="${PAD_T}" x2="${x}" y2="${PAD_T + plotH}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-                        <text x="${x}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9">${h}:${min}${ampm}</text>`;
+            const ampm = m < 720 ? 'AM' : 'PM';
+            xLabels += `<line x1="${x}" y1="${PAD_T}" x2="${x}" y2="${PAD_T + plotH}" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>
+                        <text x="${x}" y="${H - 7}" text-anchor="middle" fill="rgba(255,255,255,0.35)" font-size="8.5">${h}${ampm}</text>`;
         }
+
+        // Legend: sunrise / sunset color key
+        const legendX = PAD_L + plotW;
+        const legendY = PAD_T - 7;
+        const legend = `<circle cx="${legendX - 86}" cy="${legendY}" r="3.5" fill="rgba(255,183,77,0.9)"/>
+                        <text x="${legendX - 80}" y="${legendY + 4}" fill="rgba(255,183,77,0.8)" font-size="8">Sunrise</text>
+                        <circle cx="${legendX - 36}" cy="${legendY}" r="3.5" fill="rgba(255,112,67,0.9)"/>
+                        <text x="${legendX - 30}" y="${legendY + 4}" fill="rgba(255,112,67,0.8)" font-size="8">Sunset</text>`;
 
         let bars = '', dayLabels = '';
         days.forEach((d, i) => {
@@ -482,20 +489,21 @@ function _drawForecastChart(metric, days) {
             if (rm != null && sm != null) {
                 const x1 = xOf(rm);
                 const x2 = xOf(sm);
+                const labelY = y - barH / 2 - 3;
                 // Day bar between sunrise and sunset
-                bars += `<rect x="${x1}" y="${y - barH / 2}" width="${x2 - x1}" height="${barH}" fill="rgba(255,213,79,0.25)" rx="3"/>`;
-                // Sunrise dot + label
+                bars += `<rect x="${x1}" y="${y - barH / 2}" width="${x2 - x1}" height="${barH}" fill="rgba(255,213,79,0.2)" rx="2"/>`;
+                // Sunrise dot + label (anchored start = extends right, away from sunset label)
                 bars += `<circle cx="${x1}" cy="${y}" r="4" fill="rgba(255,183,77,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>`;
                 const rTime = sunriseVals[i].toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                bars += `<text x="${x1}" y="${y - barH / 2 - 4}" text-anchor="middle" fill="rgba(255,183,77,0.9)" font-size="8">${rTime}</text>`;
-                // Sunset dot + label
+                bars += `<text x="${x1 + 7}" y="${labelY}" text-anchor="start" fill="rgba(255,183,77,1)" font-size="8" font-weight="500" stroke="rgba(10,15,35,0.9)" stroke-width="3" paint-order="stroke">${rTime}</text>`;
+                // Sunset dot + label (anchored end = extends left, away from sunrise label)
                 bars += `<circle cx="${x2}" cy="${y}" r="4" fill="rgba(255,112,67,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>`;
                 const sTime = sunsetVals[i].toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                bars += `<text x="${x2}" y="${y - barH / 2 - 4}" text-anchor="middle" fill="rgba(255,112,67,0.9)" font-size="8">${sTime}</text>`;
+                bars += `<text x="${x2 - 7}" y="${labelY}" text-anchor="end" fill="rgba(255,112,67,1)" font-size="8" font-weight="500" stroke="rgba(10,15,35,0.9)" stroke-width="3" paint-order="stroke">${sTime}</text>`;
             }
         });
 
-        svg.innerHTML = `${xLabels}${dayLabels}${bars}`;
+        svg.innerHTML = `${xLabels}${dayLabels}${legend}${bars}`;
         return;
     }
 }
