@@ -341,9 +341,15 @@ function renderForecast(data) {
 
 
 function _buildDayDescription(day) {
-    const cond = day.weatherCondition?.description?.text
+    const cond = day.detailedForecast
+        || day.weatherCondition?.description?.text
         || (day.weatherCondition?.type || '').replace(/_/g, ' ').toLowerCase()
         || 'conditions';
+
+    // If NWS detailed forecast is available, use it as the base description
+    if (day.detailedForecast) {
+        return day.detailedForecast;
+    }
 
     const hi = day.maxTemperature?.degrees;
     const lo = day.minTemperature?.degrees;
@@ -355,21 +361,50 @@ function _buildDayDescription(day) {
                 ? `Low around ${WeatherAPI.formatTemp(lo)}°.`
                 : 'Temperature details are limited for this period.';
 
+    const feelsHi = day.feelsLikeMax?.degrees;
+    const feelsLo = day.feelsLikeMin?.degrees;
+    let feelsText = '';
+    if (feelsHi != null && hi != null && Math.abs(feelsHi - hi) >= 3) {
+        feelsText = ` Feels like ${WeatherAPI.formatTemp(feelsHi)}°.`;
+    } else if (feelsLo != null && lo != null && Math.abs(feelsLo - lo) >= 3) {
+        feelsText = ` Feels like ${WeatherAPI.formatTemp(feelsLo)}° overnight.`;
+    }
+
     const precipChance = day.precipitation?.probability;
     const precipAmount = day.precipitation?.qpf?.millimeters;
+    const snowMm = day.snowQpf?.millimeters;
     let precipText = '';
-    if (precipChance != null) {
+    if (precipChance != null && precipChance > 0) {
         precipText = ` Precipitation chance is around ${Math.round(precipChance)}%.`;
-        if (precipAmount != null && precipAmount > 0) precipText += ` Expected rainfall is about ${(precipAmount / 25.4).toFixed(2)} inches.`;
+        if (snowMm != null && snowMm > 0) {
+            precipText += ` Possible snowfall of about ${(snowMm / 25.4).toFixed(1)} inches.`;
+        } else if (precipAmount != null && precipAmount > 0) {
+            precipText += ` Expected rainfall is about ${(precipAmount / 25.4).toFixed(2)} inches.`;
+        }
     }
 
     const windSpeed = day.wind?.speed?.value || day.maxWind?.speed?.value;
     const windDir = day.wind?.direction || day.maxWind?.direction;
-    const windText = windSpeed != null
-        ? ` Winds near ${Math.round(windSpeed)} mph${windDir != null ? ` from the ${WeatherAPI.windDirection(windDir)}` : ''}.`
-        : '';
+    const windGust = day.windGust;
+    let windText = '';
+    if (windSpeed != null) {
+        windText = ` Winds near ${Math.round(windSpeed)} mph${windDir != null ? ` from the ${WeatherAPI.windDirection(windDir)}` : ''}`;
+        if (windGust != null && windGust > windSpeed + 5) {
+            windText += `, gusting to ${Math.round(windGust)} mph`;
+        }
+        windText += '.';
+    }
 
-    return `${cond.charAt(0).toUpperCase() + cond.slice(1)}. ${tempText}${precipText}${windText}`.replace(/\s+/g, ' ').trim();
+    const cloudCover = day.cloudCover;
+    let cloudText = '';
+    if (cloudCover != null) {
+        if (cloudCover >= 85) cloudText = ' Mostly cloudy.';
+        else if (cloudCover >= 60) cloudText = ' Partly to mostly cloudy.';
+        else if (cloudCover >= 30) cloudText = ' Partly cloudy.';
+        else cloudText = ' Mostly clear skies.';
+    }
+
+    return `${cond.charAt(0).toUpperCase() + cond.slice(1)}. ${tempText}${feelsText}${precipText}${windText}${cloudText}`.replace(/\s+/g, ' ').trim();
 }
 
 function closeDayDetail() {
