@@ -310,7 +310,7 @@ async function _fetchOpenMeteoHourly(lat, lng, hours = 24) {
 async function _fetchOpenMeteoDaily(lat, lng, days = 10) {
     const params = new URLSearchParams({
         latitude: lat, longitude: lng,
-        daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset,relative_humidity_2m_mean',
+        daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,snowfall_sum,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset,relative_humidity_2m_mean,apparent_temperature_max,apparent_temperature_min,cloud_cover_mean',
         temperature_unit: 'fahrenheit',
         wind_speed_unit: 'mph',
         timezone: 'auto',
@@ -334,10 +334,15 @@ async function _fetchOpenMeteoDaily(lat, lng, days = 10) {
                 qpf: { millimeters: d.precipitation_sum[i] || 0 }
             },
             maxWind: { speed: { value: d.wind_speed_10m_max[i] }, direction: d.wind_direction_10m_dominant[i] },
+            windGust: d.wind_gusts_10m_max ? d.wind_gusts_10m_max[i] : null,
             relativeHumidity: d.relative_humidity_2m_mean ? d.relative_humidity_2m_mean[i] : null,
             avgHumidity: d.relative_humidity_2m_mean ? d.relative_humidity_2m_mean[i] : null,
             uvIndex: d.uv_index_max[i],
             maxUvIndex: d.uv_index_max[i],
+            feelsLikeMax: d.apparent_temperature_max ? { degrees: d.apparent_temperature_max[i] } : null,
+            feelsLikeMin: d.apparent_temperature_min ? { degrees: d.apparent_temperature_min[i] } : null,
+            cloudCover: d.cloud_cover_mean ? d.cloud_cover_mean[i] : null,
+            snowQpf: d.snowfall_sum ? { millimeters: d.snowfall_sum[i] || 0 } : null,
             sunrise: d.sunrise[i],
             sunset: d.sunset[i]
         });
@@ -628,14 +633,21 @@ const WeatherAPI = {
                         probability: dt.precipitation?.probability?.percent,
                         qpf: { millimeters: dt.precipitation?.qpf?.quantity || 0 }
                     },
+                    snowQpf: dt.precipitation?.snowfall?.quantity != null
+                        ? { millimeters: dt.precipitation.snowfall.quantity }
+                        : null,
                     maxWind: {
                         speed: dt.wind?.speed,
                         direction: dt.wind?.direction?.degrees
                     },
+                    windGust: dt.wind?.gust?.speed?.value ?? null,
                     relativeHumidity: dt.relativeHumidity,
                     avgHumidity: dt.relativeHumidity,
                     uvIndex: dt.uvIndex,
                     maxUvIndex: dt.uvIndex,
+                    cloudCover: dt.cloudCover ?? null,
+                    feelsLikeMax: day.maxFeelsLikeTemperature ?? null,
+                    feelsLikeMin: day.minFeelsLikeTemperature ?? null,
                     sunrise: day.sunEvents?.sunriseTime,
                     sunset: day.sunEvents?.sunsetTime
                 };
@@ -647,7 +659,7 @@ const WeatherAPI = {
 
         const params = new URLSearchParams({
             latitude: lat, longitude: lng,
-            daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset,relative_humidity_2m_mean',
+            daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,snowfall_sum,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset,relative_humidity_2m_mean,apparent_temperature_max,apparent_temperature_min,cloud_cover_mean',
             temperature_unit: 'fahrenheit',
             wind_speed_unit: 'mph',
             timezone: 'auto',
@@ -672,10 +684,15 @@ const WeatherAPI = {
                     qpf: { millimeters: d.precipitation_sum[i] || 0 }
                 },
                 maxWind: { speed: { value: d.wind_speed_10m_max[i] }, direction: d.wind_direction_10m_dominant[i] },
+                windGust: d.wind_gusts_10m_max ? d.wind_gusts_10m_max[i] : null,
                 relativeHumidity: d.relative_humidity_2m_mean ? d.relative_humidity_2m_mean[i] : null,
                 avgHumidity: d.relative_humidity_2m_mean ? d.relative_humidity_2m_mean[i] : null,
                 uvIndex: d.uv_index_max[i],
                 maxUvIndex: d.uv_index_max[i],
+                feelsLikeMax: d.apparent_temperature_max ? { degrees: d.apparent_temperature_max[i] } : null,
+                feelsLikeMin: d.apparent_temperature_min ? { degrees: d.apparent_temperature_min[i] } : null,
+                cloudCover: d.cloud_cover_mean ? d.cloud_cover_mean[i] : null,
+                snowQpf: d.snowfall_sum ? { millimeters: d.snowfall_sum[i] || 0 } : null,
                 sunrise: d.sunrise[i],
                 sunset: d.sunset[i]
             });
@@ -915,7 +932,8 @@ const WeatherAPI = {
             (async () => {
                 const params = new URLSearchParams({
                     latitude: lat, longitude: lng,
-                    daily: 'wind_speed_10m_max,wind_direction_10m_dominant',
+                    daily: 'wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,apparent_temperature_max,apparent_temperature_min,snowfall_sum,cloud_cover_mean,uv_index_max',
+                    temperature_unit: 'fahrenheit',
                     wind_speed_unit: 'mph',
                     timezone: 'auto',
                     forecast_days: Math.min(days, 16)
@@ -925,7 +943,16 @@ const WeatherAPI = {
                 const d = await r.json();
                 const map = {};
                 (d.daily?.time || []).forEach((t, i) => {
-                    map[t] = { speed: d.daily.wind_speed_10m_max[i], direction: d.daily.wind_direction_10m_dominant[i] };
+                    map[t] = {
+                        speed: d.daily.wind_speed_10m_max[i],
+                        direction: d.daily.wind_direction_10m_dominant[i],
+                        gust: d.daily.wind_gusts_10m_max?.[i] ?? null,
+                        feelsLikeMax: d.daily.apparent_temperature_max?.[i] != null ? { degrees: d.daily.apparent_temperature_max[i] } : null,
+                        feelsLikeMin: d.daily.apparent_temperature_min?.[i] != null ? { degrees: d.daily.apparent_temperature_min[i] } : null,
+                        snowQpf: d.daily.snowfall_sum?.[i] != null ? { millimeters: d.daily.snowfall_sum[i] || 0 } : null,
+                        cloudCover: d.daily.cloud_cover_mean?.[i] ?? null,
+                        uvIndex: d.daily.uv_index_max?.[i] ?? null,
+                    };
                 });
                 return map;
             })().catch(() => null)
@@ -953,8 +980,9 @@ const WeatherAPI = {
                 minTemperature: { degrees: night?.temperature ?? null }, // night temp = low
                 weatherCondition: {
                     type: _nwsConditionType(p.shortForecast),
-                    description: { text: p.shortForecast || '' }
+                    description: { text: p.shortForecast || p.detailedForecast || '' }
                 },
+                detailedForecast: p.detailedForecast || null,
                 precipitation: {
                     probability: p.probabilityOfPrecipitation?.value ?? 0,
                     qpf: { millimeters: 0 }
@@ -962,10 +990,15 @@ const WeatherAPI = {
                 maxWind: omWind
                     ? { speed: { value: omWind.speed }, direction: omWind.direction }
                     : { speed: { value: _nwsWindSpeed(p.windSpeed) }, direction: _nwsCardinalToDeg(p.windDirection) },
+                windGust: omWind?.gust ?? null,
                 relativeHumidity: p.relativeHumidity?.value ?? null,
                 avgHumidity: p.relativeHumidity?.value ?? null,
-                uvIndex: null,
-                maxUvIndex: null,
+                uvIndex: omWind?.uvIndex ?? null,
+                maxUvIndex: omWind?.uvIndex ?? null,
+                feelsLikeMax: omWind?.feelsLikeMax ?? null,
+                feelsLikeMin: omWind?.feelsLikeMin ?? null,
+                cloudCover: omWind?.cloudCover ?? null,
+                snowQpf: omWind?.snowQpf ?? null,
                 sunrise: sun?.sunrise ?? null,
                 sunset: sun?.sunset ?? null
             });
