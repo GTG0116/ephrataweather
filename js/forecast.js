@@ -556,6 +556,13 @@ function renderForecast(data) {
         const barRight = hi != null ? ((hi - globalMin) / tempRange) * 100 : 100;
         const barWidth = barRight - barLeft;
 
+        // Fair Weather Index badge
+        const fwi = FairWeatherIndex.calculate(day);
+        const fwiBadge = `<span class="fwi-badge" style="color:${fwi.color};border-color:${fwi.color};background:${fwi.bg};">
+            <span class="fwi-dot" style="width:6px;height:6px;border-radius:50%;background:${fwi.color};flex-shrink:0;"></span>
+            <span class="fwi-label-text">${fwi.short}</span>
+        </span>`;
+
         return `
             <div class="forecast-row fade-in" style="animation-delay:${i * 50}ms;cursor:pointer;" onclick="showDayDetail(${i})">
                 <span class="day ${isToday ? 'today' : ''}">${dayName}<span id="spc-badge-${i}" style="display:none;"></span></span>
@@ -571,6 +578,7 @@ function renderForecast(data) {
                 <span class="precip-chance">${precipChance != null && precipChance > 0
                     ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="rgba(100,180,255,0.85)" style="vertical-align:middle;margin-right:1px;"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>${Math.round(precipChance)}%`
                     : ''}</span>
+                ${fwiBadge}
             </div>
         `;
     }).join('');
@@ -766,8 +774,84 @@ function showDayDetail(index) {
     document.getElementById('detail-sunset').textContent =
         sunset ? new Date(sunset).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'N/A';
 
+    // Fair Weather Index
+    _renderDayDetailFWI(day);
+
     // Severe weather section (SPC outlook)
     _refreshDayDetailSPCInfo();
+}
+
+function _renderDayDetailFWI(day) {
+    const fwiContainer = document.getElementById('detail-fwi');
+    const fwiBlock     = document.getElementById('detail-fwi-block');
+    const fwiFactors   = document.getElementById('detail-fwi-factors');
+    if (!fwiContainer || !fwiBlock || !fwiFactors) return;
+
+    const fwi = FairWeatherIndex.calculate(day);
+    fwiContainer.style.display = '';
+
+    // Build the header block
+    fwiBlock.style.background = fwi.bg;
+    fwiBlock.style.border = `1px solid ${fwi.color}33`;
+    fwiBlock.innerHTML = `
+        <div class="fwi-detail-score" style="color:${fwi.color};">${fwi.score}<span style="font-size:1rem;opacity:0.5;">/5</span></div>
+        <div>
+            <div class="fwi-detail-label" style="color:${fwi.color};">${fwi.label}</div>
+            <div class="fwi-detail-sub">Fair Weather Index &bull; ${fwi.score100}/100</div>
+            <div class="fwi-detail-sub" style="margin-top:3px;">
+                Seasonal comfort target: ~${fwi.details.seasonalCenter}\u00B0F feels like
+                ${fwi.details.feelsLike != null ? `&bull; actual ${Math.round(fwi.details.feelsLike)}\u00B0F` : ''}
+            </div>
+        </div>
+    `;
+
+    // Build factor chips
+    const d = fwi.details;
+    const chips = [];
+
+    function _pct(result) {
+        if (!result.available || result.pts == null) return null;
+        return Math.round((result.pts / result.max) * 100);
+    }
+    function _chipColor(pct) {
+        if (pct == null)  return '#888';
+        if (pct >= 80)    return '#4CAF50';
+        if (pct >= 55)    return '#8BC34A';
+        if (pct >= 35)    return '#FFC107';
+        if (pct >= 15)    return '#FF7043';
+        return '#EF5350';
+    }
+
+    // Temperature
+    const tPct = _pct(d.temperature);
+    chips.push({ label: `Feels Like ${d.feelsLike != null ? Math.round(d.feelsLike) + '\u00B0' : '--'}`, pct: tPct });
+
+    // Humidity
+    const hPct = _pct(d.humidity);
+    if (d.humidity.available) chips.push({ label: `Humidity`, pct: hPct });
+
+    // Wind
+    const wPct = _pct(d.wind);
+    if (d.wind.available) chips.push({ label: `Wind`, pct: wPct });
+
+    // Cloud cover
+    const cPct = _pct(d.cloudCover);
+    if (d.cloudCover.available) chips.push({ label: `Cloud Cover`, pct: cPct });
+
+    // Precipitation
+    const pPct = _pct(d.precipitation);
+    if (d.precipitation.available) chips.push({ label: `Precipitation`, pct: pPct });
+
+    fwiFactors.innerHTML = chips.map(chip => {
+        const c = _chipColor(chip.pct);
+        const bar = chip.pct != null
+            ? `<span style="display:inline-block;width:${Math.round(chip.pct * 0.28)}px;height:3px;border-radius:2px;background:${c};vertical-align:middle;margin-right:3px;"></span>`
+            : '';
+        return `<span class="fwi-factor-chip">
+            <span class="fwi-dot" style="background:${c};"></span>
+            ${bar}${chip.label}${chip.pct != null ? ` <span style="opacity:0.55;margin-left:2px;">${chip.pct}%</span>` : ''}
+        </span>`;
+    }).join('');
 }
 
 // ============================================================
