@@ -3232,8 +3232,8 @@
     // RTMA VIEWER (GitHub-hosted raster + binary data)
     // ============================================================
     const RTMA_BASE = 'https://raw.githubusercontent.com/GTG0116/RTMA/main/site/data/';
-    // Geographic bounds matching process_rtma.py EXTENT: [W, E, S, N]
-    const RTMA_BOUNDS = { lngMin: -138.37, lngMax: -59.04, latMin: 19.23, latMax: 57.09 };
+    // Geographic bounds matching process_rtma.py EXTENT: [W, E, S, N] (precise values from metadata.json)
+    const RTMA_BOUNDS = { lngMin: -138.373, lngMax: -59.042, latMin: 19.229, latMax: 57.089 };
     // Mapbox image source corners: [NW, NE, SE, SW] as [lng, lat]
     const RTMA_COORDS = [
         [RTMA_BOUNDS.lngMin, RTMA_BOUNDS.latMax],
@@ -3281,7 +3281,7 @@
     async function _fetchRtmaMetadata() {
         if (_rtmaMetadata) return _rtmaMetadata;
         const cb = Math.floor(Date.now() / 60000);
-        const r  = await fetch(RTMA_BASE + 'metadata.json?cb=' + cb, { cache: 'no-store' });
+        const r  = await fetch(RTMA_BASE + 'metadata.json?cb=' + cb);
         if (!r.ok) throw new Error('RTMA metadata fetch failed ' + r.status);
         _rtmaMetadata = await r.json();
         return _rtmaMetadata;
@@ -3290,7 +3290,7 @@
     async function _fetchRtmaData(product) {
         if (_rtmaDataCache[product]) return _rtmaDataCache[product];
         const cb = Math.floor(Date.now() / 60000);
-        const r  = await fetch(RTMA_BASE + product + '_data.bin?cb=' + cb, { cache: 'no-store' });
+        const r  = await fetch(RTMA_BASE + product + '_data.bin?cb=' + cb);
         if (!r.ok) throw new Error('RTMA data fetch failed ' + r.status);
         const buf = await r.arrayBuffer();
         _rtmaDataCache[product] = new Float32Array(buf);
@@ -3313,6 +3313,8 @@
             }, _overlayBefore());
             _rtmaLoaded = true;
             _updateRtmaLegend();
+            // Pre-fetch binary data and metadata in background so first click is instant
+            _fetchRtmaData(_currentRtmaProduct).catch(() => {});
             // Fetch timestamp asynchronously
             _fetchRtmaMetadata().then(meta => {
                 const timeEl = document.getElementById('rtma-time-display');
@@ -3380,6 +3382,13 @@
         legend.style.display = '';
     }
 
+    // Convert latitude to Web Mercator Y (log-tangent), used to correctly index
+    // the binary grid which has rows uniformly spaced in Mercator Y (not latitude).
+    function _rtmaMercatorY(lat) {
+        const latRad = lat * Math.PI / 180;
+        return Math.log(Math.tan(Math.PI / 4 + latRad / 2));
+    }
+
     async function handleRtmaClick(e) {
         if (currentLayer !== 'rtma' || !_rtmaLoaded) return;
         const { lat, lng } = e.lngLat;
@@ -3395,9 +3404,13 @@
                 if (meta?.data_cols) cols = meta.data_cols;
             } catch (_) {}
 
-            // Binary data is a regular lat/lon grid (north-to-south row order).
+            // Binary grid: rows uniformly spaced in Mercator Y, south-to-north (row 0 = southernmost).
+            // Columns uniformly spaced in longitude (Mercator X ∝ lng), west-to-east.
+            const yMin = _rtmaMercatorY(RTMA_BOUNDS.latMin);
+            const yMax = _rtmaMercatorY(RTMA_BOUNDS.latMax);
+            const yClick = _rtmaMercatorY(lat);
             const col = Math.round((lng - RTMA_BOUNDS.lngMin) / (RTMA_BOUNDS.lngMax - RTMA_BOUNDS.lngMin) * (cols - 1));
-            const row = Math.round((RTMA_BOUNDS.latMax - lat) / (RTMA_BOUNDS.latMax - RTMA_BOUNDS.latMin) * (rows - 1));
+            const row = Math.round((yClick - yMin) / (yMax - yMin) * (rows - 1));
             if (col < 0 || col >= cols || row < 0 || row >= rows) return;
 
             const data = await _fetchRtmaData(_currentRtmaProduct);
