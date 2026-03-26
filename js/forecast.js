@@ -237,7 +237,7 @@ function _drawForecastChart(metric, days) {
             <path d="${loLineFixed}" fill="none" stroke="#42A5F5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
             ${dots}
         `;
-    } else {
+    } else if (metric === 'precip') {
         // Precipitation chance — vertical bar chart
         const xOf = (i) => PAD_L + i * barW + barW * 0.15;
         const bw = barW * 0.7;
