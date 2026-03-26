@@ -433,6 +433,39 @@ function showDayDetail(index) {
     if (windDir != null) windText += ` ${WeatherAPI.windDirection(windDir)}`;
     document.getElementById('detail-wind').textContent = windText;
 
+    // Wind Gusts
+    const windGust = day.windGust;
+    const windGustRow = document.getElementById('detail-wind-gust-row');
+    if (windGustRow) windGustRow.style.display = windGust != null ? '' : 'none';
+    const windGustEl = document.getElementById('detail-wind-gust');
+    if (windGustEl) windGustEl.textContent = windGust != null ? `${Math.round(windGust)} mph` : 'N/A';
+
+    // Feels Like (high/low)
+    const feelsHi = day.feelsLikeMax?.degrees;
+    const feelsLo = day.feelsLikeMin?.degrees;
+    const feelsRow = document.getElementById('detail-feels-like-row');
+    const feelsEl = document.getElementById('detail-feels-like');
+    const hasFeels = feelsHi != null || feelsLo != null;
+    if (feelsRow) feelsRow.style.display = hasFeels ? '' : 'none';
+    if (feelsEl) feelsEl.innerHTML = hasFeels
+        ? `<span style="color:var(--accent-warm);">${feelsHi != null ? WeatherAPI.formatTemp(feelsHi) + '\u00B0' : '--'}</span> / <span style="color:var(--accent-blue);">${feelsLo != null ? WeatherAPI.formatTemp(feelsLo) + '\u00B0' : '--'}</span>`
+        : 'N/A';
+
+    // Cloud Cover
+    const cloudCover = day.cloudCover;
+    const cloudRow = document.getElementById('detail-cloud-row');
+    if (cloudRow) cloudRow.style.display = cloudCover != null ? '' : 'none';
+    const cloudEl = document.getElementById('detail-cloud');
+    if (cloudEl) cloudEl.textContent = cloudCover != null ? `${Math.round(cloudCover)}%` : 'N/A';
+
+    // Snow QPF
+    const snowMm = day.snowQpf?.millimeters;
+    const snowRow = document.getElementById('detail-snow-row');
+    const hasSnow = snowMm != null && snowMm > 0;
+    if (snowRow) snowRow.style.display = hasSnow ? '' : 'none';
+    const snowEl = document.getElementById('detail-snow');
+    if (snowEl) snowEl.textContent = hasSnow ? `${(snowMm / 25.4).toFixed(1)} in` : 'N/A';
+
     // Humidity — hide when NWS (data is null)
     const humidity = day.relativeHumidity || day.avgHumidity;
     const humidityRow = document.getElementById('detail-humidity-row');

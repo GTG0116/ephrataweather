@@ -988,8 +988,12 @@
                 <div class="cards-grid cards-grid-3" style="margin-top:16px;">
                     <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Precipitation</div><div style="font-size:1.1rem;font-weight:500;" id="detail-precip">--</div></div>
                     <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Wind</div><div style="font-size:1.1rem;font-weight:500;" id="detail-wind">--</div></div>
+                    <div id="detail-wind-gust-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Wind Gusts</div><div style="font-size:1.1rem;font-weight:500;" id="detail-wind-gust">--</div></div>
+                    <div id="detail-feels-like-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Feels Like</div><div style="font-size:1.1rem;font-weight:500;" id="detail-feels-like">--</div></div>
                     <div id="detail-humidity-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Humidity</div><div style="font-size:1.1rem;font-weight:500;" id="detail-humidity">--</div></div>
                     <div id="detail-uv-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">UV Index</div><div style="font-size:1.1rem;font-weight:500;" id="detail-uv">--</div></div>
+                    <div id="detail-cloud-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Cloud Cover</div><div style="font-size:1.1rem;font-weight:500;" id="detail-cloud">--</div></div>
+                    <div id="detail-snow-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Snow</div><div style="font-size:1.1rem;font-weight:500;" id="detail-snow">--</div></div>
                     <div id="detail-sunrise-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunrise</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunrise">--</div></div>
                     <div id="detail-sunset-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunset</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunset">--</div></div>
                 </div>
@@ -1019,7 +1023,6 @@
                 <div class="spc-controls visible" id="spc-controls">
                     <div class="ctrl-row">
                         <select id="spc-day-select" class="ctrl-select" onchange="selectDay(parseInt(this.value))">
-                            <option value="0">All Days</option>
                             <option value="1">Day 1</option>
                             <option value="2">Day 2</option>
                             <option value="3">Day 3</option>
@@ -2193,7 +2196,7 @@
     // ============================================================
     let map = null;
     let currentLayer = 'spc';
-    let currentDay = 0;  // 0 = show all days
+    let currentDay = 1;
     let currentType = 'cat';
     let firstSymbolLayerId = undefined;
     let firstBorderLayerId = undefined;
@@ -3557,21 +3560,7 @@
 
         if (layer === 'spc') {
             clearOWMLayers(); clearWPCLayers(); clearFireLayers();
-            if (currentDay > 0) {
-                // Individual day — show interactive map + images
-                buildTypeButtons(currentDay);
-            } else {
-                // All days — show image gallery only
-                const _typeRow = document.getElementById('type-row');
-                if (_typeRow) _typeRow.style.display = 'none';
-                const _typeSel = document.getElementById('spc-type-select');
-                if (_typeSel) _typeSel.style.display = 'none';
-                clearSPCLayers(); hideSPCLegend();
-                _showSPCView();
-                const hint = document.getElementById('spc-img-hint');
-                if (hint) hint.style.display = '';
-                renderSPCImages(0);
-            }
+            buildTypeButtons(currentDay);
         } else if (layer === 'satellite') {
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showSatelliteView();
@@ -3610,21 +3599,7 @@
 
         if (currentLayer !== 'spc') return;
 
-        if (day === 0) {
-            // All Days: image gallery only, hide type select and discussion
-            const discBtn = document.getElementById('spc-discussion-btn');
-            if (discBtn) discBtn.style.display = 'none';
-            const typeSel = document.getElementById('spc-type-select');
-            if (typeSel) typeSel.style.display = 'none';
-            clearSPCLayers(); hideSPCLegend();
-            _showSPCView();
-            const hint = document.getElementById('spc-img-hint');
-            if (hint) hint.style.display = '';
-            renderSPCImages(0);
-        } else {
-            // Specific day: interactive map + static images
-            buildTypeButtons(day);
-        }
+        buildTypeButtons(day);
     }
 
     function buildTypeButtons(day) {
