@@ -3675,16 +3675,15 @@
     }
 
     async function initMapsView() {
-        // Show SPC images right away (no map needed for "All Days" view)
-        _showSPCView();
-        renderSPCImages(0);
         // Ensure the SPC info row (discussion + category info buttons) is visible on init
         // switchLayer() is not called on first load, so we set it explicitly here.
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = '';
 
-        // Initialize Mapbox map now so it is ready when the user selects a
-        // specific day (which shows the interactive SPC GeoJSON overlay).
+        // Load Day 1 SPC outlook on init (map will load async via _ensureMapReady)
+        buildTypeButtons(currentDay);
+
+        // Initialize Mapbox map now so it is ready for the interactive SPC GeoJSON overlay.
         if (!map) {
             const loc = LocationManager.getCurrent();
             mapboxgl.accessToken = CONFIG.MAPBOX_ACCESS_TOKEN;
