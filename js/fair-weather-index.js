@@ -52,7 +52,7 @@ const FairWeatherIndex = (() => {
     //   Warm months (May–Sep): being hotter than center is still penalized
     //     normally; being slightly cooler (up to 5°F) gets a free pass.
     function _scoreTemperature(feelsLike, month) {
-        if (feelsLike == null) return { pts: null, max: 25, available: false };
+        if (feelsLike == null) return { pts: null, max: 35, available: false };
         const center = SEASONAL_CENTER[month];
         const delta = feelsLike - center; // positive = warmer than seasonal center
 
@@ -70,23 +70,23 @@ const FairWeatherIndex = (() => {
         }
 
         let pts;
-        if (diff <= COMFORT_WINDOW)           pts = 25;
-        else if (diff <= COMFORT_WINDOW + 7)  pts = 25 - ((diff - COMFORT_WINDOW) / 7) * 10; // 25→15
-        else if (diff <= COMFORT_WINDOW + 17) pts = 15 - ((diff - COMFORT_WINDOW - 7) / 10) * 12; // 15→3
-        else                                  pts = Math.max(0, 3 - (diff - COMFORT_WINDOW - 17) * 0.3);
-        return { pts: _clamp(pts, 0, 25), max: 25, available: true };
+        if (diff <= COMFORT_WINDOW)           pts = 35;
+        else if (diff <= COMFORT_WINDOW + 7)  pts = 35 - ((diff - COMFORT_WINDOW) / 7) * 14; // 35→21
+        else if (diff <= COMFORT_WINDOW + 17) pts = 21 - ((diff - COMFORT_WINDOW - 7) / 10) * 17; // 21→4
+        else                                  pts = Math.max(0, 4 - (diff - COMFORT_WINDOW - 17) * 0.4);
+        return { pts: _clamp(pts, 0, 35), max: 35, available: true };
     }
 
-    // Relative humidity (max 15 pts)
+    // Relative humidity (max 10 pts)
     function _scoreHumidity(humidity) {
-        if (humidity == null) return { pts: null, max: 15, available: false };
+        if (humidity == null) return { pts: null, max: 10, available: false };
         let pts;
-        if      (humidity >= 35 && humidity <= 60) pts = 15;
-        else if (humidity >= 25 && humidity <= 70) pts = 11;
-        else if (humidity >= 15 && humidity <= 80) pts = 6;
-        else if (humidity >=  5 && humidity <= 90) pts = 2;
+        if      (humidity >= 35 && humidity <= 60) pts = 10;
+        else if (humidity >= 25 && humidity <= 70) pts = 7;
+        else if (humidity >= 15 && humidity <= 80) pts = 4;
+        else if (humidity >=  5 && humidity <= 90) pts = 1;
         else                                       pts = 0;
-        return { pts, max: 15, available: true };
+        return { pts, max: 10, available: true };
     }
 
     // Wind speed + gust (max 20 pts)
@@ -109,16 +109,16 @@ const FairWeatherIndex = (() => {
         return { pts: _clamp(pts, 0, 20), max: 20, available: true };
     }
 
-    // Cloud cover percentage (max 15 pts)
+    // Cloud cover percentage (max 10 pts)
     function _scoreCloudCover(cloudCover) {
-        if (cloudCover == null) return { pts: null, max: 15, available: false };
+        if (cloudCover == null) return { pts: null, max: 10, available: false };
         let pts;
-        if      (cloudCover <= 20) pts = 15;
-        else if (cloudCover <= 40) pts = 13;
-        else if (cloudCover <= 60) pts = 9;
-        else if (cloudCover <= 80) pts = 5;
-        else                       pts = 2;
-        return { pts, max: 15, available: true };
+        if      (cloudCover <= 20) pts = 10;
+        else if (cloudCover <= 40) pts = 8;
+        else if (cloudCover <= 60) pts = 6;
+        else if (cloudCover <= 80) pts = 3;
+        else                       pts = 1;
+        return { pts, max: 10, available: true };
     }
 
     // Precipitation probability + condition severity (max 25 pts)
