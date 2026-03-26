@@ -988,6 +988,11 @@
                 </div>
                 <div id="detail-description">--</div>
                 <div id="detail-severe-weather" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:0.88rem;line-height:1.5;"></div>
+                <!-- Fair Weather Index -->
+                <div id="detail-fwi" style="display:none;">
+                    <div id="detail-fwi-block" class="fwi-detail-block"></div>
+                    <div id="detail-fwi-factors" class="fwi-factors"></div>
+                </div>
                 <hr class="divider">
                 <div class="cards-grid cards-grid-3" style="margin-top:16px;">
                     <div style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Precipitation</div><div style="font-size:1.1rem;font-weight:500;" id="detail-precip">--</div></div>
@@ -1575,6 +1580,7 @@
     <script src="js/location.js"></script>
     <script src="js/icons.js"></script>
     <script src="js/weather-api.js"></script>
+    <script src="js/fair-weather-index.js"></script>
     <!-- Signal to page scripts that they're running inside the SPA -->
     <script>var _SPA_MODE = true;</script>
     <script src="js/current.js"></script>
