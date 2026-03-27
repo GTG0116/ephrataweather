@@ -800,21 +800,31 @@ async function loadAndRenderSPCFireOutlook(lat, lng) {
     const container = document.getElementById('fire-weather-banner-container');
     if (!container) return;
 
+    // SPC now publishes fire weather as two component files per day (windrh + dryt)
     const FIRE_DAY_URLS = [
-        'https://www.spc.noaa.gov/products/fire_wx/fwdy1_cat.nolyr.geojson',
-        'https://www.spc.noaa.gov/products/fire_wx/fwdy2_cat.nolyr.geojson',
+        {
+            windrh: 'https://www.spc.noaa.gov/products/fire_wx/day1fw_windrh.nolyr.geojson',
+            dryt:   'https://www.spc.noaa.gov/products/fire_wx/day1fw_dryt.nolyr.geojson',
+        },
+        {
+            windrh: 'https://www.spc.noaa.gov/products/fire_wx/day2fw_windrh.nolyr.geojson',
+            dryt:   'https://www.spc.noaa.gov/products/fire_wx/day2fw_dryt.nolyr.geojson',
+        },
     ];
 
-    const settled = await Promise.allSettled(FIRE_DAY_URLS.map(async (url) => {
-        try {
-            const resp = await fetch(url, { cache: 'no-store' });
-            if (resp.ok) return resp.json();
-        } catch (_) { /* fall through */ }
-        const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
-        const resp2 = await fetch(proxy, { cache: 'no-store' });
-        if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
-        return resp2.json();
-    }));
+    // Fetch both component files and merge features
+    async function _fetchFireDayFeatures(urls) {
+        const [windrhRes, drytRes] = await Promise.allSettled([
+            _fetchSPCCatData(urls.windrh),
+            _fetchSPCCatData(urls.dryt),
+        ]);
+        return [
+            ...(windrhRes.status === 'fulfilled' ? windrhRes.value?.features || [] : []),
+            ...(drytRes.status === 'fulfilled' ? drytRes.value?.features || [] : []),
+        ];
+    }
+
+    const settled = await Promise.allSettled(FIRE_DAY_URLS.map(urls => _fetchFireDayFeatures(urls)));
 
     const hits = [];
     settled.forEach((result, i) => {
@@ -822,10 +832,12 @@ async function loadAndRenderSPCFireOutlook(lat, lng) {
             console.warn('SPC Fire Day ' + (i + 1) + ' unavailable:', result.reason?.message);
             return;
         }
-        const features = result.value?.features || [];
+        const features = result.value || [];
         let highestRisk = null;
         for (const feature of features) {
-            const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
+            // LABEL field: 'ELEV', 'CRIT', 'EXTCRIT' — normalize EXTCRIT → EXTM
+            const raw = (feature.properties?.LABEL || feature.properties?.CATEGORY || '').trim().toUpperCase();
+            const label = raw === 'EXTCRIT' ? 'EXTM' : raw;
             const riskIdx = _SPC_FIRE_ORDER.indexOf(label);
             if (riskIdx < 0) continue;
             if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
@@ -874,26 +886,28 @@ const _WPC_RAIN_ORDER = ['MRGL', 'SLGT', 'MDT', 'HIGH'];
 const _WPC_RAIN_LABELS = { MRGL: 'Marginal', SLGT: 'Slight', MDT: 'Moderate', HIGH: 'High' };
 const _WPC_RAIN_CLASS = { MRGL: 'mrgl', SLGT: 'slgt', MDT: 'mdt', HIGH: 'high' };
 
+// Normalize a WPC ERO feature's properties to a short risk code (MRGL/SLGT/MDT/HIGH)
+// New ERO GeoJSON uses CATEGORY (short code) or OUTLOOK (full name) depending on version.
+function _wpcRainLabel(props) {
+    const cat = (props?.CATEGORY || '').trim().toUpperCase();
+    if (_WPC_RAIN_ORDER.indexOf(cat) >= 0) return cat;
+    const outlook = (props?.OUTLOOK || '').trim().toUpperCase();
+    const nameMap = { MARGINAL: 'MRGL', SLIGHT: 'SLGT', MODERATE: 'MDT', HIGH: 'HIGH' };
+    return nameMap[outlook] || null;
+}
+
 async function loadAndRenderWPCRainfallOutlook(lat, lng) {
     const container = document.getElementById('wpc-rainfall-banner-container');
     if (!container) return;
 
+    // WPC ERO moved to the experimental map endpoint
     const WPC_ERO_URLS = [
-        'https://www.wpc.ncep.noaa.gov/qpf/94erain.geojson',
-        'https://www.wpc.ncep.noaa.gov/qpf/98erain.geojson',
-        'https://www.wpc.ncep.noaa.gov/qpf/99erain.geojson',
+        'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day1_Latest.geojson',
+        'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day2_Latest.geojson',
+        'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day3_Latest.geojson',
     ];
 
-    const settled = await Promise.allSettled(WPC_ERO_URLS.map(async (url) => {
-        try {
-            const resp = await fetch(url, { cache: 'no-store' });
-            if (resp.ok) return resp.json();
-        } catch (_) { /* fall through */ }
-        const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
-        const resp2 = await fetch(proxy, { cache: 'no-store' });
-        if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
-        return resp2.json();
-    }));
+    const settled = await Promise.allSettled(WPC_ERO_URLS.map(url => _fetchSPCCatData(url)));
 
     const hits = [];
     settled.forEach((result, i) => {
@@ -904,8 +918,8 @@ async function loadAndRenderWPCRainfallOutlook(lat, lng) {
         const features = result.value?.features || [];
         let highestRisk = null;
         for (const feature of features) {
-            const label = (feature.properties?.LABEL || feature.properties?.label ||
-                           feature.properties?.CAT || feature.properties?.cat || '').trim().toUpperCase();
+            const label = _wpcRainLabel(feature.properties);
+            if (!label) continue;
             const riskIdx = _WPC_RAIN_ORDER.indexOf(label);
             if (riskIdx < 0) continue;
             if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
