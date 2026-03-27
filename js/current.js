@@ -800,67 +800,72 @@ async function loadAndRenderSPCFireOutlook(lat, lng) {
     const container = document.getElementById('fire-weather-banner-container');
     if (!container) return;
 
-    const SPC_FIRE_URL = 'https://www.spc.noaa.gov/products/fire_wx/fwdy1_cat.nolyr.geojson';
-    let data;
-    try {
-        const resp = await fetch(SPC_FIRE_URL, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('SPC fire ' + resp.status);
-        data = await resp.json();
-    } catch (e) {
+    const FIRE_DAY_URLS = [
+        'https://www.spc.noaa.gov/products/fire_wx/fwdy1_cat.nolyr.geojson',
+        'https://www.spc.noaa.gov/products/fire_wx/fwdy2_cat.nolyr.geojson',
+    ];
+
+    const settled = await Promise.allSettled(FIRE_DAY_URLS.map(async (url) => {
         try {
-            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(SPC_FIRE_URL);
-            const resp2 = await fetch(proxy, { cache: 'no-store' });
-            if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
-            data = await resp2.json();
-        } catch (e2) {
-            console.warn('SPC fire weather unavailable:', e2.message);
-            container.style.display = 'none';
+            const resp = await fetch(url, { cache: 'no-store' });
+            if (resp.ok) return resp.json();
+        } catch (_) { /* fall through */ }
+        const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        const resp2 = await fetch(proxy, { cache: 'no-store' });
+        if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
+        return resp2.json();
+    }));
+
+    const hits = [];
+    settled.forEach((result, i) => {
+        if (result.status !== 'fulfilled') {
+            console.warn('SPC Fire Day ' + (i + 1) + ' unavailable:', result.reason?.message);
             return;
         }
-    }
-
-    const features = data.features || [];
-    let highestRisk = null;
-
-    for (const feature of features) {
-        const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
-        const riskIdx = _SPC_FIRE_ORDER.indexOf(label);
-        if (riskIdx < 0) continue;
-        if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
-            if (!highestRisk || riskIdx > _SPC_FIRE_ORDER.indexOf(highestRisk)) {
-                highestRisk = label;
+        const features = result.value?.features || [];
+        let highestRisk = null;
+        for (const feature of features) {
+            const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
+            const riskIdx = _SPC_FIRE_ORDER.indexOf(label);
+            if (riskIdx < 0) continue;
+            if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
+                if (!highestRisk || riskIdx > _SPC_FIRE_ORDER.indexOf(highestRisk)) {
+                    highestRisk = label;
+                }
             }
         }
-    }
+        if (highestRisk) hits.push({ risk: highestRisk, dayLabel: _spcDayLabel(i), dayNum: i + 1 });
+    });
 
-    if (highestRisk) {
-        renderSPCFireBanner(highestRisk);
+    if (hits.length > 0) {
+        renderSPCFireBanners(hits);
     } else {
         container.style.display = 'none';
         container.innerHTML = '';
     }
 }
 
-function renderSPCFireBanner(risk) {
+function renderSPCFireBanners(entries) {
     const container = document.getElementById('fire-weather-banner-container');
     if (!container) return;
-    const label = _SPC_FIRE_LABELS[risk] || risk;
-    const cls = _SPC_FIRE_CLASS[risk] || 'elev';
     container.style.display = 'block';
-    container.innerHTML = `
+    container.innerHTML = entries.map(({ risk, dayLabel }) => {
+        const label = _SPC_FIRE_LABELS[risk] || risk;
+        const cls = _SPC_FIRE_CLASS[risk] || 'elev';
+        return `
         <button type="button" class="spc-fire-banner spc-fire-${cls} fade-in"
                 onclick="navigateToSPCMaps()"
                 title="Tap to view SPC Fire Weather Outlook maps">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;">
                 <path d="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5 0.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
             </svg>
-            <span><strong>${label} Fire Weather Risk</strong> – Day 1 SPC Fire Outlook. Tap to view maps.</span>
+            <span><strong>${label} Fire Weather Risk</strong> – ${dayLabel} SPC Fire Outlook. Tap to view maps.</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                  stroke-linecap="round" style="flex-shrink:0;">
                 <polyline points="9 18 15 12 9 6"/>
             </svg>
-        </button>
-    `;
+        </button>`;
+    }).join('');
 }
 
 // ---- WPC Excessive Rainfall Outlook ----
@@ -873,69 +878,74 @@ async function loadAndRenderWPCRainfallOutlook(lat, lng) {
     const container = document.getElementById('wpc-rainfall-banner-container');
     if (!container) return;
 
-    const WPC_ERO_URL = 'https://www.wpc.ncep.noaa.gov/qpf/94erain.geojson';
-    let data;
-    try {
-        const resp = await fetch(WPC_ERO_URL, { cache: 'no-store' });
-        if (!resp.ok) throw new Error('WPC ERO ' + resp.status);
-        data = await resp.json();
-    } catch (e) {
+    const WPC_ERO_URLS = [
+        'https://www.wpc.ncep.noaa.gov/qpf/94erain.geojson',
+        'https://www.wpc.ncep.noaa.gov/qpf/98erain.geojson',
+        'https://www.wpc.ncep.noaa.gov/qpf/99erain.geojson',
+    ];
+
+    const settled = await Promise.allSettled(WPC_ERO_URLS.map(async (url) => {
         try {
-            const proxy = 'https://corsproxy.io/?' + encodeURIComponent(WPC_ERO_URL);
-            const resp2 = await fetch(proxy, { cache: 'no-store' });
-            if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
-            data = await resp2.json();
-        } catch (e2) {
-            console.warn('WPC rainfall outlook unavailable:', e2.message);
-            container.style.display = 'none';
+            const resp = await fetch(url, { cache: 'no-store' });
+            if (resp.ok) return resp.json();
+        } catch (_) { /* fall through */ }
+        const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        const resp2 = await fetch(proxy, { cache: 'no-store' });
+        if (!resp2.ok) throw new Error('Proxy ' + resp2.status);
+        return resp2.json();
+    }));
+
+    const hits = [];
+    settled.forEach((result, i) => {
+        if (result.status !== 'fulfilled') {
+            console.warn('WPC ERO Day ' + (i + 1) + ' unavailable:', result.reason?.message);
             return;
         }
-    }
-
-    const features = data.features || [];
-    let highestRisk = null;
-
-    for (const feature of features) {
-        const label = (feature.properties?.LABEL || feature.properties?.label ||
-                       feature.properties?.CAT || feature.properties?.cat || '').trim().toUpperCase();
-        const riskIdx = _WPC_RAIN_ORDER.indexOf(label);
-        if (riskIdx < 0) continue;
-        if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
-            if (!highestRisk || riskIdx > _WPC_RAIN_ORDER.indexOf(highestRisk)) {
-                highestRisk = label;
+        const features = result.value?.features || [];
+        let highestRisk = null;
+        for (const feature of features) {
+            const label = (feature.properties?.LABEL || feature.properties?.label ||
+                           feature.properties?.CAT || feature.properties?.cat || '').trim().toUpperCase();
+            const riskIdx = _WPC_RAIN_ORDER.indexOf(label);
+            if (riskIdx < 0) continue;
+            if (_pointInSPCGeometry(lng, lat, feature.geometry)) {
+                if (!highestRisk || riskIdx > _WPC_RAIN_ORDER.indexOf(highestRisk)) {
+                    highestRisk = label;
+                }
             }
         }
-    }
+        if (highestRisk) hits.push({ risk: highestRisk, dayLabel: _spcDayLabel(i), dayNum: i + 1 });
+    });
 
-    if (highestRisk) {
-        renderWPCRainfallBanner(highestRisk);
+    if (hits.length > 0) {
+        renderWPCRainfallBanners(hits);
     } else {
         container.style.display = 'none';
         container.innerHTML = '';
     }
 }
 
-function renderWPCRainfallBanner(risk) {
+function renderWPCRainfallBanners(entries) {
     const container = document.getElementById('wpc-rainfall-banner-container');
     if (!container) return;
-    const label = _WPC_RAIN_LABELS[risk] || risk;
-    const cls = _WPC_RAIN_CLASS[risk] || 'mrgl';
     container.style.display = 'block';
-    container.innerHTML = `
+    container.innerHTML = entries.map(({ risk, dayLabel }) => {
+        const label = _WPC_RAIN_LABELS[risk] || risk;
+        const cls = _WPC_RAIN_CLASS[risk] || 'mrgl';
+        return `
         <button type="button" class="wpc-rain-banner wpc-rain-${cls} fade-in"
                 onclick="navigateToSPCMaps()"
                 title="Tap to view WPC Excessive Rainfall Outlook">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
-                <path d="M7 17.5l1.5-4h-3zM16.5 17.5L18 13.5h-3zM12 19l1.5-4h-3z"/>
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
             </svg>
-            <span><strong>${label} Excessive Rainfall Risk</strong> – Day 1 WPC Outlook. Tap to view maps.</span>
+            <span><strong>${label} Excessive Rainfall Risk</strong> – ${dayLabel} WPC Outlook. Tap to view maps.</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                  stroke-linecap="round" style="flex-shrink:0;">
                 <polyline points="9 18 15 12 9 6"/>
             </svg>
-        </button>
-    `;
+        </button>`;
+    }).join('');
 }
 
 // ---- Hourly detail popup ----
