@@ -12,6 +12,8 @@ async function initForecastView(lat, lng) {
     _forecastLat = lat;
     _forecastLng = lng;
     _spcRiskCache = {};
+    _wpcRainCache = {};
+    _spcFireCache = {};
     _openDayDetailIndex = -1;
 
     const _src = WeatherAPI.getDataSource();
@@ -22,8 +24,9 @@ async function initForecastView(lat, lng) {
         else if (_src === 'owm') data = await WeatherAPI.getOWMDailyForecast(lat, lng, 7);
         else data = await WeatherAPI.getDailyForecast(lat, lng, 10);
         renderForecast(data);
-        // Fetch SPC risk data in the background (non-blocking)
+        // Fetch SPC, WPC, and fire weather risk data in the background (non-blocking)
         _loadSPCForecastData(lat, lng);
+        _loadWPCFireForecastData(lat, lng);
     } catch (err) {
         document.getElementById('forecast-list').innerHTML =
             '<div class="error-message" style="margin:24px;">Unable to load forecast data<div class="error-hint">Check your Google Weather API key in js/config.js</div></div>';
@@ -565,7 +568,7 @@ function renderForecast(data) {
 
         return `
             <div class="forecast-row fade-in" style="animation-delay:${i * 50}ms;cursor:pointer;" onclick="showDayDetail(${i})">
-                <span class="day ${isToday ? 'today' : ''}">${dayName}<span id="spc-badge-${i}" style="display:none;"></span></span>
+                <span class="day ${isToday ? 'today' : ''}">${dayName}<span id="spc-badge-${i}" style="display:none;"></span><span id="wpc-rain-badge-${i}" style="display:none;"></span><span id="fire-badge-${i}" style="display:none;"></span></span>
                 <div style="width:32px;height:32px;">${iconSvg}</div>
                 <div class="temp-bar-col">
                     <div class="temp-bar-wrapper">
@@ -779,6 +782,9 @@ function showDayDetail(index) {
 
     // Severe weather section (SPC outlook)
     _refreshDayDetailSPCInfo();
+    // Rainfall and fire weather sections
+    _refreshDayDetailWPCRainInfo();
+    _refreshDayDetailFireInfo();
 }
 
 function _renderDayDetailFWI(day) {
@@ -860,7 +866,9 @@ function _renderDayDetailFWI(day) {
 
 let _forecastLat = null;
 let _forecastLng = null;
-let _spcRiskCache = {};   // keyed by SPC day number (1, 2, 3) → risk object
+let _spcRiskCache = {};     // keyed by SPC day number (1, 2, 3) → risk object
+let _wpcRainCache = {};     // keyed by day number (1, 2, 3) → { risk: 'MRGL'|'SLGT'|'MDT'|'HIGH'|null }
+let _spcFireCache = {};     // keyed by day number (1, 2) → { risk: 'ELEV'|'CRIT'|'EXTM'|null }
 let _openDayDetailIndex = -1;
 
 const _SPC_FORECAST_URLS = {
@@ -1094,4 +1102,187 @@ async function _loadSPCForecastData(lat, lng) {
             } catch (_) { /* graceful degradation — no SPC info shown */ }
         })
     );
+}
+
+// ============================================================
+// WPC EXCESSIVE RAINFALL & SPC FIRE WEATHER FORECAST INTEGRATION
+// ============================================================
+
+const _WPC_ERO_FORECAST_URLS = {
+    1: 'https://www.wpc.ncep.noaa.gov/qpf/94erain.geojson',
+    2: 'https://www.wpc.ncep.noaa.gov/qpf/98erain.geojson',
+    3: 'https://www.wpc.ncep.noaa.gov/qpf/99erain.geojson',
+};
+
+const _SPC_FIRE_FORECAST_URLS = {
+    1: 'https://www.spc.noaa.gov/products/fire_wx/fwdy1_cat.nolyr.geojson',
+    2: 'https://www.spc.noaa.gov/products/fire_wx/fwdy2_cat.nolyr.geojson',
+};
+
+// WPC ERO risk order and badge colors
+const _WPC_RAIN_ORDER_FC = ['MRGL', 'SLGT', 'MDT', 'HIGH'];
+const _WPC_RAIN_LABELS_FC = { MRGL: 'Marginal', SLGT: 'Slight', MDT: 'Moderate', HIGH: 'High' };
+const _WPC_RAIN_COLORS = {
+    MRGL: { bg: 'rgba(0,160,130,0.18)',   border: '#00C8A8', text: '#00C8A8' },
+    SLGT: { bg: 'rgba(100,180,20,0.18)',  border: '#90D030', text: '#90D030' },
+    MDT:  { bg: 'rgba(200,30,30,0.17)',   border: '#FF5050', text: '#FF5050' },
+    HIGH: { bg: 'rgba(220,40,220,0.15)',  border: '#FF73DF', text: '#FF73DF' },
+};
+
+// SPC Fire Weather risk order and badge colors
+const _FIRE_RISK_ORDER_FC = ['ELEV', 'CRIT', 'EXTM'];
+const _FIRE_RISK_LABELS_FC = { ELEV: 'Elevated', CRIT: 'Critical', EXTM: 'Extreme' };
+const _FIRE_RISK_COLORS = {
+    ELEV: { bg: 'rgba(180,120,20,0.15)', border: '#E8A840', text: '#E8A840' },
+    CRIT: { bg: 'rgba(210,80,10,0.15)',  border: '#FF7030', text: '#FF7030' },
+    EXTM: { bg: 'rgba(200,20,20,0.18)',  border: '#FF4040', text: '#FF4040' },
+};
+
+// Fetch WPC ERO risk for one day
+async function _fetchWPCRainRisk(lat, lng, day) {
+    const url = _WPC_ERO_FORECAST_URLS[day];
+    if (!url) return null;
+    let data;
+    try { data = await _fetchSPCGeoJSONForForecast(url); }
+    catch (_) { return null; }
+
+    const features = data?.features || [];
+    let highestRisk = null;
+    for (const feature of features) {
+        const label = (feature.properties?.LABEL || feature.properties?.label ||
+                       feature.properties?.CAT || feature.properties?.cat || '').trim().toUpperCase();
+        const idx = _WPC_RAIN_ORDER_FC.indexOf(label);
+        if (idx < 0) continue;
+        if (_spcPointInFeature(lng, lat, feature)) {
+            if (!highestRisk || idx > _WPC_RAIN_ORDER_FC.indexOf(highestRisk)) highestRisk = label;
+        }
+    }
+    return highestRisk;
+}
+
+// Fetch SPC Fire Weather risk for one day
+async function _fetchSPCFireRisk(lat, lng, day) {
+    const url = _SPC_FIRE_FORECAST_URLS[day];
+    if (!url) return null;
+    let data;
+    try { data = await _fetchSPCGeoJSONForForecast(url); }
+    catch (_) { return null; }
+
+    const features = data?.features || [];
+    let highestRisk = null;
+    for (const feature of features) {
+        const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
+        const idx = _FIRE_RISK_ORDER_FC.indexOf(label);
+        if (idx < 0) continue;
+        if (_spcPointInFeature(lng, lat, feature)) {
+            if (!highestRisk || idx > _FIRE_RISK_ORDER_FC.indexOf(highestRisk)) highestRisk = label;
+        }
+    }
+    return highestRisk;
+}
+
+// Update the WPC rain badge chip in a forecast row
+function _updateWPCRainBadge(forecastDayIndex) {
+    const badge = document.getElementById('wpc-rain-badge-' + forecastDayIndex);
+    if (!badge) return;
+    const day = forecastDayIndex + 1;
+    const risk = day <= 3 ? (_wpcRainCache[day] ?? null) : null;
+    const col = risk ? _WPC_RAIN_COLORS[risk] : null;
+    if (!col) { badge.style.display = 'none'; return; }
+
+    const label = _WPC_RAIN_LABELS_FC[risk] || risk;
+    badge.style.cssText =
+        `display:inline-block;font-size:0.6rem;font-weight:700;padding:1px 5px;` +
+        `border-radius:4px;background:${col.bg};border:1px solid ${col.border};` +
+        `color:${col.text};margin-left:5px;vertical-align:middle;white-space:nowrap;`;
+    badge.textContent = '\uD83D\uDCA7 ' + label;
+
+    if (_openDayDetailIndex === forecastDayIndex) _refreshDayDetailWPCRainInfo();
+}
+
+// Update the fire weather badge chip in a forecast row
+function _updateFireBadge(forecastDayIndex) {
+    const badge = document.getElementById('fire-badge-' + forecastDayIndex);
+    if (!badge) return;
+    const day = forecastDayIndex + 1;
+    const risk = day <= 2 ? (_spcFireCache[day] ?? null) : null;
+    const col = risk ? _FIRE_RISK_COLORS[risk] : null;
+    if (!col) { badge.style.display = 'none'; return; }
+
+    const label = _FIRE_RISK_LABELS_FC[risk] || risk;
+    badge.style.cssText =
+        `display:inline-block;font-size:0.6rem;font-weight:700;padding:1px 5px;` +
+        `border-radius:4px;background:${col.bg};border:1px solid ${col.border};` +
+        `color:${col.text};margin-left:5px;vertical-align:middle;white-space:nowrap;`;
+    badge.textContent = '\uD83D\uDD25 ' + label;
+
+    if (_openDayDetailIndex === forecastDayIndex) _refreshDayDetailFireInfo();
+}
+
+// Refresh (or clear) the WPC rain info block inside the day-detail panel
+function _refreshDayDetailWPCRainInfo() {
+    const el = document.getElementById('detail-wpc-rainfall');
+    if (!el) return;
+    const day = _openDayDetailIndex + 1;
+    const risk = day <= 3 ? (_wpcRainCache[day] ?? null) : null;
+    if (risk) {
+        const col = _WPC_RAIN_COLORS[risk] || {};
+        const label = _WPC_RAIN_LABELS_FC[risk] || risk;
+        el.style.cssText =
+            `display:block;margin-top:10px;padding:10px 12px;border-radius:8px;` +
+            `font-size:0.88rem;line-height:1.5;` +
+            `background:${col.bg || 'rgba(0,160,130,0.12)'};` +
+            `border:1px solid ${col.border || 'rgba(0,160,130,0.35)'};` +
+            `color:var(--text-secondary);`;
+        el.innerHTML =
+            `<strong style="color:${col.text || '#00C8A8'};">\uD83D\uDCA7 Excessive Rainfall Outlook</strong><br>` +
+            `${label} risk of excessive rainfall and potential flash flooding.`;
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+// Refresh (or clear) the fire weather info block inside the day-detail panel
+function _refreshDayDetailFireInfo() {
+    const el = document.getElementById('detail-fire-weather');
+    if (!el) return;
+    const day = _openDayDetailIndex + 1;
+    const risk = day <= 2 ? (_spcFireCache[day] ?? null) : null;
+    if (risk) {
+        const col = _FIRE_RISK_COLORS[risk] || {};
+        const label = _FIRE_RISK_LABELS_FC[risk] || risk;
+        el.style.cssText =
+            `display:block;margin-top:10px;padding:10px 12px;border-radius:8px;` +
+            `font-size:0.88rem;line-height:1.5;` +
+            `background:${col.bg || 'rgba(180,120,20,0.12)'};` +
+            `border:1px solid ${col.border || 'rgba(180,120,20,0.35)'};` +
+            `color:var(--text-secondary);`;
+        el.innerHTML =
+            `<strong style="color:${col.text || '#E8A840'};">\uD83D\uDD25 Fire Weather Outlook</strong><br>` +
+            `${label} fire weather conditions are possible due to low humidity and/or strong winds.`;
+    } else {
+        el.style.display = 'none';
+    }
+}
+
+// Kick off all WPC rain and fire weather fetches concurrently
+async function _loadWPCFireForecastData(lat, lng) {
+    await Promise.allSettled([
+        // WPC Excessive Rainfall – Days 1-3
+        ...[1, 2, 3].map(async (day) => {
+            try {
+                const risk = await _fetchWPCRainRisk(lat, lng, day);
+                _wpcRainCache[day] = risk;
+                _updateWPCRainBadge(day - 1);
+            } catch (_) { /* graceful degradation */ }
+        }),
+        // SPC Fire Weather – Days 1-2
+        ...[1, 2].map(async (day) => {
+            try {
+                const risk = await _fetchSPCFireRisk(lat, lng, day);
+                _spcFireCache[day] = risk;
+                _updateFireBadge(day - 1);
+            } catch (_) { /* graceful degradation */ }
+        }),
+    ]);
 }
