@@ -2043,7 +2043,7 @@ body {
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
-    z-index: 200;
+    z-index: 9999;
     min-width: 210px;
     background: rgba(10,16,34,0.97);
     backdrop-filter: blur(16px);
