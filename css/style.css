@@ -894,6 +894,60 @@ body {
     margin-top: 3px;
 }
 
+/* --- Event-specific alert colors ---
+   Each class defines background, border, left-bar (::before), and title color
+   matching the NWS standard palette for that alert type. */
+
+/* Tornado Warning — red */
+.alert-tornado-warning { background: rgba(220,0,0,0.18); border: 1px solid rgba(220,0,0,0.40); }
+.alert-tornado-warning::before { background: #DD0000; }
+.alert-tornado-warning .alert-title { color: #FF5555; }
+
+/* Tornado Watch — pinkish purple */
+.alert-tornado-watch { background: rgba(180,60,180,0.16); border: 1px solid rgba(200,80,200,0.38); }
+.alert-tornado-watch::before { background: #BB44BB; }
+.alert-tornado-watch .alert-title { color: #DD88DD; }
+
+/* Severe Thunderstorm Warning — orange */
+.alert-svr-warning { background: rgba(255,120,0,0.18); border: 1px solid rgba(255,140,0,0.40); }
+.alert-svr-warning::before { background: #FF8800; }
+.alert-svr-warning .alert-title { color: #FFAA44; }
+
+/* Severe Thunderstorm Watch — yellow */
+.alert-svr-watch { background: rgba(220,190,0,0.16); border: 1px solid rgba(240,210,0,0.33); }
+.alert-svr-watch::before { background: #DDC000; }
+.alert-svr-watch .alert-title { color: #FFE566; }
+
+/* Flash Flood Warning — green */
+.alert-flash-flood-warning { background: rgba(0,160,50,0.18); border: 1px solid rgba(0,180,60,0.40); }
+.alert-flash-flood-warning::before { background: #00BB40; }
+.alert-flash-flood-warning .alert-title { color: #33DD66; }
+
+/* Winter Storm Watch — blue */
+.alert-winter-storm-watch { background: rgba(50,120,240,0.16); border: 1px solid rgba(70,140,255,0.35); }
+.alert-winter-storm-watch::before { background: #4488EE; }
+.alert-winter-storm-watch .alert-title { color: #88BBFF; }
+
+/* Winter Storm Warning — pink */
+.alert-winter-storm-warning { background: rgba(220,80,140,0.18); border: 1px solid rgba(240,100,160,0.40); }
+.alert-winter-storm-warning::before { background: #EE66AA; }
+.alert-winter-storm-warning .alert-title { color: #FF99CC; }
+
+/* Blizzard Warning — orange-red */
+.alert-blizzard-warning { background: rgba(240,60,0,0.18); border: 1px solid rgba(255,70,0,0.40); }
+.alert-blizzard-warning::before { background: #FF4400; }
+.alert-blizzard-warning .alert-title { color: #FF7744; }
+
+/* Snow Squall Warning — purple */
+.alert-snow-squall-warning { background: rgba(120,30,160,0.18); border: 1px solid rgba(140,40,190,0.40); }
+.alert-snow-squall-warning::before { background: #882299; }
+.alert-snow-squall-warning .alert-title { color: #BB55CC; }
+
+/* Special Weather Statement — cyan */
+.alert-sws { background: rgba(0,180,200,0.15); border: 1px solid rgba(0,200,220,0.35); }
+.alert-sws::before { background: #00BBCC; }
+.alert-sws .alert-title { color: #44DDEE; }
+
 /* --- SPC Outlooks --- */
 .spc-outlook-grid {
     display: grid;
@@ -1872,4 +1926,38 @@ body {
 .alerts-toggle-chevron {
     flex-shrink: 0;
     transition: transform 0.2s ease;
+}
+
+/* --- Alert overlay filter buttons (map controls) --- */
+.alert-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    font-size: 0.69rem;
+    font-weight: 600;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-smooth);
+    opacity: 0.55;
+}
+.alert-filter-btn.active {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.28);
+    color: var(--text-secondary);
+    opacity: 1;
+}
+.alert-filter-btn:hover {
+    background: rgba(255,255,255,0.14);
+    color: var(--text-primary);
+}
+.af-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
