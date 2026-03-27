@@ -1189,7 +1189,7 @@
                     &#9888; OpenWeatherMap API key not set. Add your key to <code>js/config.js</code> as <code>OWM_API_KEY</code>.
                 </div>
                 <!-- Alert Overlay Controls — visible for all interactive map layers -->
-                <div class="spc-controls" id="alert-overlay-controls">
+                <div class="spc-controls" id="alert-overlay-controls" style="position:relative;">
                     <div class="ctrl-row" style="gap:10px;align-items:center;">
                         <span class="ctrl-label">Alert Overlay</span>
                         <label class="alert-master-toggle" title="Toggle alert overlay">
@@ -1197,8 +1197,18 @@
                             <span class="amt-track"><span class="amt-knob"></span></span>
                         </label>
                         <span class="ctrl-label" id="alert-overlay-status" style="font-size:0.7rem;opacity:0.55;transition:opacity 0.2s;">OFF</span>
+                        <button class="af-filter-menu-btn" id="af-filter-menu-btn" onclick="toggleAlertFilterMenu(event)" style="display:none;" title="Filter alert types">
+                            <svg width="11" height="10" viewBox="0 0 11 10" fill="none" aria-hidden="true">
+                                <line x1="0.5" y1="1.5" x2="10.5" y2="1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <line x1="2" y1="5" x2="9" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <line x1="3.5" y1="8.5" x2="7.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                            Filters
+                        </button>
                     </div>
-                    <div id="alert-filter-panel" style="display:none;margin-top:8px;flex-wrap:wrap;gap:5px;">
+                    <!-- Alert type filter popup menu -->
+                    <div class="af-filter-popup" id="af-filter-popup">
+                        <div class="af-filter-popup-header">Alert Filters</div>
                         <button class="af-chip active" id="af-tornado-warning"
                                 onclick="toggleAlertFilter('Tornado Warning')" title="Tornado Warning">
                             <span class="af-swatch" style="background:#DD0000;"></span>Tornado Warning
@@ -1209,15 +1219,15 @@
                         </button>
                         <button class="af-chip active" id="af-severe-thunderstorm-warning"
                                 onclick="toggleAlertFilter('Severe Thunderstorm Warning')" title="Severe Thunderstorm Warning">
-                            <span class="af-swatch" style="background:#FF8800;"></span>SVR Warning
+                            <span class="af-swatch" style="background:#FF8800;"></span>Severe Thunderstorm Warning
                         </button>
                         <button class="af-chip active" id="af-severe-thunderstorm-watch"
                                 onclick="toggleAlertFilter('Severe Thunderstorm Watch')" title="Severe Thunderstorm Watch">
-                            <span class="af-swatch" style="background:#DDC000;"></span>SVR Watch
+                            <span class="af-swatch" style="background:#DDC000;"></span>Severe Thunderstorm Watch
                         </button>
                         <button class="af-chip active" id="af-flash-flood-warning"
                                 onclick="toggleAlertFilter('Flash Flood Warning')" title="Flash Flood Warning">
-                            <span class="af-swatch" style="background:#00BB40;"></span>FF Warning
+                            <span class="af-swatch" style="background:#00BB40;"></span>Flash Flood Warning
                         </button>
                         <button class="af-chip active" id="af-winter-storm-watch"
                                 onclick="toggleAlertFilter('Winter Storm Watch')" title="Winter Storm Watch">
@@ -1225,19 +1235,19 @@
                         </button>
                         <button class="af-chip active" id="af-winter-storm-warning"
                                 onclick="toggleAlertFilter('Winter Storm Warning')" title="Winter Storm Warning">
-                            <span class="af-swatch" style="background:#EE66AA;"></span>Winter Storm Warn.
+                            <span class="af-swatch" style="background:#EE66AA;"></span>Winter Storm Warning
                         </button>
                         <button class="af-chip active" id="af-blizzard-warning"
                                 onclick="toggleAlertFilter('Blizzard Warning')" title="Blizzard Warning">
-                            <span class="af-swatch" style="background:#FF4400;"></span>Blizzard Warn.
+                            <span class="af-swatch" style="background:#FF4400;"></span>Blizzard Warning
                         </button>
                         <button class="af-chip active" id="af-snow-squall-warning"
                                 onclick="toggleAlertFilter('Snow Squall Warning')" title="Snow Squall Warning">
-                            <span class="af-swatch" style="background:#882299;"></span>Snow Squall Warn.
+                            <span class="af-swatch" style="background:#882299;"></span>Snow Squall Warning
                         </button>
                         <button class="af-chip active" id="af-special-weather-statement"
                                 onclick="toggleAlertFilter('Special Weather Statement')" title="Special Weather Statement">
-                            <span class="af-swatch" style="background:#00BBCC;"></span>Special Wx Stmt.
+                            <span class="af-swatch" style="background:#00BBCC;"></span>Special Weather Statement
                         </button>
                     </div>
                 </div>
@@ -2242,6 +2252,32 @@
         if (_alertOverlayEnabled) _applyAlertFilters();
     }
 
+    let _filterMenuOpen = false;
+    function toggleAlertFilterMenu(e) {
+        e.stopPropagation();
+        _filterMenuOpen = !_filterMenuOpen;
+        const popup = document.getElementById('af-filter-popup');
+        const btn = document.getElementById('af-filter-menu-btn');
+        if (popup) popup.classList.toggle('open', _filterMenuOpen);
+        if (btn) btn.classList.toggle('active', _filterMenuOpen);
+    }
+    function closeAlertFilterMenu() {
+        if (!_filterMenuOpen) return;
+        _filterMenuOpen = false;
+        const popup = document.getElementById('af-filter-popup');
+        const btn = document.getElementById('af-filter-menu-btn');
+        if (popup) popup.classList.remove('open');
+        if (btn) btn.classList.remove('active');
+    }
+    document.addEventListener('click', function(e) {
+        if (!_filterMenuOpen) return;
+        const popup = document.getElementById('af-filter-popup');
+        const btn = document.getElementById('af-filter-menu-btn');
+        if (popup && !popup.contains(e.target) && btn && !btn.contains(e.target)) {
+            closeAlertFilterMenu();
+        }
+    });
+
     // --- UI sync ---
     function _syncAlertOverlayUI() {
         const chk = document.getElementById('alert-overlay-toggle-chk');
@@ -2251,8 +2287,9 @@
             status.textContent = _alertOverlayEnabled ? 'ON' : 'OFF';
             status.style.opacity = _alertOverlayEnabled ? '1' : '0.55';
         }
-        const panel = document.getElementById('alert-filter-panel');
-        if (panel) panel.style.display = _alertOverlayEnabled ? 'flex' : 'none';
+        const filterBtn = document.getElementById('af-filter-menu-btn');
+        if (filterBtn) filterBtn.style.display = _alertOverlayEnabled ? 'flex' : 'none';
+        if (!_alertOverlayEnabled) closeAlertFilterMenu();
 
         ALERT_OVERLAY_KEYS.forEach(k => {
             const btn = document.getElementById(_afBtnId(k));
@@ -2425,7 +2462,24 @@
             geometry:    alertFeature.geometry || null,
         };
 
-        if (typeof openAlertDetail === 'function') openAlertDetail(alertObj);
+        // Show a compact text popup instead of the full modal
+        const color = ALERT_OVERLAY_COLORS[alertObj.event] || '#AAAAAA';
+        const escHtml = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const descParts = [alertObj.description, alertObj.instruction].filter(Boolean);
+        const descText = escHtml(descParts.join('\n\n') || 'No additional text provided by NWS.');
+        const fmtTime = typeof _formatAlertTime === 'function' ? _formatAlertTime : (t => t || '—');
+        const timeHtml = `<div class="alert-popup-time"><span>Effective: ${fmtTime(alertObj.onset || alertObj.effective)}</span><span>Expires: ${fmtTime(alertObj.expires)}</span></div>`;
+        const areaHtml = alertObj.areaDesc ? `<div class="alert-popup-area">${escHtml(alertObj.areaDesc)}</div>` : '';
+
+        new mapboxgl.Popup({ closeButton: true, maxWidth: '360px' })
+            .setLngLat(e.lngLat)
+            .setHTML(`
+                <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};">${escHtml(alertObj.event)}</div>
+                ${timeHtml}
+                ${areaHtml}
+                <div class="alert-popup-body">${descText}</div>
+            `)
+            .addTo(map);
     }
 
     // Initialize prefs on load
