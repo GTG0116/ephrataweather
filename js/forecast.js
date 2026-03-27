@@ -1108,15 +1108,23 @@ async function _loadSPCForecastData(lat, lng) {
 // WPC EXCESSIVE RAINFALL & SPC FIRE WEATHER FORECAST INTEGRATION
 // ============================================================
 
+// WPC ERO moved to the experimental map endpoint (new URL structure)
 const _WPC_ERO_FORECAST_URLS = {
-    1: 'https://www.wpc.ncep.noaa.gov/qpf/94erain.geojson',
-    2: 'https://www.wpc.ncep.noaa.gov/qpf/98erain.geojson',
-    3: 'https://www.wpc.ncep.noaa.gov/qpf/99erain.geojson',
+    1: 'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day1_Latest.geojson',
+    2: 'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day2_Latest.geojson',
+    3: 'https://www.wpc.ncep.noaa.gov/exper/eromap/geojson/Day3_Latest.geojson',
 };
 
+// SPC fire weather is now split into two component files per day
 const _SPC_FIRE_FORECAST_URLS = {
-    1: 'https://www.spc.noaa.gov/products/fire_wx/fwdy1_cat.nolyr.geojson',
-    2: 'https://www.spc.noaa.gov/products/fire_wx/fwdy2_cat.nolyr.geojson',
+    1: {
+        windrh: 'https://www.spc.noaa.gov/products/fire_wx/day1fw_windrh.nolyr.geojson',
+        dryt:   'https://www.spc.noaa.gov/products/fire_wx/day1fw_dryt.nolyr.geojson',
+    },
+    2: {
+        windrh: 'https://www.spc.noaa.gov/products/fire_wx/day2fw_windrh.nolyr.geojson',
+        dryt:   'https://www.spc.noaa.gov/products/fire_wx/day2fw_dryt.nolyr.geojson',
+    },
 };
 
 // WPC ERO risk order and badge colors
@@ -1138,6 +1146,16 @@ const _FIRE_RISK_COLORS = {
     EXTM: { bg: 'rgba(200,20,20,0.18)',  border: '#FF4040', text: '#FF4040' },
 };
 
+// Normalize WPC ERO properties to a short risk code.
+// New ERO GeoJSON uses CATEGORY (short) or OUTLOOK (full name) depending on field present.
+function _wpcRainLabelFC(props) {
+    const cat = (props?.CATEGORY || '').trim().toUpperCase();
+    if (_WPC_RAIN_ORDER_FC.indexOf(cat) >= 0) return cat;
+    const outlook = (props?.OUTLOOK || '').trim().toUpperCase();
+    const map = { MARGINAL: 'MRGL', SLIGHT: 'SLGT', MODERATE: 'MDT', HIGH: 'HIGH' };
+    return map[outlook] || null;
+}
+
 // Fetch WPC ERO risk for one day
 async function _fetchWPCRainRisk(lat, lng, day) {
     const url = _WPC_ERO_FORECAST_URLS[day];
@@ -1149,8 +1167,8 @@ async function _fetchWPCRainRisk(lat, lng, day) {
     const features = data?.features || [];
     let highestRisk = null;
     for (const feature of features) {
-        const label = (feature.properties?.LABEL || feature.properties?.label ||
-                       feature.properties?.CAT || feature.properties?.cat || '').trim().toUpperCase();
+        const label = _wpcRainLabelFC(feature.properties);
+        if (!label) continue;
         const idx = _WPC_RAIN_ORDER_FC.indexOf(label);
         if (idx < 0) continue;
         if (_spcPointInFeature(lng, lat, feature)) {
@@ -1160,18 +1178,26 @@ async function _fetchWPCRainRisk(lat, lng, day) {
     return highestRisk;
 }
 
-// Fetch SPC Fire Weather risk for one day
+// Fetch SPC Fire Weather risk for one day (merges both windrh and dryt component files)
 async function _fetchSPCFireRisk(lat, lng, day) {
-    const url = _SPC_FIRE_FORECAST_URLS[day];
-    if (!url) return null;
-    let data;
-    try { data = await _fetchSPCGeoJSONForForecast(url); }
-    catch (_) { return null; }
+    const urls = _SPC_FIRE_FORECAST_URLS[day];
+    if (!urls) return null;
 
-    const features = data?.features || [];
+    const [windrhRes, drytRes] = await Promise.allSettled([
+        _fetchSPCGeoJSONForForecast(urls.windrh),
+        _fetchSPCGeoJSONForForecast(urls.dryt),
+    ]);
+
+    const allFeatures = [
+        ...(windrhRes.status === 'fulfilled' ? windrhRes.value?.features || [] : []),
+        ...(drytRes.status === 'fulfilled' ? drytRes.value?.features || [] : []),
+    ];
+
     let highestRisk = null;
-    for (const feature of features) {
-        const label = (feature.properties?.LABEL || feature.properties?.label || '').trim().toUpperCase();
+    for (const feature of allFeatures) {
+        // LABEL: 'ELEV', 'CRIT', or 'EXTCRIT' — normalize EXTCRIT → EXTM
+        const raw = (feature.properties?.LABEL || feature.properties?.CATEGORY || '').trim().toUpperCase();
+        const label = raw === 'EXTCRIT' ? 'EXTM' : raw;
         const idx = _FIRE_RISK_ORDER_FC.indexOf(label);
         if (idx < 0) continue;
         if (_spcPointInFeature(lng, lat, feature)) {
