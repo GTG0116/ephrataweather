@@ -1188,6 +1188,57 @@
                 <div class="owm-key-warn" id="owm-key-warn">
                     &#9888; OpenWeatherMap API key not set. Add your key to <code>js/config.js</code> as <code>OWM_API_KEY</code>.
                 </div>
+                <!-- Alert Overlay Controls — visible for all interactive map layers -->
+                <div class="spc-controls" id="alert-overlay-controls">
+                    <div class="ctrl-row" style="gap:8px;align-items:center;flex-wrap:wrap;">
+                        <span class="ctrl-label">Alert Overlay:</span>
+                        <button id="alert-overlay-toggle" class="day-btn"
+                                onclick="toggleAlertOverlay()"
+                                style="min-width:90px;font-size:0.72rem;">Alerts: OFF</button>
+                    </div>
+                    <div id="alert-filter-panel" style="display:none;margin-top:6px;flex-wrap:wrap;gap:4px;">
+                        <button class="alert-filter-btn active" id="af-tornado-warning"
+                                onclick="toggleAlertFilter('Tornado Warning')" title="Tornado Warning">
+                            <span class="af-dot" style="background:#DD0000;"></span>Tornado Warning
+                        </button>
+                        <button class="alert-filter-btn active" id="af-tornado-watch"
+                                onclick="toggleAlertFilter('Tornado Watch')" title="Tornado Watch">
+                            <span class="af-dot" style="background:#BB44BB;"></span>Tornado Watch
+                        </button>
+                        <button class="alert-filter-btn active" id="af-severe-thunderstorm-warning"
+                                onclick="toggleAlertFilter('Severe Thunderstorm Warning')" title="Severe Thunderstorm Warning">
+                            <span class="af-dot" style="background:#FF8800;"></span>SVR Warning
+                        </button>
+                        <button class="alert-filter-btn active" id="af-severe-thunderstorm-watch"
+                                onclick="toggleAlertFilter('Severe Thunderstorm Watch')" title="Severe Thunderstorm Watch">
+                            <span class="af-dot" style="background:#DDC000;"></span>SVR Watch
+                        </button>
+                        <button class="alert-filter-btn active" id="af-flash-flood-warning"
+                                onclick="toggleAlertFilter('Flash Flood Warning')" title="Flash Flood Warning">
+                            <span class="af-dot" style="background:#00BB40;"></span>FF Warning
+                        </button>
+                        <button class="alert-filter-btn active" id="af-winter-storm-watch"
+                                onclick="toggleAlertFilter('Winter Storm Watch')" title="Winter Storm Watch">
+                            <span class="af-dot" style="background:#4488EE;"></span>Winter Storm Watch
+                        </button>
+                        <button class="alert-filter-btn active" id="af-winter-storm-warning"
+                                onclick="toggleAlertFilter('Winter Storm Warning')" title="Winter Storm Warning">
+                            <span class="af-dot" style="background:#EE66AA;"></span>Winter Storm Warn.
+                        </button>
+                        <button class="alert-filter-btn active" id="af-blizzard-warning"
+                                onclick="toggleAlertFilter('Blizzard Warning')" title="Blizzard Warning">
+                            <span class="af-dot" style="background:#FF4400;"></span>Blizzard Warn.
+                        </button>
+                        <button class="alert-filter-btn active" id="af-snow-squall-warning"
+                                onclick="toggleAlertFilter('Snow Squall Warning')" title="Snow Squall Warning">
+                            <span class="af-dot" style="background:#882299;"></span>Snow Squall Warn.
+                        </button>
+                        <button class="alert-filter-btn active" id="af-special-weather-statement"
+                                onclick="toggleAlertFilter('Special Weather Statement')" title="Special Weather Statement">
+                            <span class="af-dot" style="background:#00BBCC;"></span>Special Wx Stmt.
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Map (for SPC / WPC / Fire / Temperature / Wind / Satellite / Radar) -->
@@ -2113,6 +2164,216 @@
     }
 
     // ============================================================
+    // ALERT OVERLAY — NWS active alerts drawn on the interactive map
+    // ============================================================
+
+    // Map event-type string → fill/line color
+    const ALERT_OVERLAY_COLORS = {
+        'Tornado Warning':             '#DD0000',
+        'Tornado Watch':               '#BB44BB',
+        'Severe Thunderstorm Warning': '#FF8800',
+        'Severe Thunderstorm Watch':   '#DDC000',
+        'Flash Flood Warning':         '#00BB40',
+        'Winter Storm Watch':          '#4488EE',
+        'Winter Storm Warning':        '#EE66AA',
+        'Blizzard Warning':            '#FF4400',
+        'Snow Squall Warning':         '#882299',
+        'Special Weather Statement':   '#00BBCC',
+    };
+    const ALERT_OVERLAY_KEYS = Object.keys(ALERT_OVERLAY_COLORS);
+
+    // Map event string → filter button element ID
+    function _afBtnId(eventType) {
+        return 'af-' + eventType.toLowerCase().replace(/\s+/g, '-');
+    }
+
+    let _alertOverlayEnabled = false;
+    let _alertFilters = {};          // eventType → true/false
+    let _activeAlerts  = [];         // original NWS GeoJSON features (for click lookup)
+    let _alertRefreshTimer = null;
+
+    // --- Persistence ---
+    function _loadAlertPrefs() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('ephrata_alert_overlay_prefs') || '{}');
+            _alertOverlayEnabled = saved.enabled === true;   // default OFF
+            _alertFilters = {};
+            ALERT_OVERLAY_KEYS.forEach(k => {
+                _alertFilters[k] = saved.filters?.[k] !== false;  // default all ON
+            });
+        } catch (_) {
+            _alertOverlayEnabled = false;
+            ALERT_OVERLAY_KEYS.forEach(k => { _alertFilters[k] = true; });
+        }
+    }
+    function _saveAlertPrefs() {
+        localStorage.setItem('ephrata_alert_overlay_prefs', JSON.stringify({
+            enabled: _alertOverlayEnabled,
+            filters: _alertFilters,
+        }));
+    }
+
+    // --- Toggle handlers ---
+    function toggleAlertOverlay() {
+        _alertOverlayEnabled = !_alertOverlayEnabled;
+        _saveAlertPrefs();
+        _syncAlertOverlayUI();
+        if (_alertOverlayEnabled) {
+            _ensureMapReady().then(() => _loadAlertOverlay());
+            // Refresh every 2 minutes while on
+            if (!_alertRefreshTimer) {
+                _alertRefreshTimer = setInterval(() => {
+                    if (_alertOverlayEnabled && map) _loadAlertOverlay();
+                }, 120000);
+            }
+        } else {
+            _clearAlertOverlay();
+            clearInterval(_alertRefreshTimer);
+            _alertRefreshTimer = null;
+        }
+    }
+
+    function toggleAlertFilter(eventType) {
+        _alertFilters[eventType] = !_alertFilters[eventType];
+        _saveAlertPrefs();
+        _syncAlertOverlayUI();
+        if (_alertOverlayEnabled) _applyAlertFilters();
+    }
+
+    // --- UI sync ---
+    function _syncAlertOverlayUI() {
+        const toggleBtn = document.getElementById('alert-overlay-toggle');
+        if (toggleBtn) {
+            toggleBtn.classList.toggle('active', _alertOverlayEnabled);
+            toggleBtn.textContent = _alertOverlayEnabled ? 'Alerts: ON' : 'Alerts: OFF';
+        }
+        const panel = document.getElementById('alert-filter-panel');
+        if (panel) panel.style.display = _alertOverlayEnabled ? 'flex' : 'none';
+
+        ALERT_OVERLAY_KEYS.forEach(k => {
+            const btn = document.getElementById(_afBtnId(k));
+            if (btn) btn.classList.toggle('active', _alertFilters[k] !== false);
+        });
+    }
+
+    // Show alert overlay controls whenever the interactive map is visible
+    function _showAlertOverlayControls(show) {
+        const el = document.getElementById('alert-overlay-controls');
+        if (el) el.classList.toggle('visible', show);
+    }
+
+    // --- Data fetch & render ---
+    async function _loadAlertOverlay() {
+        if (!map || !_alertOverlayEnabled) return;
+        try {
+            const resp = await fetch(
+                'https://api.weather.gov/alerts/active?status=actual&message_type=alert',
+                { headers: { 'Accept': 'application/geo+json' } }
+            );
+            if (!resp.ok) return;
+            const data = await resp.json();
+            _activeAlerts = (data.features || []).filter(f =>
+                ALERT_OVERLAY_KEYS.includes(f.properties?.event || '')
+            );
+            _applyAlertFilters();
+        } catch (e) {
+            console.warn('Alert overlay load error:', e);
+        }
+    }
+
+    // Mapbox fill-color expression built from the color map
+    function _buildAlertColorExpr() {
+        const expr = ['match', ['get', 'event']];
+        ALERT_OVERLAY_KEYS.forEach(k => { expr.push(k, ALERT_OVERLAY_COLORS[k]); });
+        expr.push('#AAAAAA');  // fallback
+        return expr;
+    }
+
+    function _applyAlertFilters() {
+        if (!map) return;
+        const filtered = _activeAlerts.filter(f =>
+            _alertFilters[f.properties?.event || ''] !== false
+        );
+        const geojson = { type: 'FeatureCollection', features: filtered };
+        if (map.getSource('alert-overlay-src')) {
+            map.getSource('alert-overlay-src').setData(geojson);
+        } else {
+            _addAlertLayers(geojson);
+        }
+    }
+
+    function _addAlertLayers(geojson) {
+        if (!map) return;
+        const colorExpr = _buildAlertColorExpr();
+        map.addSource('alert-overlay-src', { type: 'geojson', data: geojson });
+        map.addLayer({
+            id: 'alert-overlay-fill', type: 'fill', source: 'alert-overlay-src',
+            paint: { 'fill-color': colorExpr, 'fill-opacity': 0.25 }
+        });
+        map.addLayer({
+            id: 'alert-overlay-line', type: 'line', source: 'alert-overlay-src',
+            paint: { 'line-color': colorExpr, 'line-width': 2, 'line-opacity': 0.88 }
+        });
+    }
+
+    function _clearAlertOverlay() {
+        if (!map) return;
+        if (map.getLayer('alert-overlay-fill')) map.removeLayer('alert-overlay-fill');
+        if (map.getLayer('alert-overlay-line')) map.removeLayer('alert-overlay-line');
+        if (map.getSource('alert-overlay-src')) map.removeSource('alert-overlay-src');
+    }
+
+    // Reload alert overlay after a basemap style change clears all layers
+    function _reloadAlertOverlayAfterStyleChange() {
+        if (!_alertOverlayEnabled || !_activeAlerts.length) return;
+        _applyAlertFilters();
+    }
+
+    // --- Click handler ---
+    function handleAlertOverlayClick(e) {
+        if (!_alertOverlayEnabled || !map) return;
+        if (!map.getLayer('alert-overlay-fill')) return;
+        const features = map.queryRenderedFeatures(e.point, { layers: ['alert-overlay-fill'] });
+        if (!features.length) return;
+
+        // Stop other click handlers from also firing (e.g. WPC/fire outlook popup)
+        e.originalEvent._alertHandled = true;
+
+        const alertId = features[0].properties?.id;
+        const alertFeature = _activeAlerts.find(f => f.properties?.id === alertId)
+                          || _activeAlerts.find(f =>
+                                 f.properties?.event === features[0].properties?.event &&
+                                 f.properties?.expires === features[0].properties?.expires);
+        if (!alertFeature) return;
+
+        const props = alertFeature.properties;
+        // Parse parameters — may be an object already or a JSON string depending on context
+        let params = props.parameters || {};
+        if (typeof params === 'string') { try { params = JSON.parse(params); } catch (_) {} }
+
+        // Build an alert object compatible with openAlertDetail()
+        const alertObj = {
+            event:       props.event       || '',
+            headline:    props.headline    || props.event || '',
+            description: props.description || '',
+            instruction: props.instruction || '',
+            onset:       props.onset       || props.effective,
+            effective:   props.effective,
+            expires:     props.expires,
+            areaDesc:    props.areaDesc    || '',
+            severity:    props.severity    || '',
+            parameters:  params,
+            raw:         { properties: { affectedZones: props.affectedZones || [] } },
+            geometry:    alertFeature.geometry || null,
+        };
+
+        if (typeof openAlertDetail === 'function') openAlertDetail(alertObj);
+    }
+
+    // Initialize prefs on load
+    _loadAlertPrefs();
+
+    // ============================================================
     // SPA ROUTER
     // ============================================================
     const VALID_VIEWS = ['home', 'current', 'forecast', 'maps'];
@@ -2156,13 +2417,24 @@
             if (window._spaMap) setTimeout(() => window._spaMap.resize(), 50);
         }
 
-        // After maps view is ready, jump to a specific SPC day if requested
-        // (set by navigateToSPCMaps(dayNum) in current.js banner click handlers)
-        if (viewId === 'maps' && window._spcTargetDay) {
-            const targetDay = window._spcTargetDay;
-            window._spcTargetDay = null;
-            if (currentLayer !== 'spc') switchLayer('spc');
-            selectDay(targetDay);
+        // After maps view is ready, navigate to the requested layer/day
+        // (set by navigateToSPCMaps() in current.js banner click handlers)
+        if (viewId === 'maps') {
+            const targetLayer = window._spcTargetLayer;
+            const targetDay   = window._spcTargetDay;
+            window._spcTargetLayer = null;
+            window._spcTargetDay   = null;
+
+            if (targetLayer && targetLayer !== 'spc') {
+                // Fire-wx or WPC-rain banner was clicked — switch to that layer
+                switchLayer(targetLayer);
+                if (targetLayer === 'wpc-rain' && targetDay) selectWPCDay(targetDay);
+                else if (targetLayer === 'fire-wx' && targetDay) selectFireDay(targetDay);
+            } else if (targetDay) {
+                // SPC banner was clicked — switch to SPC and select the day
+                if (currentLayer !== 'spc') switchLayer('spc');
+                selectDay(targetDay);
+            }
         }
     }
 
@@ -2694,6 +2966,7 @@
     }
 
     async function handleOutlookClick(e) {
+        if (e.originalEvent?._alertHandled) return; // alert overlay took priority
         if (currentLayer !== 'wpc-rain' && currentLayer !== 'fire-wx') return;
         const layerId = currentLayer === 'wpc-rain' ? 'wpc-fill' : 'fire-fill';
         if (!map.getLayer(layerId)) return;
@@ -3520,6 +3793,8 @@
             map.on('click', handleMrmsClick);
             map.off('click', handleRtmaClick);
             map.on('click', handleRtmaClick);
+            map.off('click', handleAlertOverlayClick);
+            map.on('click', handleAlertOverlayClick);
             if (currentLayer === 'spc' && currentDay > 0) loadSPCLayer(currentDay, currentType);
             else if (currentLayer === 'temperature' || currentLayer === 'wind' || currentLayer === 'clouds') loadOWMLayer(currentLayer);
             else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
@@ -3527,6 +3802,8 @@
             else if (currentLayer === 'radar') { _radarLoaded = false; showRadarFrame(_radarFrameIdx); }
             else if (currentLayer === 'satellite') { _satLoaded = false; showSatFrame(_satFrameIdx); }
             else if (currentLayer === 'rtma') { _rtmaLoaded = false; loadRtmaLayer(); }
+            // Re-apply alert overlay after style change clears all layers
+            _reloadAlertOverlayAfterStyleChange();
         });
     }
 
@@ -3566,9 +3843,16 @@
         if (spcInfoRow) spcInfoRow.style.display = layer === 'spc' ? '' : 'none';
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
-        document.getElementById('basemap-controls').classList.toggle('visible',
-            mapLayer || layer === 'spc' || layer === 'radar' || layer === 'satellite' ||
-            layer === 'wpc-rain' || layer === 'fire-wx' || layer === 'rtma');
+        const hasInteractiveMap = mapLayer || layer === 'spc' || layer === 'radar' ||
+            layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx' || layer === 'rtma';
+        document.getElementById('basemap-controls').classList.toggle('visible', hasInteractiveMap);
+        _showAlertOverlayControls(hasInteractiveMap);
+        // Re-apply alert overlay when switching layers (overlay persists across layer changes)
+        if (_alertOverlayEnabled && hasInteractiveMap && map) {
+            _ensureMapReady().then(() => {
+                if (!map.getSource('alert-overlay-src')) _applyAlertFilters();
+            });
+        }
 
         if (layer === 'spc') {
             clearOWMLayers(); clearWPCLayers(); clearFireLayers();
@@ -3692,6 +3976,10 @@
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = '';
 
+        // Show alert overlay controls and sync toggle state from saved prefs
+        _showAlertOverlayControls(true);
+        _syncAlertOverlayUI();
+
         // Load Day 1 SPC outlook on init (map will load async via _ensureMapReady)
         buildTypeButtons(currentDay);
 
@@ -3722,6 +4010,14 @@
                 map.on('click', handleOutlookClick);
                 map.on('click', handleMrmsClick);
                 map.on('click', handleRtmaClick);
+                map.on('click', handleAlertOverlayClick);
+                // Fix: _ensureMapReady() returns immediately when map===null during
+                // buildTypeButtons(), so loadSPCLayer() exits early. Force initial load here.
+                if (currentLayer === 'spc' && currentDay > 0) {
+                    loadSPCLayer(currentDay, currentType);
+                }
+                // Restore alert overlay if it was enabled
+                if (_alertOverlayEnabled) _loadAlertOverlay();
             });
         }
     }
