@@ -1628,6 +1628,11 @@ body {
     line-height: 1.6;
 }
 
+@keyframes slideUpSheet {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+}
+
 .alert-modal-overlay {
     position: fixed;
     inset: 0;
@@ -1662,6 +1667,7 @@ body {
     font-size: 1.15rem;
     font-weight: 700;
     margin-bottom: 6px;
+    padding-right: 44px; /* always leave room for close button */
 }
 
 .alert-modal-meta {
@@ -1690,18 +1696,17 @@ body {
     border: none;
     background: rgba(255,255,255,0.2);
     color: #fff;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     cursor: pointer;
     z-index: 10;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     line-height: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    /* Ensure it's always above the grid content */
     pointer-events: auto;
     touch-action: manipulation;
 }
@@ -1714,7 +1719,7 @@ body {
     .alert-modal {
         grid-template-columns: 1fr;
         width: 100%;
-        max-height: min(88vh, 760px);
+        max-height: 90vh;
         border-bottom-left-radius: 0;
         border-bottom-right-radius: 0;
         /* Make the whole modal scroll on mobile so text + map are both accessible */
@@ -1723,17 +1728,48 @@ body {
         overscroll-behavior: contain;
         display: flex;
         flex-direction: column;
+        animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+        /* Safe area for iPhones with home indicator */
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    /* Drag handle indicator */
+    .alert-modal::before {
+        content: '';
+        display: block;
+        width: 36px;
+        height: 4px;
+        background: rgba(255,255,255,0.25);
+        border-radius: 2px;
+        margin: 10px auto 4px;
+        flex-shrink: 0;
     }
     .alert-modal-main {
         overflow-y: visible; /* parent handles scroll on mobile */
         flex-shrink: 0;
-        padding-right: 56px; /* avoid overlap with the fixed close button */
+        padding: 12px 16px 16px;
+    }
+    .alert-modal-title {
+        font-size: 1rem;
+        padding-right: 52px; /* room for close button */
+    }
+    .alert-modal-meta {
+        font-size: 0.75rem;
+    }
+    .alert-modal-body {
+        font-size: 0.85rem;
     }
     .alert-modal-map {
-        min-height: 280px;
+        min-height: 220px;
         flex-shrink: 0;
         border-left: none;
         border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .alert-modal-close {
+        top: 10px;
+        right: 12px;
+        width: 44px;
+        height: 44px;
+        background: rgba(255,255,255,0.15);
     }
 }
 
