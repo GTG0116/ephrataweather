@@ -224,9 +224,9 @@
         .map-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(12,18,38,0.65); backdrop-filter: blur(6px); z-index: 30; gap: 10px; border-radius: var(--radius-lg); }
         .map-loading p { font-size: 0.85rem; color: var(--text-secondary); }
 
-        .mapboxgl-popup { max-width: min(320px, calc(100vw - 32px)) !important; }
+        .mapboxgl-popup { max-width: min(380px, calc(100vw - 24px)) !important; }
         .mapboxgl-popup-content { background: rgba(12,18,38,0.95) !important; border: 1px solid rgba(255,255,255,0.18) !important; color: #fff !important; padding: 14px 16px !important; border-radius: 12px !important; box-shadow: 0 8px 28px rgba(0,0,0,0.45) !important; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size: 0.85rem; }
-        .mapboxgl-popup-close-button { color: rgba(255,255,255,0.6) !important; font-size: 20px !important; width: 32px !important; height: 32px !important; display: flex !important; align-items: center !important; justify-content: center !important; top: 4px !important; right: 4px !important; border-radius: 50% !important; }
+        .mapboxgl-popup-close-button { color: rgba(255,255,255,0.6) !important; font-size: 20px !important; min-width: 36px !important; min-height: 36px !important; width: 36px !important; height: 36px !important; display: flex !important; align-items: center !important; justify-content: center !important; top: 4px !important; right: 4px !important; border-radius: 50% !important; }
         .mapboxgl-popup-close-button:hover { background: rgba(255,255,255,0.1) !important; color: #fff !important; }
         .mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip { border-top-color: rgba(12,18,38,0.95) !important; }
         .mapboxgl-popup-anchor-top .mapboxgl-popup-tip { border-bottom-color: rgba(12,18,38,0.95) !important; }
@@ -2320,6 +2320,22 @@
     }
 
     // --- Resolve zone geometries for alerts that have geometry: null ---
+
+    // Merge an array of Polygon/MultiPolygon geometries into a single MultiPolygon.
+    // GeometryCollection is NOT used because Mapbox GL JS won't render it.
+    function _mergeZoneGeometries(geometries) {
+        if (geometries.length === 1) return geometries[0];
+        const coords = [];
+        for (const g of geometries) {
+            if (g.type === 'Polygon') coords.push(g.coordinates);
+            else if (g.type === 'MultiPolygon') coords.push(...g.coordinates);
+            // skip unsupported geometry types
+        }
+        if (coords.length === 0) return geometries[0]; // fallback
+        if (coords.length === 1) return { type: 'Polygon', coordinates: coords[0] };
+        return { type: 'MultiPolygon', coordinates: coords };
+    }
+
     async function _resolveZoneGeometries(alerts) {
         // Collect unique zone URLs across all null-geometry alerts
         const zoneUrlSet = new Set();
@@ -2341,14 +2357,12 @@
             } catch (_) {}
         }));
 
-        // Attach merged geometries to each alert
+        // Attach merged geometries to each alert as a valid Polygon or MultiPolygon
         alerts.forEach(alert => {
             const zones = alert.properties?.affectedZones || [];
             const geometries = zones.map(u => zoneGeomMap.get(u)).filter(Boolean);
             if (geometries.length === 0) return;
-            alert.geometry = geometries.length === 1
-                ? geometries[0]
-                : { type: 'GeometryCollection', geometries };
+            alert.geometry = _mergeZoneGeometries(geometries);
         });
     }
 
@@ -2476,7 +2490,7 @@
         const timeHtml = `<div class="alert-popup-time"><span>Effective: ${fmtTime(alertObj.onset || alertObj.effective)}</span><span>Expires: ${fmtTime(alertObj.expires)}</span></div>`;
         const areaHtml = alertObj.areaDesc ? `<div class="alert-popup-area">${escHtml(alertObj.areaDesc)}</div>` : '';
 
-        new mapboxgl.Popup({ closeButton: true, maxWidth: '360px' })
+        new mapboxgl.Popup({ closeButton: true, maxWidth: 'min(380px, calc(100vw - 24px))' })
             .setLngLat(e.lngLat)
             .setHTML(`
                 <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};">${escHtml(alertObj.event)}</div>
