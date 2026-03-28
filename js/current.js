@@ -1008,6 +1008,27 @@ function showHourlyDetail(idx) {
     const hourNight = _isTimestampNight(tsMs, dayForHour);
     const iconSvg = WeatherIcons.fromText(condType, hourNight);
 
+    // Fair Weather Index for this hour
+    let fwiBadgeHtml = '';
+    if (typeof FairWeatherIndex !== 'undefined') {
+        const fwiInput = {
+            interval: h.interval,
+            displayDateTime: h.displayDateTime,
+            feelsLike: h.feelsLikeTemperature,
+            relativeHumidity: h.relativeHumidity,
+            wind: { speed: { value: h.wind?.speed }, gust: h.wind?.gust },
+            windGust: h.wind?.gust,
+            cloudCover: h.cloudCover,
+            precipitation: h.precipitation,
+            weatherCondition: h.weatherCondition,
+        };
+        const fwi = FairWeatherIndex.calculate(fwiInput);
+        fwiBadgeHtml = `<span class="fwi-badge" style="color:${fwi.color};border-color:${fwi.color};background:${fwi.bg};font-size:0.75rem;margin-left:auto;">
+            <span style="width:6px;height:6px;border-radius:50%;background:${fwi.color};flex-shrink:0;display:inline-block;"></span>
+            <span>${fwi.label}</span>
+        </span>`;
+    }
+
     const rows = [];
     if (feelsLike) rows.push(`<div class="hpop-row"><span class="hpop-key">Feels Like</span><span>${feelsLike}</span></div>`);
     if (precip != null) rows.push(`<div class="hpop-row"><span class="hpop-key">Precip</span><span>${Math.round(precip)}%</span></div>`);
@@ -1023,6 +1044,7 @@ function showHourlyDetail(idx) {
             <span class="hpop-time">${time}</span>
             <div class="hpop-icon" aria-hidden="true">${iconSvg}</div>
             <span class="hpop-temp">${temp}°</span>
+            ${fwiBadgeHtml}
             <button class="hpop-close" onclick="document.getElementById('hourly-detail-popup').remove()">&#x2715;</button>
         </div>
         <div class="hpop-cond">${cond}</div>
@@ -1288,6 +1310,21 @@ function _getMetricValue(hour, metric) {
         case 'wind':      return hour.wind?.speed != null ? Math.round(hour.wind.speed) : null;
         case 'precip':    return hour.precipitation?.probability != null ? Math.round(hour.precipitation.probability) : null;
         case 'windgusts': return hour.wind?.gust != null ? Math.round(hour.wind.gust) : null;
+        case 'fwi': {
+            if (typeof FairWeatherIndex === 'undefined') return null;
+            const fwiInput = {
+                interval: hour.interval,
+                displayDateTime: hour.displayDateTime,
+                feelsLike: hour.feelsLikeTemperature,
+                relativeHumidity: hour.relativeHumidity,
+                wind: { speed: { value: hour.wind?.speed }, gust: hour.wind?.gust },
+                windGust: hour.wind?.gust,
+                cloudCover: hour.cloudCover,
+                precipitation: hour.precipitation,
+                weatherCondition: hour.weatherCondition,
+            };
+            return FairWeatherIndex.calculate(fwiInput).score100;
+        }
         default:          return null;
     }
 }
@@ -1300,6 +1337,7 @@ function _metricUnit(metric) {
         case 'precip':    return '%';
         case 'wind':
         case 'windgusts': return ' mph';
+        case 'fwi':       return '';
         default:          return '';
     }
 }
@@ -1310,7 +1348,8 @@ const _METRIC_COLORS = {
     humidity:  '#42A5F5',
     wind:      '#4DB6AC',
     precip:    '#26C6DA',
-    windgusts: '#AB47BC'
+    windgusts: '#AB47BC',
+    fwi:       '#8BC34A'
 };
 
 function _renderMetricRow(hours, metric) {
@@ -1358,9 +1397,15 @@ function _renderMetricRow(hours, metric) {
     vals.forEach((v, i) => {
         if (v == null) return;
         const x = xOf(i), y = yOf(v);
-        const label = `${v}${unit}`;
-        dotsHtml += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${color}" stroke="rgba(10,15,35,0.8)" stroke-width="1.5"/>`;
-        dotsHtml += `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-size="10.5" font-weight="500">${label}</text>`;
+        let dotColor = color;
+        let label = `${v}${unit}`;
+        if (metric === 'fwi' && typeof FairWeatherIndex !== 'undefined') {
+            const rating = FairWeatherIndex.RATINGS.find(r => v >= r.min) ?? FairWeatherIndex.RATINGS[FairWeatherIndex.RATINGS.length - 1];
+            dotColor = rating.color;
+            label = rating.short;
+        }
+        dotsHtml += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${dotColor}" stroke="rgba(10,15,35,0.8)" stroke-width="1.5"/>`;
+        dotsHtml += `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" fill="${metric === 'fwi' ? dotColor : 'rgba(255,255,255,0.9)'}" font-size="10.5" font-weight="500">${label}</text>`;
     });
 
     const gradId = `mg_${metric}`;
@@ -1378,7 +1423,7 @@ function _renderMetricRow(hours, metric) {
 }
 
 function _updateMetricPills(hours) {
-    const allMetrics = ['temp', 'feelslike', 'humidity', 'wind', 'precip', 'windgusts'];
+    const allMetrics = ['temp', 'feelslike', 'humidity', 'wind', 'precip', 'windgusts', 'fwi'];
     let firstVisible = null;
     allMetrics.forEach(metric => {
         const btn = document.querySelector(`#hourly-metric-selector [data-metric="${metric}"]`);

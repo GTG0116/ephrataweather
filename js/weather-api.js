@@ -276,7 +276,7 @@ async function _fetchOpenMeteoCurrent(lat, lng) {
 async function _fetchOpenMeteoHourly(lat, lng, hours = 24) {
     const params = new URLSearchParams({
         latitude: lat, longitude: lng,
-        hourly: 'temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,relative_humidity_2m,pressure_msl',
+        hourly: 'temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,relative_humidity_2m,pressure_msl,cloud_cover',
         temperature_unit: 'fahrenheit',
         wind_speed_unit: 'mph',
         timezone: 'auto',
@@ -300,6 +300,7 @@ async function _fetchOpenMeteoHourly(lat, lng, hours = 24) {
             precipitation: { probability: h.precipitation_probability[i] },
             wind: { speed: h.wind_speed_10m[i], direction: h.wind_direction_10m[i], gust: h.wind_gusts_10m?.[i] ?? null },
             relativeHumidity: h.relative_humidity_2m?.[i],
+            cloudCover: h.cloud_cover?.[i] ?? null,
             pressure: h.pressure_msl?.[i] != null ? { meanSeaLevelMillibars: h.pressure_msl[i] } : null
         });
     }
@@ -577,7 +578,7 @@ const WeatherAPI = {
 
         const params = new URLSearchParams({
             latitude: lat, longitude: lng,
-            hourly: 'temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,relative_humidity_2m,pressure_msl',
+            hourly: 'temperature_2m,apparent_temperature,weather_code,precipitation_probability,wind_speed_10m,wind_direction_10m,wind_gusts_10m,relative_humidity_2m,pressure_msl,cloud_cover',
             temperature_unit: 'fahrenheit',
             wind_speed_unit: 'mph',
             timezone: 'auto',
@@ -602,6 +603,7 @@ const WeatherAPI = {
                 precipitation: { probability: h.precipitation_probability[i] },
                 wind: { speed: h.wind_speed_10m[i], direction: h.wind_direction_10m[i], gust: h.wind_gusts_10m?.[i] ?? null },
                 relativeHumidity: h.relative_humidity_2m?.[i],
+                cloudCover: h.cloud_cover?.[i] ?? null,
                 pressure: h.pressure_msl?.[i] != null
                     ? { meanSeaLevelMillibars: h.pressure_msl[i] }
                     : null
