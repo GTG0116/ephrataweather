@@ -1850,30 +1850,34 @@
         alaska: {
             label: 'Alaska',
             base: 'https://raw.githubusercontent.com/GTG0116/Alaska_MRMS/main/public/data/',
-            coords: [[-175, 73], [-123, 73], [-123, 50], [-175, 50]],
+            // [lng, lat] corners: NW, NE, SE, SW  (50–72°N, 176–126°W) — from metadata bounds
+            coords: [[-176, 72], [-126, 72], [-126, 50], [-176, 50]],
             hasLightning: false,
-            mapCenter: [-153, 62], mapZoom: 4,
+            mapCenter: [-151, 61], mapZoom: 4,
         },
         hawaii: {
             label: 'Hawaii',
             base: 'https://raw.githubusercontent.com/GTG0116/Hawaii_MRMS/main/public/data/',
-            coords: [[-162, 23.5], [-153.5, 23.5], [-153.5, 17], [-162, 17]],
+            // [lng, lat] corners: NW, NE, SE, SW  (15–26°N, 164–151°W) — from metadata bounds
+            coords: [[-164, 26], [-151, 26], [-151, 15], [-164, 15]],
             hasLightning: false,
-            mapCenter: [-157.5, 20.5], mapZoom: 6,
+            mapCenter: [-157.5, 20.5], mapZoom: 5,
         },
         puertorico: {
             label: 'Puerto Rico',
             base: 'https://raw.githubusercontent.com/GTG0116/Puerto_Rico_MRMS/main/public/data/',
-            coords: [[-69, 20], [-64, 20], [-64, 16.5], [-69, 16.5]],
+            // [lng, lat] corners: NW, NE, SE, SW  (17–19°N, 68–65°W) — from metadata bounds
+            coords: [[-68, 19], [-65, 19], [-65, 17], [-68, 17]],
             hasLightning: false,
-            mapCenter: [-66.5, 18.2], mapZoom: 7,
+            mapCenter: [-66.5, 18], mapZoom: 8,
         },
         guam: {
             label: 'Guam',
             base: 'https://raw.githubusercontent.com/GTG0116/Guam_MRMS/main/public/data/',
-            coords: [[143, 15], [147.5, 15], [147.5, 12.5], [143, 12.5]],
+            // [lng, lat] corners: NW, NE, SE, SW  (9–18°N, 140–150°E) — from metadata bounds
+            coords: [[140, 18], [150, 18], [150, 9], [140, 9]],
             hasLightning: false,
-            mapCenter: [144.8, 13.5], mapZoom: 8,
+            mapCenter: [145, 13.5], mapZoom: 6,
         },
     };
 
@@ -2125,6 +2129,9 @@
             }, _overlayBefore());
             _radarLoaded = true;
         }
+        // Force a repaint so the image overlay renders immediately even if the
+        // map is mid-animation (e.g. after flyTo on sector switch).
+        map.triggerRepaint();
         _updateRadarUI(idx);
     }
 
@@ -2249,10 +2256,10 @@
 
     // Detect which MRMS sector best matches a lat/lng
     function _detectMrmsSector(lat, lng) {
-        if (lat >= 16.5 && lat <= 20 && lng >= -69.5 && lng <= -64) return 'puertorico';
-        if (lat >= 12.5 && lat <= 15 && lng >= 143   && lng <= 148)  return 'guam';
-        if (lat >= 17   && lat <= 24 && lng >= -162  && lng <= -153) return 'hawaii';
-        if (lat >= 50   && lat <= 73 && lng >= -180  && lng <= -123) return 'alaska';
+        if (lat >= 17   && lat <= 19 && lng >= -68   && lng <= -65)  return 'puertorico';
+        if (lat >= 9    && lat <= 18 && lng >= 140   && lng <= 150)  return 'guam';
+        if (lat >= 15   && lat <= 26 && lng >= -164  && lng <= -151) return 'hawaii';
+        if (lat >= 50   && lat <= 72 && lng >= -176  && lng <= -126) return 'alaska';
         return 'conus';
     }
 
