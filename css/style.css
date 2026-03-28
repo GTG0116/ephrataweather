@@ -2188,5 +2188,12 @@ body {
     .alert-popup-title { font-size: 0.85rem; }
     .alert-popup-time  { font-size: 0.7rem; }
     .alert-popup-area  { font-size: 0.7rem; }
-    .alert-popup-body  { font-size: 0.75rem; }
+    .alert-popup-body  { font-size: 0.75rem; max-height: min(160px, 28vh); }
+    .af-filter-popup {
+        right: auto;
+        left: 0;
+        min-width: 0;
+        width: calc(100vw - 24px);
+        max-width: calc(100vw - 24px);
+    }
 }

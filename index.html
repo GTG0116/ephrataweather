@@ -225,8 +225,8 @@
         .map-loading p { font-size: 0.85rem; color: var(--text-secondary); }
 
         .mapboxgl-popup { max-width: min(380px, calc(100vw - 24px)) !important; }
-        .mapboxgl-popup-content { background: rgba(12,18,38,0.95) !important; border: 1px solid rgba(255,255,255,0.18) !important; color: #fff !important; padding: 14px 16px !important; border-radius: 12px !important; box-shadow: 0 8px 28px rgba(0,0,0,0.45) !important; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size: 0.85rem; }
-        .mapboxgl-popup-close-button { color: rgba(255,255,255,0.6) !important; font-size: 20px !important; min-width: 36px !important; min-height: 36px !important; width: 36px !important; height: 36px !important; display: flex !important; align-items: center !important; justify-content: center !important; top: 4px !important; right: 4px !important; border-radius: 50% !important; }
+        .mapboxgl-popup-content { background: rgba(12,18,38,0.95) !important; border: 1px solid rgba(255,255,255,0.18) !important; color: #fff !important; padding: 14px 16px !important; border-radius: 12px !important; box-shadow: 0 8px 28px rgba(0,0,0,0.45) !important; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size: 0.85rem; max-height: min(480px, 70vh); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .mapboxgl-popup-close-button { color: rgba(255,255,255,0.6) !important; font-size: 20px !important; min-width: 36px !important; min-height: 36px !important; width: 36px !important; height: 36px !important; display: flex !important; align-items: center !important; justify-content: center !important; top: 4px !important; right: 4px !important; border-radius: 50% !important; position: sticky !important; float: right !important; }
         .mapboxgl-popup-close-button:hover { background: rgba(255,255,255,0.1) !important; color: #fff !important; }
         .mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip { border-top-color: rgba(12,18,38,0.95) !important; }
         .mapboxgl-popup-anchor-top .mapboxgl-popup-tip { border-bottom-color: rgba(12,18,38,0.95) !important; }
@@ -1144,6 +1144,17 @@
                 </div>
                 <!-- Radar Sub-Controls -->
                 <div class="radar-controls" id="radar-controls">
+                    <!-- Sector Selector -->
+                    <div class="ctrl-row" style="gap:8px;align-items:center;">
+                        <span class="ctrl-label">Sector</span>
+                        <select id="mrms-sector-select" class="ctrl-select" onchange="setMrmsSector(this.value)">
+                            <option value="conus">CONUS</option>
+                            <option value="alaska">Alaska</option>
+                            <option value="hawaii">Hawaii</option>
+                            <option value="puertorico">Puerto Rico</option>
+                            <option value="guam">Guam</option>
+                        </select>
+                    </div>
                     <!-- Product Selector -->
                     <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <select id="radar-product-select" class="ctrl-select" onchange="setRadarProduct(this.value)">
@@ -1152,7 +1163,7 @@
                             <option value="mesh">Hail Size (MESH)</option>
                             <option value="qpe6h">6hr Total Precip</option>
                             <option value="qpe24h">24hr Total Precip</option>
-                            <option value="lightning">CG Lightning Prob</option>
+                            <option value="lightning" id="radar-lightning-opt">CG Lightning Prob</option>
                             <option value="rotation">Az Shear / Rotation</option>
                         </select>
                     </div>
@@ -1188,6 +1199,14 @@
                             <option value="satellite-streets">Satellite + Streets</option>
                             <option value="outdoors">Outdoors</option>
                         </select>
+                    </div>
+                    <div class="ctrl-row" style="gap:10px;align-items:center;">
+                        <span class="ctrl-label">My Location</span>
+                        <label class="alert-master-toggle" title="Show your location on the map">
+                            <input type="checkbox" id="my-location-toggle-chk" onchange="toggleMyLocationLayer()">
+                            <span class="amt-track"><span class="amt-knob"></span></span>
+                        </label>
+                        <span class="ctrl-label" id="my-location-status" style="font-size:0.7rem;opacity:0.55;transition:opacity 0.2s;">OFF</span>
                     </div>
                 </div>
                 <div class="owm-key-warn" id="owm-key-warn">
@@ -1815,11 +1834,50 @@
     }
 
     // ============================================================
-    // MRMS RADAR (GitHub-hosted images — multiple products)
+    // MRMS RADAR (GitHub-hosted images — multiple products, multiple sectors)
     // ============================================================
-    const MRMS_BASE   = 'https://raw.githubusercontent.com/EphrataWeather/MRMS/main/public/data/';
-    // Image source corners [lng, lat]: NW, NE, SE, SW  (bounds 24–50°N, 130–60°W)
-    const MRMS_COORDS = [[-130, 50], [-60, 50], [-60, 24], [-130, 24]];
+
+    // Sector definitions: base URL, image corners [NW, NE, SE, SW], lightning support
+    const MRMS_SECTORS = {
+        conus: {
+            label: 'CONUS',
+            base: 'https://raw.githubusercontent.com/EphrataWeather/MRMS/main/public/data/',
+            // [lng, lat] corners: NW, NE, SE, SW  (24–50°N, 130–60°W)
+            coords: [[-130, 50], [-60, 50], [-60, 24], [-130, 24]],
+            hasLightning: true,
+            mapCenter: [-95, 38], mapZoom: 4,
+        },
+        alaska: {
+            label: 'Alaska',
+            base: 'https://raw.githubusercontent.com/GTG0116/Alaska_MRMS/main/public/data/',
+            coords: [[-175, 73], [-123, 73], [-123, 50], [-175, 50]],
+            hasLightning: false,
+            mapCenter: [-153, 62], mapZoom: 4,
+        },
+        hawaii: {
+            label: 'Hawaii',
+            base: 'https://raw.githubusercontent.com/GTG0116/Hawaii_MRMS/main/public/data/',
+            coords: [[-162, 23.5], [-153.5, 23.5], [-153.5, 17], [-162, 17]],
+            hasLightning: false,
+            mapCenter: [-157.5, 20.5], mapZoom: 6,
+        },
+        puertorico: {
+            label: 'Puerto Rico',
+            base: 'https://raw.githubusercontent.com/GTG0116/Puerto_Rico_MRMS/main/public/data/',
+            coords: [[-69, 20], [-64, 20], [-64, 16.5], [-69, 16.5]],
+            hasLightning: false,
+            mapCenter: [-66.5, 18.2], mapZoom: 7,
+        },
+        guam: {
+            label: 'Guam',
+            base: 'https://raw.githubusercontent.com/GTG0116/Guam_MRMS/main/public/data/',
+            coords: [[143, 15], [147.5, 15], [147.5, 12.5], [143, 12.5]],
+            hasLightning: false,
+            mapCenter: [144.8, 13.5], mapZoom: 8,
+        },
+    };
+
+    let _currentMrmsSector = 'conus';
 
     // Product definitions: filePrefix, frame count, metadata file prefix
     const MRMS_PRODUCT_DEFS = {
@@ -1904,36 +1962,41 @@
     let _currentRadarProduct = 'precip_type';
     let _mrmsImgCache        = {};   // keyed by base URL → { imgData, width, height }
 
-    function _mrmsFrameUrl(idx, product) {
-        const def = MRMS_PRODUCT_DEFS[product || _currentRadarProduct];
-        const cb  = Math.floor(Date.now() / 60000);
+    function _mrmsFrameUrl(idx, product, sector) {
+        const def  = MRMS_PRODUCT_DEFS[product || _currentRadarProduct];
+        const base = MRMS_SECTORS[sector || _currentMrmsSector].base;
+        const cb   = Math.floor(Date.now() / 60000);
         let filename;
         if (def.filePrefix === 'master') {
             filename = idx === 0 ? 'master.png' : 'master_' + idx + '.png';
         } else {
             filename = def.filePrefix + '_' + idx + '.png';
         }
-        return MRMS_BASE + filename + '?cb=' + cb;
+        return base + filename + '?cb=' + cb;
     }
 
     // URL for the value-encoded PNG (R=high byte, G=low byte of uint16 value).
     // Available for: mesh, qpe6h, qpe24h, lightning, rotation.
-    function _mrmsValueFrameUrl(idx, product) {
-        const def = MRMS_PRODUCT_DEFS[product || _currentRadarProduct];
-        const cb  = Math.floor(Date.now() / 60000);
-        return MRMS_BASE + def.filePrefix + '_val_' + idx + '.png?cb=' + cb;
+    function _mrmsValueFrameUrl(idx, product, sector) {
+        const def  = MRMS_PRODUCT_DEFS[product || _currentRadarProduct];
+        const base = MRMS_SECTORS[sector || _currentMrmsSector].base;
+        const cb   = Math.floor(Date.now() / 60000);
+        return base + def.filePrefix + '_val_' + idx + '.png?cb=' + cb;
     }
 
-    async function _loadRadarMeta(product) {
+    async function _loadRadarMeta(product, sector) {
         product = product || _currentRadarProduct;
-        if (_radarMeta[product]) return _radarMeta[product];
-        const def = MRMS_PRODUCT_DEFS[product];
+        sector  = sector  || _currentMrmsSector;
+        const cacheKey = sector + ':' + product;
+        if (_radarMeta[cacheKey]) return _radarMeta[cacheKey];
+        const def  = MRMS_PRODUCT_DEFS[product];
+        const base = MRMS_SECTORS[sector].base;
         const requests = Array.from({ length: def.frames }, (_, i) =>
-            fetch(MRMS_BASE + 'metadata_' + def.metaPrefix + i + '.json', { cache: 'no-store' })
+            fetch(base + 'metadata_' + def.metaPrefix + i + '.json', { cache: 'no-store' })
                 .then(r => r.ok ? r.json() : null).catch(() => null)
         );
-        _radarMeta[product] = await Promise.all(requests);
-        return _radarMeta[product];
+        _radarMeta[cacheKey] = await Promise.all(requests);
+        return _radarMeta[cacheKey];
     }
 
     // Fetch MRMS PNG image and return pixel data for click-to-value lookups.
@@ -1990,8 +2053,10 @@
         if (_currentRadarProduct === 'refl' || _currentRadarProduct === 'precip_type') return;
 
         const { lat, lng } = e.lngLat;
-        // Use known fixed MRMS bounds: lat 24–50°N, lon 130–60°W
-        const LAT_MIN = 24, LAT_MAX = 50, LON_MIN = -130, LON_MAX = -60;
+        // Derive bounds from the active sector's image corners [NW, NE, SE, SW]
+        const sc = MRMS_SECTORS[_currentMrmsSector].coords;
+        const LAT_MIN = sc[3][1],  LAT_MAX = sc[0][1];
+        const LON_MIN = sc[0][0],  LON_MAX = sc[1][0];
         if (lat < LAT_MIN || lat > LAT_MAX || lng < LON_MIN || lng > LON_MAX) return;
 
         const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
@@ -2034,9 +2099,10 @@
     }
 
     function _updateRadarUI(idx) {
-        const def  = MRMS_PRODUCT_DEFS[_currentRadarProduct];
-        const meta = (_radarMeta[_currentRadarProduct] || [])[idx];
-        const timeEl = document.getElementById('radar-time-display');
+        const def     = MRMS_PRODUCT_DEFS[_currentRadarProduct];
+        const cacheKey = _currentMrmsSector + ':' + _currentRadarProduct;
+        const meta    = (_radarMeta[cacheKey] || [])[idx];
+        const timeEl  = document.getElementById('radar-time-display');
         if (timeEl) timeEl.textContent = meta?.time ?? '—';
         const slider = document.getElementById('radar-frame-slider');
         if (slider) slider.value = def.frames - 1 - idx;
@@ -2045,13 +2111,14 @@
     function showRadarFrame(idx) {
         if (!map) return;
         _radarFrameIdx = idx;
-        const url = _mrmsFrameUrl(idx);
+        const url    = _mrmsFrameUrl(idx);
+        const coords = MRMS_SECTORS[_currentMrmsSector].coords;
         if (_radarLoaded && map.getSource('mrms-radar')) {
             map.getSource('mrms-radar').updateImage({ url });
         } else {
             if (map.getLayer('mrms-radar-layer')) map.removeLayer('mrms-radar-layer');
             if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
-            map.addSource('mrms-radar', { type: 'image', url, coordinates: MRMS_COORDS });
+            map.addSource('mrms-radar', { type: 'image', url, coordinates: coords });
             map.addLayer({
                 id: 'mrms-radar-layer', type: 'raster', source: 'mrms-radar',
                 paint: { 'raster-opacity': 0.85, 'raster-fade-duration': 300, 'raster-resampling': 'nearest' }
@@ -2077,7 +2144,7 @@
         showLoading('Loading radar\u2026');
         try {
             const def = MRMS_PRODUCT_DEFS[_currentRadarProduct];
-            await _loadRadarMeta(_currentRadarProduct);
+            await _loadRadarMeta(_currentRadarProduct, _currentMrmsSector);
             const slider = document.getElementById('radar-frame-slider');
             if (slider) { slider.max = def.frames - 1; slider.value = def.frames - 1; }
             showRadarFrame(0);
@@ -2178,6 +2245,62 @@
         _radarMeta = {};  // clear all cached metadata
         clearRadarLayer();
         await loadRadarLayer();
+    }
+
+    // Detect which MRMS sector best matches a lat/lng
+    function _detectMrmsSector(lat, lng) {
+        if (lat >= 16.5 && lat <= 20 && lng >= -69.5 && lng <= -64) return 'puertorico';
+        if (lat >= 12.5 && lat <= 15 && lng >= 143   && lng <= 148)  return 'guam';
+        if (lat >= 17   && lat <= 24 && lng >= -162  && lng <= -153) return 'hawaii';
+        if (lat >= 50   && lat <= 73 && lng >= -180  && lng <= -123) return 'alaska';
+        return 'conus';
+    }
+
+    // Update radar product select to show/hide lightning based on sector support
+    function _updateRadarProductOptions(sector) {
+        const sectorDef = MRMS_SECTORS[sector];
+        const lightningOpt = document.getElementById('radar-lightning-opt');
+        if (!lightningOpt) return;
+        if (!sectorDef.hasLightning) {
+            lightningOpt.style.display = 'none';
+            // Switch away from lightning if it's currently selected
+            if (_currentRadarProduct === 'lightning') {
+                _currentRadarProduct = 'precip_type';
+                const sel = document.getElementById('radar-product-select');
+                if (sel) sel.value = 'precip_type';
+            }
+        } else {
+            lightningOpt.style.display = '';
+        }
+    }
+
+    function setMrmsSector(sector) {
+        if (!MRMS_SECTORS[sector] || sector === _currentMrmsSector) return;
+        _currentMrmsSector = sector;
+
+        // Sync UI
+        const sel = document.getElementById('mrms-sector-select');
+        if (sel) sel.value = sector;
+        _updateRadarProductOptions(sector);
+
+        // Clear all cached radar data (different base URL)
+        _radarMeta    = {};
+        _mrmsImgCache = {};
+        _radarLoaded  = false;
+
+        if (currentLayer === 'radar') {
+            stopRadarAnimation();
+            if (map) {
+                if (map.getLayer('mrms-radar-layer')) map.removeLayer('mrms-radar-layer');
+                if (map.getSource('mrms-radar'))      map.removeSource('mrms-radar');
+            }
+            // Pan the map to the new sector
+            if (map) {
+                const sd = MRMS_SECTORS[sector];
+                map.flyTo({ center: sd.mapCenter, zoom: sd.mapZoom, duration: 1200 });
+            }
+            _ensureMapReady().then(() => loadRadarLayer());
+        }
     }
 
     // ============================================================
@@ -2321,6 +2444,21 @@
 
     // --- Resolve zone geometries for alerts that have geometry: null ---
 
+    // Normalize a single geometry: flatten GeometryCollection → Polygon/MultiPolygon
+    // so Mapbox GL JS can render it (Mapbox does not support GeometryCollection).
+    function _normalizeGeometry(geom) {
+        if (!geom) return null;
+        if (geom.type !== 'GeometryCollection') return geom;
+        const polys = [];
+        for (const g of geom.geometries || []) {
+            if (g.type === 'Polygon') polys.push(g.coordinates);
+            else if (g.type === 'MultiPolygon') polys.push(...g.coordinates);
+        }
+        if (polys.length === 0) return null;
+        if (polys.length === 1) return { type: 'Polygon', coordinates: polys[0] };
+        return { type: 'MultiPolygon', coordinates: polys };
+    }
+
     // Merge an array of Polygon/MultiPolygon geometries into a single MultiPolygon.
     // GeometryCollection is NOT used because Mapbox GL JS won't render it.
     function _mergeZoneGeometries(geometries) {
@@ -2353,7 +2491,9 @@
                 const r = await fetch(url, { headers: { 'Accept': 'application/geo+json' } });
                 if (!r.ok) return;
                 const d = await r.json();
-                if (d.geometry) zoneGeomMap.set(url, d.geometry);
+                // Normalize to Polygon/MultiPolygon — Mapbox can't render GeometryCollection
+                const geom = _normalizeGeometry(d.geometry);
+                if (geom) zoneGeomMap.set(url, geom);
             } catch (_) {}
         }));
 
@@ -2380,7 +2520,13 @@
                 ALERT_OVERLAY_KEYS.includes(f.properties?.event || '')
             );
 
-            // Resolve zone polygons for alerts that lack geometry
+            // Normalize any existing geometries (NWS sometimes returns GeometryCollection
+            // which Mapbox GL JS cannot render — flatten to Polygon/MultiPolygon)
+            alerts.forEach(f => {
+                if (f.geometry) f.geometry = _normalizeGeometry(f.geometry);
+            });
+
+            // Resolve zone polygons for alerts that still lack geometry
             const nullGeomAlerts = alerts.filter(f => !f.geometry);
             if (nullGeomAlerts.length > 0) {
                 await _resolveZoneGeometries(nullGeomAlerts);
@@ -2499,6 +2645,95 @@
                 <div class="alert-popup-body">${descText}</div>
             `)
             .addTo(map);
+    }
+
+    // ============================================================
+    // MY LOCATION MARKER — show a dot at the saved location
+    // ============================================================
+
+    let _myLocationEnabled = false;
+
+    function _loadMyLocationPref() {
+        _myLocationEnabled = localStorage.getItem('ephrata_my_location') === 'true';
+    }
+
+    function toggleMyLocationLayer() {
+        _myLocationEnabled = !_myLocationEnabled;
+        localStorage.setItem('ephrata_my_location', String(_myLocationEnabled));
+        _syncMyLocationUI();
+        if (_myLocationEnabled) {
+            _ensureMapReady().then(() => _addMyLocationLayer());
+        } else {
+            _removeMyLocationLayer();
+        }
+    }
+
+    function _addMyLocationLayer() {
+        if (!map) return;
+        const loc = LocationManager.getCurrent();
+        const geojson = {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [loc.lng, loc.lat] },
+                properties: { name: loc.name }
+            }]
+        };
+        if (map.getSource('my-location-src')) {
+            map.getSource('my-location-src').setData(geojson);
+        } else {
+            map.addSource('my-location-src', { type: 'geojson', data: geojson });
+            map.addLayer({
+                id: 'my-location-halo',
+                type: 'circle',
+                source: 'my-location-src',
+                paint: {
+                    'circle-radius': 14,
+                    'circle-color': '#4080FF',
+                    'circle-opacity': 0.22,
+                    'circle-stroke-width': 0,
+                }
+            });
+            map.addLayer({
+                id: 'my-location-dot',
+                type: 'circle',
+                source: 'my-location-src',
+                paint: {
+                    'circle-radius': 7,
+                    'circle-color': '#4488FF',
+                    'circle-opacity': 1,
+                    'circle-stroke-width': 2.5,
+                    'circle-stroke-color': '#FFFFFF',
+                }
+            });
+            // Show a popup on click
+            map.on('click', 'my-location-dot', function(e) {
+                const name = e.features[0].properties.name || 'My Location';
+                new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
+                    .setLngLat(e.lngLat)
+                    .setHTML('<div class="popup-title">' + name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div><div class="popup-stat"><span class="popup-key">Your saved location</span></div>')
+                    .addTo(map);
+            });
+            map.on('mouseenter', 'my-location-dot', () => { if (map.getCanvas()) map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mouseleave', 'my-location-dot', () => { if (map.getCanvas()) map.getCanvas().style.cursor = ''; });
+        }
+    }
+
+    function _removeMyLocationLayer() {
+        if (!map) return;
+        if (map.getLayer('my-location-dot'))  map.removeLayer('my-location-dot');
+        if (map.getLayer('my-location-halo')) map.removeLayer('my-location-halo');
+        if (map.getSource('my-location-src')) map.removeSource('my-location-src');
+    }
+
+    function _syncMyLocationUI() {
+        const chk = document.getElementById('my-location-toggle-chk');
+        if (chk) chk.checked = _myLocationEnabled;
+        const status = document.getElementById('my-location-status');
+        if (status) {
+            status.textContent = _myLocationEnabled ? 'ON' : 'OFF';
+            status.style.opacity = _myLocationEnabled ? '1' : '0.55';
+        }
     }
 
     // Initialize prefs on load
@@ -3935,6 +4170,8 @@
             else if (currentLayer === 'rtma') { _rtmaLoaded = false; loadRtmaLayer(); }
             // Re-apply alert overlay after style change clears all layers
             _reloadAlertOverlayAfterStyleChange();
+            // Re-apply my-location marker if enabled
+            if (_myLocationEnabled) _addMyLocationLayer();
         });
     }
 
@@ -4107,6 +4344,20 @@
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = '';
 
+        // Auto-detect MRMS sector from saved location
+        {
+            const loc = LocationManager.getCurrent();
+            const detected = _detectMrmsSector(loc.lat, loc.lng);
+            _currentMrmsSector = detected;
+            const sectorSel = document.getElementById('mrms-sector-select');
+            if (sectorSel) sectorSel.value = detected;
+            _updateRadarProductOptions(detected);
+        }
+
+        // Load my-location pref and sync UI
+        _loadMyLocationPref();
+        _syncMyLocationUI();
+
         // Show alert overlay controls and sync toggle state from saved prefs
         _showAlertOverlayControls(true);
         _syncAlertOverlayUI();
@@ -4149,6 +4400,8 @@
                 }
                 // Restore alert overlay if it was enabled
                 if (_alertOverlayEnabled) _loadAlertOverlay();
+                // Restore my-location marker if it was enabled
+                if (_myLocationEnabled) _addMyLocationLayer();
             });
         }
     }
