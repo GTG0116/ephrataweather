@@ -2,6 +2,32 @@
 // 10-DAY FORECAST PAGE LOGIC
 // ============================================
 
+// Precipitation condition types that should be suppressed when chance is low
+const _PRECIP_CONDITION_TYPES = new Set([
+    'DRIZZLE', 'LIGHT_RAIN', 'RAIN', 'HEAVY_RAIN',
+    'LIGHT_SNOW', 'SNOW', 'HEAVY_SNOW', 'FLURRIES',
+    'SLEET', 'ICE_PELLETS', 'FREEZING_RAIN', 'FREEZING_DRIZZLE',
+    'HAIL', 'MIXED'
+]);
+// Below this threshold (%), precip icons are replaced with sky/cloud conditions
+const _PRECIP_ICON_THRESHOLD = 30;
+
+// Return the effective icon condition code, suppressing precip icons when chance is low.
+// Falls back to a sky condition parsed from the description text when possible.
+function _effectiveIconCondition(condType, condText, precipChance) {
+    if (!_PRECIP_CONDITION_TYPES.has(condType)) return condType;
+    if (precipChance != null && precipChance >= _PRECIP_ICON_THRESHOLD) return condType;
+    // Low (or unknown) precip chance — try to find a sky condition in the description
+    const t = (condText || '').toUpperCase();
+    if (t.includes('MOSTLY CLOUDY') || t.includes('MOSTLY_CLOUDY')) return 'MOSTLY_CLOUDY';
+    if (t.includes('PARTLY CLOUDY') || t.includes('PARTLY_CLOUDY') ||
+        t.includes('PARTLY SUNNY')) return 'PARTLY_CLOUDY';
+    if (t.includes('OVERCAST') || t.includes('CLOUDY')) return 'OVERCAST';
+    if (t.includes('MOSTLY CLEAR') || t.includes('MOSTLY_CLEAR')) return 'MOSTLY_CLEAR';
+    if (t.includes('CLEAR') || t.includes('SUNNY') || t.includes('FAIR')) return 'CLEAR';
+    return 'PARTLY_CLOUDY';
+}
+
 async function initForecastView(lat, lng) {
     if (lat == null || lng == null) {
         const loc = LocationManager.getCurrent();
@@ -552,7 +578,7 @@ function renderForecast(data) {
         const condType = day.weatherCondition?.type || '';
         const condText = day.weatherCondition?.description?.text || condType.replace(/_/g, ' ').toLowerCase();
         const precipChance = day.precipitation?.probability;
-        const iconSvg = WeatherIcons.fromText(condType);
+        const iconSvg = WeatherIcons.fromText(_effectiveIconCondition(condType, condText, precipChance));
 
         // Temperature bar positioning
         const barLeft = lo != null ? ((lo - globalMin) / tempRange) * 100 : 0;
@@ -700,7 +726,7 @@ function showDayDetail(index) {
     document.getElementById('detail-temps').innerHTML =
         `<span style="color:var(--accent-warm);">${hi != null ? WeatherAPI.formatTemp(hi) + '\u00B0' : '--'}</span> / <span style="color:var(--accent-blue);">${lo != null ? WeatherAPI.formatTemp(lo) + '\u00B0' : '--'}</span>`;
 
-    const iconSvg = WeatherIcons.fromText(condType);
+    const iconSvg = WeatherIcons.fromText(_effectiveIconCondition(condType, condText, day.precipitation?.probability));
     document.getElementById('detail-icon').innerHTML = iconSvg;
 
     // Precipitation
