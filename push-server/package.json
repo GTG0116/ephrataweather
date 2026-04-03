@@ -1,6 +1,0 @@
-{
-  "name": "ephrata-push",
-  "version": "1.0.0",
-  "type": "module",
-  "description": "Cloudflare Worker that polls NWS alerts and sends web-push notifications using only the built-in Web Crypto API — no npm dependencies needed."
-}
