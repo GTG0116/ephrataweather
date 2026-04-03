@@ -267,27 +267,17 @@ const WeatherIcons = {
     },
 
     _fog(s) {
-        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
-            <defs>
-                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stop-color="rgba(225,232,245,0.95)"/>
-                    <stop offset="100%" stop-color="rgba(195,205,222,0.90)"/>
-                </linearGradient>
-            </defs>
-            <g>
-                <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="8s" repeatCount="indefinite"/>
-                <ellipse cx="50" cy="36" rx="30" ry="14" fill="url(#${id}cg)"/>
-                <ellipse cx="34" cy="30" rx="17" ry="13" fill="rgba(235,242,252,0.95)"/>
-                <ellipse cx="66" cy="32" rx="15" ry="12" fill="rgba(230,238,248,0.92)"/>
-            </g>
-            ${[55,64,73,82].map((y, i) =>
-                `<line x1="18" y1="${y}" x2="82" y2="${y}" stroke="rgba(180,195,215,0.75)" stroke-width="4" stroke-linecap="round">
+            ${[38,50,62,74].map((y, i) =>
+                `<line x1="18" y1="${y}" x2="82" y2="${y}" stroke="rgba(200,210,225,0.7)" stroke-width="4" stroke-linecap="round">
                     <animate attributeName="x1" values="18;22;18" dur="${3 + i * 0.5}s" repeatCount="indefinite"/>
                     <animate attributeName="x2" values="82;78;82" dur="${3 + i * 0.5}s" repeatCount="indefinite"/>
                     <animate attributeName="opacity" values="0.4;0.8;0.4" dur="${4 + i * 0.3}s" repeatCount="indefinite"/>
                 </line>`
             ).join('')}
+            <ellipse cx="50" cy="32" rx="22" ry="10" fill="rgba(200,210,225,0.5)">
+                <animateTransform attributeName="transform" type="translate" values="0,0;3,0;0,0" dur="6s" repeatCount="indefinite"/>
+            </ellipse>
         </svg>`;
     },
 
