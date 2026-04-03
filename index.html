@@ -2596,6 +2596,16 @@
     }
 
     // --- Click handler ---
+    // Stores the alert object for the currently-open map popup so the
+    // "View Full Alert" button can open the modal without serialization issues.
+    let _mapPopupAlert = null;
+    let _mapAlertPopup = null;
+
+    function _openMapAlertModal() {
+        if (_mapAlertPopup) { _mapAlertPopup.remove(); _mapAlertPopup = null; }
+        if (_mapPopupAlert) openAlertDetail(_mapPopupAlert, true);
+    }
+
     function handleAlertOverlayClick(e) {
         if (!_alertOverlayEnabled || !map) return;
         if (!map.getLayer('alert-overlay-fill')) return;
@@ -2634,23 +2644,72 @@
             geometry:    alertFeature.geometry || null,
         };
 
-        // Show a compact text popup instead of the full modal
-        const color = ALERT_OVERLAY_COLORS[alertObj.event] || '#AAAAAA';
-        const escHtml = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        const descParts = [alertObj.description, alertObj.instruction].filter(Boolean);
-        const descText = escHtml(descParts.join('\n\n') || 'No additional text provided by NWS.');
-        const fmtTime = typeof _formatAlertTime === 'function' ? _formatAlertTime : (t => t || '—');
-        const timeHtml = `<div class="alert-popup-time"><span>Effective: ${fmtTime(alertObj.onset || alertObj.effective)}</span><span>Expires: ${fmtTime(alertObj.expires)}</span></div>`;
-        const areaHtml = alertObj.areaDesc ? `<div class="alert-popup-area">${escHtml(alertObj.areaDesc)}</div>` : '';
+        // Store for modal button
+        _mapPopupAlert = alertObj;
 
-        new mapboxgl.Popup({ closeButton: true, maxWidth: 'min(380px, calc(100vw - 24px))' })
+        const color = ALERT_OVERLAY_COLORS[alertObj.event] || '#AAAAAA';
+        const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const fmtTime = typeof _formatAlertTime === 'function' ? _formatAlertTime : (t => t || '—');
+
+        // ---- Subtype badge (PDS, Destructive, Tornado Emergency, etc.) ----
+        const subtype = typeof _alertSubtype === 'function' ? _alertSubtype(alertObj) : null;
+        const subtypeBadgeHtml = subtype
+            ? `<span class="alert-subtype-badge ${subtype.colorClass}" style="display:inline-block;margin-bottom:6px;">${escHtml(subtype.label)}</span>`
+            : '';
+
+        // ---- Radar Indicated row (tornado & flash flood warnings) ----
+        let radarRowHtml = '';
+        const eventLower = alertObj.event.toLowerCase();
+        if (eventLower.includes('tornado warning')) {
+            const detection = (params.tornadoDetection?.[0] || '').toUpperCase();
+            if (detection === 'RADAR INDICATED') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#88CCFF;">Yes</span></div>`;
+            } else if (detection === 'OBSERVED') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#FF8888;">No (Observed)</span></div>`;
+            } else if (detection === 'POSSIBLE') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#FFCC66;">Possible</span></div>`;
+            }
+        } else if (eventLower.includes('flash flood warning')) {
+            const detection = (params.flashFloodDetection?.[0] || '').toUpperCase();
+            if (detection === 'RADAR INDICATED') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#88CCFF;">Yes</span></div>`;
+            } else if (detection === 'OBSERVED') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#FF8888;">No (Observed)</span></div>`;
+            }
+        }
+
+        // ---- Hazard details (wind / hail for Severe Thunderstorm Warnings) ----
+        let hazardHtml = '';
+        const tstmDetails = typeof _extractSevereThunderstormDetails === 'function'
+            ? _extractSevereThunderstormDetails(alertObj) : null;
+        if (tstmDetails) {
+            if (tstmDetails.wind) hazardHtml += `<div class="popup-stat"><span class="popup-key">Wind</span><span class="popup-val">${escHtml(tstmDetails.wind)}</span></div>`;
+            if (tstmDetails.hail) hazardHtml += `<div class="popup-stat"><span class="popup-key">Hail</span><span class="popup-val">${escHtml(tstmDetails.hail)}</span></div>`;
+        }
+
+        // ---- Time & area rows ----
+        const timeHtml = `
+            <div class="popup-stat"><span class="popup-key">Effective</span><span class="popup-val" style="font-size:0.78rem;">${fmtTime(alertObj.onset || alertObj.effective)}</span></div>
+            <div class="popup-stat"><span class="popup-key">Expires</span><span class="popup-val" style="font-size:0.78rem;">${fmtTime(alertObj.expires)}</span></div>`;
+        const areaHtml = alertObj.areaDesc
+            ? `<div class="popup-stat" style="flex-direction:column;align-items:flex-start;gap:2px;"><span class="popup-key">Areas</span><span style="font-size:0.78rem;color:var(--text-secondary);line-height:1.4;">${escHtml(alertObj.areaDesc)}</span></div>`
+            : '';
+
+        const popupHtml = `
+            <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};padding-left:8px;font-weight:700;font-size:0.92rem;margin-bottom:6px;">${escHtml(alertObj.event)}</div>
+            ${subtypeBadgeHtml}
+            ${radarRowHtml}
+            ${hazardHtml}
+            ${timeHtml}
+            ${areaHtml}
+            <button onclick="_openMapAlertModal()" style="margin-top:10px;width:100%;padding:7px 10px;background:rgba(100,180,255,0.15);border:1px solid rgba(100,180,255,0.35);color:#8dd4ff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:inherit;font-weight:600;text-align:center;">
+                View Full Alert Text
+            </button>`;
+
+        if (_mapAlertPopup) { _mapAlertPopup.remove(); _mapAlertPopup = null; }
+        _mapAlertPopup = new mapboxgl.Popup({ closeButton: true, maxWidth: 'min(360px, calc(100vw - 24px))' })
             .setLngLat(e.lngLat)
-            .setHTML(`
-                <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};">${escHtml(alertObj.event)}</div>
-                ${timeHtml}
-                ${areaHtml}
-                <div class="alert-popup-body">${descText}</div>
-            `)
+            .setHTML(popupHtml)
             .addTo(map);
     }
 
@@ -2677,13 +2736,30 @@
 
     function _addMyLocationLayer() {
         if (!map) return;
-        const loc = LocationManager.getCurrent();
+        // Try live GPS first; fall back to saved location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                pos => _placeMyLocationMarker(pos.coords.latitude, pos.coords.longitude, 'My Live Location'),
+                () => {
+                    const loc = LocationManager.getCurrent();
+                    _placeMyLocationMarker(loc.lat, loc.lng, loc.name);
+                },
+                { timeout: 6000, maximumAge: 30000 }
+            );
+        } else {
+            const loc = LocationManager.getCurrent();
+            _placeMyLocationMarker(loc.lat, loc.lng, loc.name);
+        }
+    }
+
+    function _placeMyLocationMarker(lat, lng, name) {
+        if (!map) return;
         const geojson = {
             type: 'FeatureCollection',
             features: [{
                 type: 'Feature',
-                geometry: { type: 'Point', coordinates: [loc.lng, loc.lat] },
-                properties: { name: loc.name }
+                geometry: { type: 'Point', coordinates: [lng, lat] },
+                properties: { name }
             }]
         };
         if (map.getSource('my-location-src')) {
@@ -2718,7 +2794,7 @@
                 const name = e.features[0].properties.name || 'My Location';
                 new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
                     .setLngLat(e.lngLat)
-                    .setHTML('<div class="popup-title">' + name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div><div class="popup-stat"><span class="popup-key">Your saved location</span></div>')
+                    .setHTML('<div class="popup-title">' + name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div><div class="popup-stat"><span class="popup-key">Your location</span></div>')
                     .addTo(map);
             });
             map.on('mouseenter', 'my-location-dot', () => { if (map.getCanvas()) map.getCanvas().style.cursor = 'pointer'; });

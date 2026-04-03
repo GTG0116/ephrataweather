@@ -267,17 +267,26 @@ const WeatherIcons = {
     },
 
     _fog(s) {
+        const id = this._id();
         return `<svg viewBox="0 0 100 100" width="${s}" height="${s}">
-            ${[38,50,62,74].map((y, i) =>
-                `<line x1="18" y1="${y}" x2="82" y2="${y}" stroke="rgba(200,210,225,0.7)" stroke-width="4" stroke-linecap="round">
-                    <animate attributeName="x1" values="18;22;18" dur="${3 + i * 0.5}s" repeatCount="indefinite"/>
-                    <animate attributeName="x2" values="82;78;82" dur="${3 + i * 0.5}s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0.4;0.8;0.4" dur="${4 + i * 0.3}s" repeatCount="indefinite"/>
-                </line>`
-            ).join('')}
-            <ellipse cx="50" cy="32" rx="22" ry="10" fill="rgba(200,210,225,0.5)">
-                <animateTransform attributeName="transform" type="translate" values="0,0;3,0;0,0" dur="6s" repeatCount="indefinite"/>
-            </ellipse>
+            <defs>
+                <linearGradient id="${id}cg" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="rgba(225,230,240,0.97)"/>
+                    <stop offset="100%" stop-color="rgba(190,200,215,0.92)"/>
+                </linearGradient>
+            </defs>
+            <!-- Clear cloud body -->
+            <g>
+                <animateTransform attributeName="transform" type="translate" values="0,0;2,0;0,0" dur="10s" repeatCount="indefinite"/>
+                <ellipse cx="50" cy="38" rx="28" ry="13" fill="url(#${id}cg)"/>
+                <ellipse cx="36" cy="32" rx="17" ry="13" fill="rgba(232,237,245,0.97)"/>
+                <ellipse cx="65" cy="34" rx="15" ry="12" fill="rgba(225,232,242,0.94)"/>
+            </g>
+            <!-- Fog lines -->
+            <line x1="16" y1="60" x2="84" y2="60" stroke="rgba(175,188,210,0.80)" stroke-width="4.5" stroke-linecap="round"/>
+            <line x1="22" y1="70" x2="78" y2="70" stroke="rgba(175,188,210,0.68)" stroke-width="4.5" stroke-linecap="round"/>
+            <line x1="16" y1="80" x2="82" y2="80" stroke="rgba(175,188,210,0.55)" stroke-width="4.5" stroke-linecap="round"/>
+            <line x1="22" y1="90" x2="76" y2="90" stroke="rgba(175,188,210,0.42)" stroke-width="4.5" stroke-linecap="round"/>
         </svg>`;
     },
 

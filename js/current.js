@@ -494,7 +494,7 @@ function toggleExtraAlerts() {
     }
 }
 
-function openAlertDetail(indexOrAlert) {
+function openAlertDetail(indexOrAlert, skipMap) {
     const alert = (typeof indexOrAlert === 'number') ? _renderedAlerts[indexOrAlert] : indexOrAlert;
     if (!alert) return;
 
@@ -539,15 +539,26 @@ function openAlertDetail(indexOrAlert) {
     const parts = [alert.description, alert.instruction].filter(Boolean);
     bodyEl.textContent = parts.length ? parts.join('\n\n') : 'No additional text provided by NWS.';
 
+    // Optionally hide the map section (e.g. when opened from the map view)
+    const mapEl = document.getElementById('alert-modal-map');
+    if (skipMap) {
+        if (mapEl) mapEl.style.display = 'none';
+    } else {
+        if (mapEl) mapEl.style.display = '';
+        _drawAlertMap(alert);
+    }
+
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    _drawAlertMap(alert);
 }
 
 function closeAlertDetail() {
     const modal = document.getElementById('alert-modal');
     if (modal) modal.style.display = 'none';
     document.body.style.overflow = '';
+    // Restore map section so next open from current conditions shows it
+    const mapEl = document.getElementById('alert-modal-map');
+    if (mapEl) mapEl.style.display = '';
 }
 
 function _drawAlertMap(alert) {
