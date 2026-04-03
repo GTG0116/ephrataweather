@@ -235,6 +235,11 @@
         .popup-stat:last-child { border-bottom: none; }
         .popup-key { color: var(--text-muted); font-size: 0.78rem; }
         .popup-val { font-weight: 600; font-size: 0.85rem; }
+        .alert-nav-bar { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); }
+        .alert-nav-btn { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); color:rgba(255,255,255,0.75); border-radius:6px; padding:3px 10px; cursor:pointer; font-size:0.8rem; line-height:1.4; transition:background 0.15s,color 0.15s; font-family:inherit; }
+        .alert-nav-btn:hover:not(:disabled) { background:rgba(255,255,255,0.18); color:#fff; }
+        .alert-nav-btn:disabled { opacity:0.3; cursor:default; }
+        .alert-nav-count { font-size:0.76rem; color:var(--text-muted); flex:1; text-align:center; white-space:nowrap; }
 
         .owm-key-warn { display: none; padding: 8px 14px; background: rgba(255,160,64,0.12); border: 1px solid rgba(255,160,64,0.3); border-radius: var(--radius-sm); font-size: 0.78rem; color: #FFA040; margin-top: 6px; }
         .owm-key-warn.visible { display: block; }
@@ -2616,58 +2621,40 @@
     // --- Click handler ---
     // Stores the alert object for the currently-open map popup so the
     // "View Full Alert" button can open the modal without serialization issues.
-    let _mapPopupAlert = null;
+    let _mapPopupAlerts = [];    // all unique alerts at the clicked point
+    let _mapPopupAlertIdx = 0;  // which one is currently shown
     let _mapAlertPopup = null;
 
     function _openMapAlertModal() {
         if (_mapAlertPopup) { _mapAlertPopup.remove(); _mapAlertPopup = null; }
-        if (_mapPopupAlert) openAlertDetail(_mapPopupAlert, true);
+        const alertObj = _mapPopupAlerts[_mapPopupAlertIdx];
+        if (alertObj) openAlertDetail(alertObj, true);
     }
 
-    function handleAlertOverlayClick(e) {
-        if (!_alertOverlayEnabled || !map) return;
-        if (!map.getLayer('alert-overlay-fill')) return;
-        const features = map.queryRenderedFeatures(e.point, { layers: ['alert-overlay-fill'] });
-        if (!features.length) return;
+    // Global so inline onclick handlers in popup HTML can call it
+    window._navMapAlert = function(delta) {
+        if (!_mapPopupAlerts.length) return;
+        _mapPopupAlertIdx = (_mapPopupAlertIdx + delta + _mapPopupAlerts.length) % _mapPopupAlerts.length;
+        if (_mapAlertPopup) {
+            _mapAlertPopup.setHTML(_buildAlertPopupHtml(_mapPopupAlerts[_mapPopupAlertIdx], _mapPopupAlertIdx, _mapPopupAlerts.length));
+        }
+    };
 
-        // Stop other click handlers from also firing (e.g. WPC/fire outlook popup)
-        e.originalEvent._alertHandled = true;
-
-        // NWS GeoJSON places the alert ID at the top-level feature.id, not in properties
-        const alertId = features[0].id;
-        const alertFeature = _activeAlerts.find(f => f.id === alertId)
-                          || _activeAlerts.find(f =>
-                                 f.properties?.event === features[0].properties?.event &&
-                                 f.properties?.expires === features[0].properties?.expires);
-        if (!alertFeature) return;
-
-        const props = alertFeature.properties;
-        // Parse parameters — may be an object already or a JSON string depending on context
-        let params = props.parameters || {};
-        if (typeof params === 'string') { try { params = JSON.parse(params); } catch (_) {} }
-
-        // Build an alert object compatible with openAlertDetail()
-        const alertObj = {
-            event:       props.event       || '',
-            headline:    props.headline    || props.event || '',
-            description: props.description || '',
-            instruction: props.instruction || '',
-            onset:       props.onset       || props.effective,
-            effective:   props.effective,
-            expires:     props.expires,
-            areaDesc:    props.areaDesc    || '',
-            severity:    props.severity    || '',
-            parameters:  params,
-            raw:         { properties: { affectedZones: props.affectedZones || [] } },
-            geometry:    alertFeature.geometry || null,
-        };
-
-        // Store for modal button
-        _mapPopupAlert = alertObj;
-
+    // Build popup HTML for a single alert, with optional prev/next navigation
+    function _buildAlertPopupHtml(alertObj, idx, total) {
         const color = ALERT_OVERLAY_COLORS[alertObj.event] || '#AAAAAA';
         const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         const fmtTime = typeof _formatAlertTime === 'function' ? _formatAlertTime : (t => t || '—');
+        const params = alertObj.parameters || {};
+
+        // ---- Nav bar (only when multiple alerts overlap) ----
+        const navHtml = total > 1
+            ? `<div class="alert-nav-bar">
+                   <button class="alert-nav-btn" ${idx === 0 ? 'disabled' : ''} onclick="_navMapAlert(-1)" title="Previous alert">&#8592;</button>
+                   <span class="alert-nav-count">${idx + 1} of ${total}</span>
+                   <button class="alert-nav-btn" ${idx === total - 1 ? 'disabled' : ''} onclick="_navMapAlert(1)" title="Next alert">&#8594;</button>
+               </div>`
+            : '';
 
         // ---- Subtype badge (PDS, Destructive, Tornado Emergency, etc.) ----
         const subtype = typeof _alertSubtype === 'function' ? _alertSubtype(alertObj) : null;
@@ -2713,7 +2700,7 @@
             ? `<div class="popup-stat" style="flex-direction:column;align-items:flex-start;gap:2px;"><span class="popup-key">Areas</span><span style="font-size:0.78rem;color:var(--text-secondary);line-height:1.4;max-height:3.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escHtml(alertObj.areaDesc)}</span></div>`
             : '';
 
-        const popupHtml = `
+        return `${navHtml}
             <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};padding-left:8px;font-weight:700;font-size:0.92rem;margin-bottom:6px;">${escHtml(alertObj.event)}</div>
             ${subtypeBadgeHtml}
             ${radarRowHtml}
@@ -2723,11 +2710,60 @@
             <button onclick="_openMapAlertModal()" style="margin-top:10px;width:100%;padding:7px 10px;background:rgba(100,180,255,0.15);border:1px solid rgba(100,180,255,0.35);color:#8dd4ff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:inherit;font-weight:600;text-align:center;">
                 View Full Alert Text
             </button>`;
+    }
+
+    function handleAlertOverlayClick(e) {
+        if (!_alertOverlayEnabled || !map) return;
+        if (!map.getLayer('alert-overlay-fill')) return;
+        const features = map.queryRenderedFeatures(e.point, { layers: ['alert-overlay-fill'] });
+        if (!features.length) return;
+
+        // Stop other click handlers from also firing (e.g. WPC/fire outlook popup)
+        e.originalEvent._alertHandled = true;
+
+        // Collect ALL unique alert features at the clicked point
+        const seenKeys = new Set();
+        const alertObjs = [];
+        for (const feat of features) {
+            const alertFeature = _activeAlerts.find(f => f.id === feat.id)
+                              || _activeAlerts.find(f =>
+                                     f.properties?.event === feat.properties?.event &&
+                                     f.properties?.expires === feat.properties?.expires);
+            if (!alertFeature) continue;
+            const key = alertFeature.id
+                     || (alertFeature.properties?.event + '|' + alertFeature.properties?.expires);
+            if (seenKeys.has(key)) continue;
+            seenKeys.add(key);
+
+            const props = alertFeature.properties;
+            let params = props.parameters || {};
+            if (typeof params === 'string') { try { params = JSON.parse(params); } catch (_) {} }
+
+            alertObjs.push({
+                event:       props.event       || '',
+                headline:    props.headline    || props.event || '',
+                description: props.description || '',
+                instruction: props.instruction || '',
+                onset:       props.onset       || props.effective,
+                effective:   props.effective,
+                expires:     props.expires,
+                areaDesc:    props.areaDesc    || '',
+                severity:    props.severity    || '',
+                parameters:  params,
+                raw:         { properties: { affectedZones: props.affectedZones || [] } },
+                geometry:    alertFeature.geometry || null,
+            });
+        }
+        if (!alertObjs.length) return;
+
+        // Store for nav and modal
+        _mapPopupAlerts = alertObjs;
+        _mapPopupAlertIdx = 0;
 
         if (_mapAlertPopup) { _mapAlertPopup.remove(); _mapAlertPopup = null; }
         _mapAlertPopup = new mapboxgl.Popup({ closeButton: true, maxWidth: 'min(360px, calc(100vw - 24px))' })
             .setLngLat(e.lngLat)
-            .setHTML(popupHtml)
+            .setHTML(_buildAlertPopupHtml(alertObjs[0], 0, alertObjs.length))
             .addTo(map);
     }
 
