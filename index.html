@@ -2498,30 +2498,20 @@
         });
         if (zoneUrlSet.size === 0) return;
 
-        // Fetch all unique zone polygons in parallel (cap at 500 to handle nationwide outbreaks)
-        const urlArr = [...zoneUrlSet].slice(0, 500);
+        // Fetch all unique zone polygons in parallel (cap at 60)
+        const urlArr = [...zoneUrlSet].slice(0, 60);
         const zoneGeomMap = new Map(); // url -> geometry
 
-        // Worker-pool: 30 concurrent fetches running continuously.
-        // This avoids head-of-line blocking from sequential batches while
-        // keeping load on the NWS zone API at a reasonable level.
-        let _zoneIdx = 0;
-        async function _zoneWorker() {
-            while (_zoneIdx < urlArr.length) {
-                const url = urlArr[_zoneIdx++];
-                try {
-                    const r = await fetch(url, { headers: { 'Accept': 'application/geo+json' } });
-                    if (!r.ok) continue;
-                    const d = await r.json();
-                    // Normalize to Polygon/MultiPolygon — Mapbox can't render GeometryCollection
-                    const geom = _normalizeGeometry(d.geometry);
-                    if (geom) zoneGeomMap.set(url, geom);
-                } catch (_) {}
-            }
-        }
-        await Promise.allSettled(
-            Array.from({ length: Math.min(30, urlArr.length) }, _zoneWorker)
-        );
+        await Promise.allSettled(urlArr.map(async url => {
+            try {
+                const r = await fetch(url, { headers: { 'Accept': 'application/geo+json' } });
+                if (!r.ok) return;
+                const d = await r.json();
+                // Normalize to Polygon/MultiPolygon — Mapbox can't render GeometryCollection
+                const geom = _normalizeGeometry(d.geometry);
+                if (geom) zoneGeomMap.set(url, geom);
+            } catch (_) {}
+        }));
 
         // Attach merged geometries to each alert as a valid Polygon or MultiPolygon
         alerts.forEach(alert => {
@@ -2537,7 +2527,7 @@
         if (!map || !_alertOverlayEnabled) return;
         try {
             const resp = await fetch(
-                'https://api.weather.gov/alerts/active?status=actual&limit=500',
+                'https://api.weather.gov/alerts/active?status=actual&message_type=alert',
                 { headers: { 'Accept': 'application/geo+json' } }
             );
             if (!resp.ok) return;
@@ -2546,30 +2536,21 @@
                 ALERT_OVERLAY_KEYS.includes(f.properties?.event || '')
             );
 
-            // Normalize any inline geometries (NWS sometimes returns GeometryCollection
+            // Normalize any existing geometries (NWS sometimes returns GeometryCollection
             // which Mapbox GL JS cannot render — flatten to Polygon/MultiPolygon)
             alerts.forEach(f => {
                 if (f.geometry) f.geometry = _normalizeGeometry(f.geometry);
             });
 
-            // Render alerts that already carry inline polygon geometry immediately
-            // (modern storm-based warnings from NWS include a polygon in the response)
-            // so the user sees something right away without waiting for zone resolution.
-            _activeAlerts = alerts.filter(f => f.geometry);
-            if (_activeAlerts.length > 0) _applyAlertFilters();
-
-            // Resolve zone polygons for county/zone-based alerts (geometry === null).
-            // These require a separate per-zone API call to get the county boundary.
+            // Resolve zone polygons for alerts that still lack geometry
             const nullGeomAlerts = alerts.filter(f => !f.geometry);
             if (nullGeomAlerts.length > 0) {
                 await _resolveZoneGeometries(nullGeomAlerts);
-                // Merge newly-resolved alerts into the active set and re-render
-                const resolved = nullGeomAlerts.filter(f => f.geometry);
-                if (resolved.length > 0 && _alertOverlayEnabled) {
-                    _activeAlerts = [..._activeAlerts, ...resolved];
-                    _applyAlertFilters();
-                }
             }
+
+            // Only keep alerts that now have geometry to render
+            _activeAlerts = alerts.filter(f => f.geometry);
+            _applyAlertFilters();
         } catch (e) {
             console.warn('Alert overlay load error:', e);
         }
@@ -2623,179 +2604,15 @@
         _applyAlertFilters();
     }
 
-    // --- Click handler with multi-item popup navigation ---
-    // _mapPopupItems holds all items (alerts + optional layer value) at the click point.
-    // The user can cycle through them with prev/next arrows.
-    let _mapPopupItems   = [];   // [{type:'alert', alertObj} | {type:'layer', html}]
-    let _mapPopupItemIdx = 0;    // currently displayed item index
-    let _mapPopupAlert   = null; // current alertObj — used by _openMapAlertModal
-    let _mapAlertPopup   = null; // the live Popup instance
+    // --- Click handler ---
+    // Stores the alert object for the currently-open map popup so the
+    // "View Full Alert" button can open the modal without serialization issues.
+    let _mapPopupAlert = null;
+    let _mapAlertPopup = null;
 
     function _openMapAlertModal() {
         if (_mapAlertPopup) { _mapAlertPopup.remove(); _mapAlertPopup = null; }
         if (_mapPopupAlert) openAlertDetail(_mapPopupAlert, true);
-    }
-
-    // Build the full popup HTML for item at index `idx` out of `total`.
-    function _buildPopupItemHtml(idx, total) {
-        const item    = _mapPopupItems[idx];
-        const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-        // Navigation bar — only rendered when there is more than one item
-        let navHtml = '';
-        if (total > 1) {
-            const pd = idx === 0;
-            const nd = idx === total - 1;
-            const btnStyle = (disabled) =>
-                `border:1px solid rgba(255,255,255,0.22);border-radius:50%;width:28px;height:28px;` +
-                `cursor:${disabled?'default':'pointer'};font-size:17px;line-height:1;` +
-                `display:flex;align-items:center;justify-content:center;flex-shrink:0;` +
-                `font-family:inherit;padding:0;` +
-                `background:${disabled?'rgba(255,255,255,0.05)':'rgba(255,255,255,0.13)'};` +
-                `color:${disabled?'rgba(255,255,255,0.22)':'rgba(255,255,255,0.88)'};`;
-            navHtml = `
-                <div style="display:flex;align-items:center;justify-content:space-between;` +
-                          `margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,0.1);">
-                    <button onclick="_mapPopupNav(-1)" ${pd?'disabled':''} style="${btnStyle(pd)}">&#8249;</button>
-                    <span style="font-size:0.72rem;color:rgba(255,255,255,0.42);font-weight:500;letter-spacing:0.04em;">
-                        ${idx+1}&nbsp;/&nbsp;${total}
-                    </span>
-                    <button onclick="_mapPopupNav(1)" ${nd?'disabled':''} style="${btnStyle(nd)}">&#8250;</button>
-                </div>`;
-        }
-
-        // Layer-value item (RTMA / MRMS)
-        if (item.type === 'layer') {
-            return navHtml + item.html;
-        }
-
-        // Alert item
-        const alertObj = item.alertObj;
-        const color    = ALERT_OVERLAY_COLORS[alertObj.event] || '#AAAAAA';
-        const fmtTime  = typeof _formatAlertTime === 'function' ? _formatAlertTime : (t => t || '—');
-
-        const subtype = typeof _alertSubtype === 'function' ? _alertSubtype(alertObj) : null;
-        const subtypeBadgeHtml = subtype
-            ? `<span class="alert-subtype-badge ${subtype.colorClass}" style="display:inline-block;margin-bottom:6px;">${escHtml(subtype.label)}</span>`
-            : '';
-
-        const params     = alertObj.parameters || {};
-        const eventLower = alertObj.event.toLowerCase();
-        let radarRowHtml = '';
-        if (eventLower.includes('tornado warning')) {
-            const det = (params.tornadoDetection?.[0] || '').toUpperCase();
-            if (det === 'RADAR INDICATED')
-                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Detection</span><span class="popup-val" style="color:#88CCFF;">Radar Indicated</span></div>`;
-            else if (det === 'OBSERVED')
-                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Detection</span><span class="popup-val" style="color:#FF8888;">Observed</span></div>`;
-            else if (det === 'POSSIBLE')
-                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Detection</span><span class="popup-val" style="color:#FFCC66;">Possible</span></div>`;
-        } else if (eventLower.includes('flash flood warning')) {
-            const det = (params.flashFloodDetection?.[0] || '').toUpperCase();
-            if (det === 'RADAR INDICATED')
-                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Detection</span><span class="popup-val" style="color:#88CCFF;">Radar Indicated</span></div>`;
-            else if (det === 'OBSERVED')
-                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Detection</span><span class="popup-val" style="color:#FF8888;">Observed</span></div>`;
-        }
-
-        let hazardHtml = '';
-        const tstmDetails = typeof _extractSevereThunderstormDetails === 'function'
-            ? _extractSevereThunderstormDetails(alertObj) : null;
-        if (tstmDetails) {
-            if (tstmDetails.wind) hazardHtml += `<div class="popup-stat"><span class="popup-key">Wind</span><span class="popup-val">${escHtml(tstmDetails.wind)}</span></div>`;
-            if (tstmDetails.hail) hazardHtml += `<div class="popup-stat"><span class="popup-key">Hail</span><span class="popup-val">${escHtml(tstmDetails.hail)}</span></div>`;
-        }
-
-        const timeHtml = `
-            <div class="popup-stat"><span class="popup-key">Effective</span><span class="popup-val" style="font-size:0.78rem;">${fmtTime(alertObj.onset || alertObj.effective)}</span></div>
-            <div class="popup-stat"><span class="popup-key">Expires</span><span class="popup-val" style="font-size:0.78rem;">${fmtTime(alertObj.expires)}</span></div>`;
-        const areaHtml = alertObj.areaDesc
-            ? `<div class="popup-stat" style="flex-direction:column;align-items:flex-start;gap:2px;"><span class="popup-key">Areas</span><span style="font-size:0.78rem;color:var(--text-secondary);line-height:1.4;max-height:3.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escHtml(alertObj.areaDesc)}</span></div>`
-            : '';
-
-        return `${navHtml}
-            <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};padding-left:8px;font-weight:700;font-size:0.92rem;margin-bottom:6px;">${escHtml(alertObj.event)}</div>
-            ${subtypeBadgeHtml}${radarRowHtml}${hazardHtml}${timeHtml}${areaHtml}
-            <button onclick="_openMapAlertModal()" style="margin-top:10px;width:100%;padding:7px 10px;background:rgba(100,180,255,0.15);border:1px solid rgba(100,180,255,0.35);color:#8dd4ff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:inherit;font-weight:600;text-align:center;">
-                View Full Alert Text
-            </button>`;
-    }
-
-    // Navigate the popup to the previous (delta=-1) or next (delta=+1) item.
-    function _mapPopupNav(delta) {
-        const newIdx = _mapPopupItemIdx + delta;
-        if (newIdx < 0 || newIdx >= _mapPopupItems.length) return;
-        _mapPopupItemIdx = newIdx;
-        const item = _mapPopupItems[newIdx];
-        _mapPopupAlert = item.type === 'alert' ? item.alertObj : null;
-        if (_mapAlertPopup) {
-            _mapAlertPopup.setHTML(_buildPopupItemHtml(newIdx, _mapPopupItems.length));
-        }
-    }
-
-    // Async: try to read the value from the currently-active data layer (RTMA or MRMS)
-    // at the given lngLat. Returns {type:'layer', html} or null if not applicable.
-    async function _tryFetchLayerValue(lngLat) {
-        const { lat, lng } = lngLat;
-        try {
-            if (currentLayer === 'rtma' && _rtmaLoaded) {
-                if (lat < RTMA_BOUNDS.latMin || lat > RTMA_BOUNDS.latMax ||
-                    lng < RTMA_BOUNDS.lngMin || lng > RTMA_BOUNDS.lngMax) return null;
-                let rows = RTMA_ROWS, cols = RTMA_COLS;
-                try {
-                    const meta = await _fetchRtmaMetadata();
-                    if (meta?.data_rows) rows = meta.data_rows;
-                    if (meta?.data_cols) cols = meta.data_cols;
-                } catch (_) {}
-                const yMin   = _rtmaMercatorY(RTMA_BOUNDS.latMin);
-                const yMax   = _rtmaMercatorY(RTMA_BOUNDS.latMax);
-                const col    = Math.round((lng - RTMA_BOUNDS.lngMin) / (RTMA_BOUNDS.lngMax - RTMA_BOUNDS.lngMin) * (cols - 1));
-                const row    = Math.round((_rtmaMercatorY(lat) - yMin) / (yMax - yMin) * (rows - 1));
-                if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
-                const data   = await _fetchRtmaData(_currentRtmaProduct);
-                const val    = data[row * cols + col];
-                if (!isFinite(val) || Math.abs(val) > 9e10) return null;
-                const prod   = RTMA_PRODUCTS[_currentRtmaProduct];
-                const formatted = prod?.format ? prod.format(val) : val.toFixed(1);
-                return {
-                    type: 'layer',
-                    html: `<div class="popup-title">RTMA Analysis</div>` +
-                          `<div class="popup-stat"><span class="popup-key">${prod?.label || _currentRtmaProduct}</span>` +
-                          `<span class="popup-val">${formatted}</span></div>`
-                };
-            } else if (currentLayer === 'radar' && _radarLoaded &&
-                       _currentRadarProduct !== 'refl' && _currentRadarProduct !== 'precip_type') {
-                const sc      = MRMS_SECTORS[_currentMrmsSector].coords;
-                const LAT_MIN = sc[3][1], LAT_MAX = sc[0][1];
-                const LON_MIN = sc[0][0], LON_MAX = sc[1][0];
-                if (lat < LAT_MIN || lat > LAT_MAX || lng < LON_MIN || lng > LON_MAX) return null;
-                const def  = MRMS_PRODUCT_DEFS[_currentRadarProduct];
-                const url  = _mrmsValueFrameUrl(_radarFrameIdx);
-                const { imgData, width, height } = await _getMrmsPixelData(url);
-                const mercY   = lt => Math.log(Math.tan(Math.PI / 4 + lt * Math.PI / 180 / 2));
-                const mercTop = mercY(LAT_MAX), mercBot = mercY(LAT_MIN);
-                const px  = Math.round((lng - LON_MIN) / (LON_MAX - LON_MIN) * (width  - 1));
-                const py  = Math.round((mercTop - mercY(lat)) / (mercTop - mercBot) * (height - 1));
-                const cx  = Math.max(0, Math.min(width  - 1, px));
-                const cy  = Math.max(0, Math.min(height - 1, py));
-                const i   = (cy * width + cx) * 4;
-                const r   = imgData.data[i], g = imgData.data[i + 1], a = imgData.data[i + 3];
-                if (a < 10) return null;
-                const valueStr = _decodeMrmsValue(_currentRadarProduct, r, g);
-                const cacheKey = _currentMrmsSector + ':' + _currentRadarProduct;
-                const frameMeta = (_radarMeta[cacheKey] || [])[_radarFrameIdx];
-                const timeStr  = frameMeta?.time || '';
-                return {
-                    type: 'layer',
-                    html: `<div class="popup-title">MRMS ${def?.label || ''}</div>` +
-                          `<div class="popup-stat"><span class="popup-key">${def?.label || _currentRadarProduct}</span>` +
-                          `<span class="popup-val">${valueStr}</span></div>` +
-                          (timeStr ? `<div class="popup-stat"><span class="popup-key" style="font-size:0.72rem;">Valid</span>` +
-                                     `<span class="popup-val" style="font-size:0.72rem;">${timeStr}</span></div>` : '')
-                };
-            }
-        } catch (_) {}
-        return null;
     }
 
     function handleAlertOverlayClick(e) {
@@ -2807,62 +2624,102 @@
         // Stop other click handlers from also firing (e.g. WPC/fire outlook popup)
         e.originalEvent._alertHandled = true;
 
-        // Collect ALL distinct alert features at this click point (overlapping polygons)
-        const seenIds  = new Set();
-        const alertItems = [];
-        for (const f of features) {
-            const alertFeature = _activeAlerts.find(a => a.id === f.id)
-                              || _activeAlerts.find(a =>
-                                     a.properties?.event === f.properties?.event &&
-                                     a.properties?.expires === f.properties?.expires);
-            if (!alertFeature) continue;
-            const uid = alertFeature.id ||
-                        (alertFeature.properties?.event + '|' + alertFeature.properties?.expires);
-            if (seenIds.has(uid)) continue;
-            seenIds.add(uid);
+        // NWS GeoJSON places the alert ID at the top-level feature.id, not in properties
+        const alertId = features[0].id;
+        const alertFeature = _activeAlerts.find(f => f.id === alertId)
+                          || _activeAlerts.find(f =>
+                                 f.properties?.event === features[0].properties?.event &&
+                                 f.properties?.expires === features[0].properties?.expires);
+        if (!alertFeature) return;
 
-            const props = alertFeature.properties;
-            let params  = props.parameters || {};
-            if (typeof params === 'string') { try { params = JSON.parse(params); } catch (_) {} }
+        const props = alertFeature.properties;
+        // Parse parameters — may be an object already or a JSON string depending on context
+        let params = props.parameters || {};
+        if (typeof params === 'string') { try { params = JSON.parse(params); } catch (_) {} }
 
-            alertItems.push({
-                type: 'alert',
-                alertObj: {
-                    event:       props.event       || '',
-                    headline:    props.headline    || props.event || '',
-                    description: props.description || '',
-                    instruction: props.instruction || '',
-                    onset:       props.onset       || props.effective,
-                    effective:   props.effective,
-                    expires:     props.expires,
-                    areaDesc:    props.areaDesc    || '',
-                    severity:    props.severity    || '',
-                    parameters:  params,
-                    raw:         { properties: { affectedZones: props.affectedZones || [] } },
-                    geometry:    alertFeature.geometry || null,
-                }
-            });
+        // Build an alert object compatible with openAlertDetail()
+        const alertObj = {
+            event:       props.event       || '',
+            headline:    props.headline    || props.event || '',
+            description: props.description || '',
+            instruction: props.instruction || '',
+            onset:       props.onset       || props.effective,
+            effective:   props.effective,
+            expires:     props.expires,
+            areaDesc:    props.areaDesc    || '',
+            severity:    props.severity    || '',
+            parameters:  params,
+            raw:         { properties: { affectedZones: props.affectedZones || [] } },
+            geometry:    alertFeature.geometry || null,
+        };
+
+        // Store for modal button
+        _mapPopupAlert = alertObj;
+
+        const color = ALERT_OVERLAY_COLORS[alertObj.event] || '#AAAAAA';
+        const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const fmtTime = typeof _formatAlertTime === 'function' ? _formatAlertTime : (t => t || '—');
+
+        // ---- Subtype badge (PDS, Destructive, Tornado Emergency, etc.) ----
+        const subtype = typeof _alertSubtype === 'function' ? _alertSubtype(alertObj) : null;
+        const subtypeBadgeHtml = subtype
+            ? `<span class="alert-subtype-badge ${subtype.colorClass}" style="display:inline-block;margin-bottom:6px;">${escHtml(subtype.label)}</span>`
+            : '';
+
+        // ---- Radar Indicated row (tornado & flash flood warnings) ----
+        let radarRowHtml = '';
+        const eventLower = alertObj.event.toLowerCase();
+        if (eventLower.includes('tornado warning')) {
+            const detection = (params.tornadoDetection?.[0] || '').toUpperCase();
+            if (detection === 'RADAR INDICATED') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#88CCFF;">Yes</span></div>`;
+            } else if (detection === 'OBSERVED') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#FF8888;">No (Observed)</span></div>`;
+            } else if (detection === 'POSSIBLE') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#FFCC66;">Possible</span></div>`;
+            }
+        } else if (eventLower.includes('flash flood warning')) {
+            const detection = (params.flashFloodDetection?.[0] || '').toUpperCase();
+            if (detection === 'RADAR INDICATED') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#88CCFF;">Yes</span></div>`;
+            } else if (detection === 'OBSERVED') {
+                radarRowHtml = `<div class="popup-stat"><span class="popup-key">Radar Indicated</span><span class="popup-val" style="color:#FF8888;">No (Observed)</span></div>`;
+            }
         }
-        if (!alertItems.length) return;
 
-        _mapPopupItems   = alertItems;
-        _mapPopupItemIdx = 0;
-        _mapPopupAlert   = alertItems[0].alertObj;
+        // ---- Hazard details (wind / hail for Severe Thunderstorm Warnings) ----
+        let hazardHtml = '';
+        const tstmDetails = typeof _extractSevereThunderstormDetails === 'function'
+            ? _extractSevereThunderstormDetails(alertObj) : null;
+        if (tstmDetails) {
+            if (tstmDetails.wind) hazardHtml += `<div class="popup-stat"><span class="popup-key">Wind</span><span class="popup-val">${escHtml(tstmDetails.wind)}</span></div>`;
+            if (tstmDetails.hail) hazardHtml += `<div class="popup-stat"><span class="popup-key">Hail</span><span class="popup-val">${escHtml(tstmDetails.hail)}</span></div>`;
+        }
+
+        // ---- Time & area rows ----
+        const timeHtml = `
+            <div class="popup-stat"><span class="popup-key">Effective</span><span class="popup-val" style="font-size:0.78rem;">${fmtTime(alertObj.onset || alertObj.effective)}</span></div>
+            <div class="popup-stat"><span class="popup-key">Expires</span><span class="popup-val" style="font-size:0.78rem;">${fmtTime(alertObj.expires)}</span></div>`;
+        const areaHtml = alertObj.areaDesc
+            ? `<div class="popup-stat" style="flex-direction:column;align-items:flex-start;gap:2px;"><span class="popup-key">Areas</span><span style="font-size:0.78rem;color:var(--text-secondary);line-height:1.4;max-height:3.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escHtml(alertObj.areaDesc)}</span></div>`
+            : '';
+
+        const popupHtml = `
+            <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};padding-left:8px;font-weight:700;font-size:0.92rem;margin-bottom:6px;">${escHtml(alertObj.event)}</div>
+            ${subtypeBadgeHtml}
+            ${radarRowHtml}
+            ${hazardHtml}
+            ${timeHtml}
+            ${areaHtml}
+            <button onclick="_openMapAlertModal()" style="margin-top:10px;width:100%;padding:7px 10px;background:rgba(100,180,255,0.15);border:1px solid rgba(100,180,255,0.35);color:#8dd4ff;border-radius:8px;cursor:pointer;font-size:0.82rem;font-family:inherit;font-weight:600;text-align:center;">
+                View Full Alert Text
+            </button>`;
 
         if (_mapAlertPopup) { _mapAlertPopup.remove(); _mapAlertPopup = null; }
         _mapAlertPopup = new mapboxgl.Popup({ closeButton: true, maxWidth: 'min(360px, calc(100vw - 24px))' })
             .setLngLat(e.lngLat)
-            .setHTML(_buildPopupItemHtml(0, _mapPopupItems.length))
+            .setHTML(popupHtml)
             .addTo(map);
-
-        // Async: if a data layer (RTMA / MRMS) is also active, append its value
-        // as an extra navigation item so the user can view both.
-        _tryFetchLayerValue(e.lngLat).then(layerItem => {
-            if (!layerItem || !_mapAlertPopup) return;
-            _mapPopupItems.push(layerItem);
-            // Re-render current page — nav arrows will now appear (or counter updates)
-            _mapAlertPopup.setHTML(_buildPopupItemHtml(_mapPopupItemIdx, _mapPopupItems.length));
-        }).catch(() => {});
     }
 
     // ============================================================
