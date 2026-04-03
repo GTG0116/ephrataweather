@@ -144,23 +144,16 @@ const LocationManager = {
     },
 
     // Initialize on page load.
-    // If a location is already stored (from a previous search or visit) use it
-    // so the user sees the last place they were viewing.
-    // On first ever visit (nothing stored) try geolocation, then fall back to
-    // the hardcoded default.
+    // Always attempt live geolocation first so the location stays current.
+    // Falls back to stored location, then the hardcoded default if geo is
+    // unavailable or denied.
     async init() {
-        const stored = localStorage.getItem(this.STORAGE_KEY);
-        if (stored) {
-            // Already have a saved location — use it as-is.
-            return this.getCurrent();
-        }
-        // First visit: try geolocation
         const pos = await this.detectLocation();
         if (pos) {
             const name = await this.reverseGeocode(pos.lat, pos.lng);
             if (name) return this.setCurrent(pos.lat, pos.lng, name);
         }
-        // Geolocation unavailable — use hardcoded default
+        // Geolocation unavailable or denied — use stored or default
         return this.getCurrent();
     }
 };
