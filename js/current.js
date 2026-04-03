@@ -155,6 +155,8 @@ let _alertMap = null;
 // Timezone of the currently-viewed location (IANA string, e.g. "America/Chicago").
 // Set when alerts are loaded so times are shown in the location's local timezone.
 let _locationTimeZone = null;
+// Alert currently shown in the summary popup (used by openFullAlertText)
+let _summaryAlert = null;
 
 function _escapeHtml(str) {
     return String(str || '').replace(/[&<>"']/g, (ch) => ({
@@ -266,6 +268,48 @@ function _extractSevereThunderstormDetails(alert) {
     return (wind || hail) ? { wind, hail } : null;
 }
 
+// ---- Radar indicated status for eligible alert types ----
+// Returns { label } or null if not applicable / already covered by subtype badge.
+function _getRadarStatus(alert) {
+    const event = (alert.event || '').toLowerCase();
+    const params = alert.parameters || {};
+
+    if (event.includes('tornado warning')) {
+        const detection = (params.tornadoDetection?.[0] || '').toUpperCase();
+        if (detection.includes('RADAR')) return { label: 'Radar Indicated' };
+        // OBSERVED and PDS are already shown via _alertSubtype badge
+        return null;
+    }
+
+    if (event.includes('flash flood warning')) {
+        const detection = (params.flashFloodDetection?.[0] || '').toUpperCase();
+        if (detection.includes('RADAR')) return { label: 'Radar Indicated' };
+        if (detection.includes('GAUGE')) return { label: 'Gauge Indicated' };
+        // OBSERVED is already shown via _alertSubtype badge
+        return null;
+    }
+
+    return null;
+}
+
+// ---- Extract the * HAZARDS... line from alert description ----
+function _extractHazardsLine(alert) {
+    const desc = alert.description || '';
+    const match = desc.match(/\*\s*HAZARDS?\.{3}(.+?)(?=\n\*|\n\n|$)/is);
+    if (match) return match[1].trim();
+
+    // For severe thunderstorm warnings, build from wind/hail details
+    const tstmDetails = _extractSevereThunderstormDetails(alert);
+    if (tstmDetails) {
+        const parts = [];
+        if (tstmDetails.wind) parts.push(`Wind gusts to ${tstmDetails.wind}`);
+        if (tstmDetails.hail) parts.push(`Hail up to ${tstmDetails.hail}`);
+        if (parts.length) return parts.join(', ');
+    }
+
+    return null;
+}
+
 function _alertClass(alert) {
     const event = (alert.event || '').toLowerCase();
     const severity = (alert.severity || '').toLowerCase();
@@ -359,7 +403,7 @@ function _buildAlertBannerHTML(alert, i) {
     }
 
     return `
-        <button type="button" class="alert-banner ${_alertClass(alert)} fade-in" style="animation-delay:${i * 80}ms" onclick="openAlertDetail(${i})">
+        <button type="button" class="alert-banner ${_alertClass(alert)} fade-in" style="animation-delay:${i * 80}ms" onclick="openAlertSummary(${i})">
             <div class="alert-header">
                 ${iconSvg}
                 <span class="alert-title">${headline}</span>
@@ -548,6 +592,111 @@ function closeAlertDetail() {
     const modal = document.getElementById('alert-modal');
     if (modal) modal.style.display = 'none';
     document.body.style.overflow = '';
+}
+
+// ---- Alert Summary Popup (shown when clicking an alert banner) ----
+function openAlertSummary(indexOrAlert) {
+    const alert = (typeof indexOrAlert === 'number') ? _renderedAlerts[indexOrAlert] : indexOrAlert;
+    if (!alert) return;
+    _summaryAlert = alert;
+
+    const modal = document.getElementById('alert-summary-modal');
+    if (!modal) { openAlertDetail(indexOrAlert); return; }
+
+    document.getElementById('alert-summary-title').textContent = alert.headline || alert.event || 'Weather Alert';
+    document.getElementById('alert-summary-meta').textContent =
+        `Effective: ${_formatAlertTime(alert.onset || alert.effective)} \u2022 Expires: ${_formatAlertTime(alert.expires)} \u2022 Areas: ${alert.areaDesc || 'N/A'}`;
+
+    // Badges: alert level + radar indicated
+    const badgesEl = document.getElementById('alert-summary-badges');
+    badgesEl.innerHTML = '';
+    const subtype = _alertSubtype(alert);
+    if (subtype) {
+        const badge = document.createElement('span');
+        badge.className = `alert-subtype-badge ${subtype.colorClass}`;
+        badge.textContent = subtype.label;
+        badgesEl.appendChild(badge);
+    }
+    const radarStatus = _getRadarStatus(alert);
+    if (radarStatus) {
+        const badge = document.createElement('span');
+        badge.className = 'alert-radar-badge';
+        badge.textContent = radarStatus.label;
+        badgesEl.appendChild(badge);
+    }
+
+    // Hazards section
+    const hazardsEl = document.getElementById('alert-summary-hazards');
+    const hazards = _extractHazardsLine(alert);
+    if (hazards) {
+        hazardsEl.style.display = 'block';
+        hazardsEl.innerHTML = `<div class="alert-summary-hazards-label">Hazards</div><div class="alert-summary-hazards-text">${_escapeHtml(hazards)}</div>`;
+    } else {
+        hazardsEl.style.display = 'none';
+        hazardsEl.innerHTML = '';
+    }
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+function closeAlertSummary() {
+    const modal = document.getElementById('alert-summary-modal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
+    _summaryAlert = null;
+}
+
+// ---- Full Alert Text Popup (no map, opened from summary popup) ----
+function openFullAlertText() {
+    if (!_summaryAlert) return;
+    const alert = _summaryAlert;
+
+    const modal = document.getElementById('alert-text-modal');
+    if (!modal) return;
+
+    document.getElementById('alert-text-modal-title').textContent = alert.headline || alert.event || 'Weather Alert';
+    document.getElementById('alert-text-modal-meta').textContent =
+        `Effective: ${_formatAlertTime(alert.onset || alert.effective)} \u2022 Expires: ${_formatAlertTime(alert.expires)} \u2022 Areas: ${alert.areaDesc || 'N/A'}`;
+
+    // Subtype badge + thunderstorm details (same as openAlertDetail)
+    const extraEl = document.getElementById('alert-text-modal-extra');
+    extraEl.innerHTML = '';
+    extraEl.style.cssText = '';
+    const subtype = _alertSubtype(alert);
+    const tstmDetails = _extractSevereThunderstormDetails(alert);
+    if (subtype || tstmDetails) {
+        extraEl.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;';
+        if (subtype) {
+            const badge = document.createElement('span');
+            badge.className = `alert-subtype-badge ${subtype.colorClass}`;
+            badge.textContent = subtype.label;
+            extraEl.appendChild(badge);
+        }
+        if (tstmDetails) {
+            const parts = [];
+            if (tstmDetails.wind) parts.push(`Wind: ${tstmDetails.wind}`);
+            if (tstmDetails.hail) parts.push(`Hail: ${tstmDetails.hail}`);
+            if (parts.length) {
+                const detailSpan = document.createElement('span');
+                detailSpan.className = 'alert-tstm-details';
+                detailSpan.textContent = parts.join('  \u2022  ');
+                extraEl.appendChild(detailSpan);
+            }
+        }
+    }
+
+    const parts = [alert.description, alert.instruction].filter(Boolean);
+    document.getElementById('alert-text-modal-body').textContent =
+        parts.length ? parts.join('\n\n') : 'No additional text provided by NWS.';
+
+    modal.style.display = 'flex';
+    // Keep body scroll locked (summary remains in background)
+}
+
+function closeAlertText() {
+    const modal = document.getElementById('alert-text-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 function _drawAlertMap(alert) {
