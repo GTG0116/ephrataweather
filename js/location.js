@@ -291,17 +291,28 @@ function initLocationSearch() {
         if (q.length < 2) {
             resultsEl.innerHTML = '';
             lastResults = [];
+            // Restore favorites section when search is blank
+            favoritesEl.style.display = '';
             return;
         }
+        // Hide the favorites chips while searching — favorites that match
+        // will appear at the top of the results list instead
+        favoritesEl.style.display = 'none';
         searchTimeout = setTimeout(async () => {
             const results = await LocationManager.search(q);
-            // Sort favorites to top
+            // Sort favorites to top of results
             const favNames = LocationManager.getFavorites().map(f => f.name);
+            const hasFavMatch = results.some(r => favNames.includes(r.name));
             results.sort((a, b) => {
                 const aFav = favNames.includes(a.name) ? 0 : 1;
                 const bFav = favNames.includes(b.name) ? 0 : 1;
                 return aFav - bFav;
             });
+            // If no favorites appear in results, restore the favorites section
+            // so the user can still access them
+            if (!hasFavMatch) {
+                favoritesEl.style.display = '';
+            }
             lastResults = results;
             renderResults(results);
         }, 350);
@@ -317,6 +328,7 @@ function initLocationSearch() {
     function openDropdown() {
         dropdown.style.display = 'block';
         isOpen = true;
+        favoritesEl.style.display = '';
         renderFavorites();
         searchInput.value = '';
         resultsEl.innerHTML = '';

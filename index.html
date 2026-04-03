@@ -2498,8 +2498,8 @@
         });
         if (zoneUrlSet.size === 0) return;
 
-        // Fetch all unique zone polygons in parallel (cap at 60)
-        const urlArr = [...zoneUrlSet].slice(0, 60);
+        // Fetch all unique zone polygons in parallel (cap at 500 to handle nationwide outbreaks)
+        const urlArr = [...zoneUrlSet].slice(0, 500);
         const zoneGeomMap = new Map(); // url -> geometry
 
         await Promise.allSettled(urlArr.map(async url => {
@@ -2527,7 +2527,7 @@
         if (!map || !_alertOverlayEnabled) return;
         try {
             const resp = await fetch(
-                'https://api.weather.gov/alerts/active?status=actual&message_type=alert',
+                'https://api.weather.gov/alerts/active?status=actual&message_type=alert&limit=500',
                 { headers: { 'Accept': 'application/geo+json' } }
             );
             if (!resp.ok) return;
