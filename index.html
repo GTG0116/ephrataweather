@@ -2502,20 +2502,26 @@
         const urlArr = [...zoneUrlSet].slice(0, 500);
         const zoneGeomMap = new Map(); // url -> geometry
 
-        // Process in batches of 20 to avoid overwhelming the NWS API with concurrent requests
-        const ZONE_BATCH = 20;
-        for (let bStart = 0; bStart < urlArr.length; bStart += ZONE_BATCH) {
-            await Promise.allSettled(urlArr.slice(bStart, bStart + ZONE_BATCH).map(async url => {
+        // Worker-pool: 30 concurrent fetches running continuously.
+        // This avoids head-of-line blocking from sequential batches while
+        // keeping load on the NWS zone API at a reasonable level.
+        let _zoneIdx = 0;
+        async function _zoneWorker() {
+            while (_zoneIdx < urlArr.length) {
+                const url = urlArr[_zoneIdx++];
                 try {
                     const r = await fetch(url, { headers: { 'Accept': 'application/geo+json' } });
-                    if (!r.ok) return;
+                    if (!r.ok) continue;
                     const d = await r.json();
                     // Normalize to Polygon/MultiPolygon — Mapbox can't render GeometryCollection
                     const geom = _normalizeGeometry(d.geometry);
                     if (geom) zoneGeomMap.set(url, geom);
                 } catch (_) {}
-            }));
+            }
         }
+        await Promise.allSettled(
+            Array.from({ length: Math.min(30, urlArr.length) }, _zoneWorker)
+        );
 
         // Attach merged geometries to each alert as a valid Polygon or MultiPolygon
         alerts.forEach(alert => {
@@ -2531,7 +2537,7 @@
         if (!map || !_alertOverlayEnabled) return;
         try {
             const resp = await fetch(
-                'https://api.weather.gov/alerts/active?status=actual&message_type=alert&limit=500',
+                'https://api.weather.gov/alerts/active?status=actual&limit=500',
                 { headers: { 'Accept': 'application/geo+json' } }
             );
             if (!resp.ok) return;
@@ -2540,21 +2546,30 @@
                 ALERT_OVERLAY_KEYS.includes(f.properties?.event || '')
             );
 
-            // Normalize any existing geometries (NWS sometimes returns GeometryCollection
+            // Normalize any inline geometries (NWS sometimes returns GeometryCollection
             // which Mapbox GL JS cannot render — flatten to Polygon/MultiPolygon)
             alerts.forEach(f => {
                 if (f.geometry) f.geometry = _normalizeGeometry(f.geometry);
             });
 
-            // Resolve zone polygons for alerts that still lack geometry
+            // Render alerts that already carry inline polygon geometry immediately
+            // (modern storm-based warnings from NWS include a polygon in the response)
+            // so the user sees something right away without waiting for zone resolution.
+            _activeAlerts = alerts.filter(f => f.geometry);
+            if (_activeAlerts.length > 0) _applyAlertFilters();
+
+            // Resolve zone polygons for county/zone-based alerts (geometry === null).
+            // These require a separate per-zone API call to get the county boundary.
             const nullGeomAlerts = alerts.filter(f => !f.geometry);
             if (nullGeomAlerts.length > 0) {
                 await _resolveZoneGeometries(nullGeomAlerts);
+                // Merge newly-resolved alerts into the active set and re-render
+                const resolved = nullGeomAlerts.filter(f => f.geometry);
+                if (resolved.length > 0 && _alertOverlayEnabled) {
+                    _activeAlerts = [..._activeAlerts, ...resolved];
+                    _applyAlertFilters();
+                }
             }
-
-            // Only keep alerts that now have geometry to render
-            _activeAlerts = alerts.filter(f => f.geometry);
-            _applyAlertFilters();
         } catch (e) {
             console.warn('Alert overlay load error:', e);
         }
