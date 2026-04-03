@@ -283,10 +283,19 @@
             .hero-section { padding: 32px 16px 36px; }
             .hero-section h2 { font-size: 1.8rem; }
             .nav-cards { grid-template-columns: 1fr; gap: 12px; }
+            /* Keep map alert popups compact so they don't overflow the screen */
+            .mapboxgl-popup { max-width: min(300px, calc(100vw - 20px)) !important; }
+            .mapboxgl-popup-content { max-height: min(260px, 42vh) !important; padding: 10px 12px !important; font-size: 0.8rem !important; }
+            .mapboxgl-popup-close-button { min-width: 32px !important; min-height: 32px !important; width: 32px !important; height: 32px !important; font-size: 18px !important; }
+            .alert-popup-title { font-size: 0.82rem !important; margin-bottom: 4px !important; }
+            .popup-stat { padding: 3px 0 !important; }
+            .popup-key { font-size: 0.72rem !important; }
+            .popup-val { font-size: 0.78rem !important; }
         }
         @media (max-width: 400px) {
             .layer-btn, .day-btn, .type-btn { padding: 5px 9px; font-size: 0.75rem; }
             .chart-tab { padding: 5px 9px; font-size: 0.73rem; }
+            .mapboxgl-popup-content { max-height: min(220px, 38vh) !important; padding: 8px 10px !important; }
         }
 
         /* ---- Redesigned Header ---- */
@@ -2692,7 +2701,7 @@
             <div class="popup-stat"><span class="popup-key">Effective</span><span class="popup-val" style="font-size:0.78rem;">${fmtTime(alertObj.onset || alertObj.effective)}</span></div>
             <div class="popup-stat"><span class="popup-key">Expires</span><span class="popup-val" style="font-size:0.78rem;">${fmtTime(alertObj.expires)}</span></div>`;
         const areaHtml = alertObj.areaDesc
-            ? `<div class="popup-stat" style="flex-direction:column;align-items:flex-start;gap:2px;"><span class="popup-key">Areas</span><span style="font-size:0.78rem;color:var(--text-secondary);line-height:1.4;">${escHtml(alertObj.areaDesc)}</span></div>`
+            ? `<div class="popup-stat" style="flex-direction:column;align-items:flex-start;gap:2px;"><span class="popup-key">Areas</span><span style="font-size:0.78rem;color:var(--text-secondary);line-height:1.4;max-height:3.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escHtml(alertObj.areaDesc)}</span></div>`
             : '';
 
         const popupHtml = `
