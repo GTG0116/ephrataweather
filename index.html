@@ -2498,20 +2498,29 @@
         });
         if (zoneUrlSet.size === 0) return;
 
-        // Fetch all unique zone polygons in parallel (cap at 60)
-        const urlArr = [...zoneUrlSet].slice(0, 60);
+        // Fetch all unique zone polygons in parallel (worker-pool of 20 concurrent fetches)
+        const urlArr = [...zoneUrlSet];
         const zoneGeomMap = new Map(); // url -> geometry
-
-        await Promise.allSettled(urlArr.map(async url => {
-            try {
-                const r = await fetch(url, { headers: { 'Accept': 'application/geo+json' } });
-                if (!r.ok) return;
-                const d = await r.json();
-                // Normalize to Polygon/MultiPolygon — Mapbox can't render GeometryCollection
-                const geom = _normalizeGeometry(d.geometry);
-                if (geom) zoneGeomMap.set(url, geom);
-            } catch (_) {}
-        }));
+        const CONCURRENCY = 20;
+        for (let i = 0; i < urlArr.length; i += CONCURRENCY) {
+            await Promise.allSettled(urlArr.slice(i, i + CONCURRENCY).map(async url => {
+                try {
+                    const r = await fetch(url, { headers: { 'Accept': 'application/geo+json' } });
+                    if (!r.ok) return;
+                    const d = await r.json();
+                    // Handle both Feature and FeatureCollection responses from NWS zone endpoints
+                    let geom;
+                    if (d.type === 'FeatureCollection') {
+                        const geoms = (d.features || []).map(f => _normalizeGeometry(f.geometry)).filter(Boolean);
+                        geom = geoms.length > 0 ? _mergeZoneGeometries(geoms) : null;
+                    } else {
+                        // Normalize to Polygon/MultiPolygon — Mapbox can't render GeometryCollection
+                        geom = _normalizeGeometry(d.geometry);
+                    }
+                    if (geom) zoneGeomMap.set(url, geom);
+                } catch (_) {}
+            }));
+        }
 
         // Attach merged geometries to each alert as a valid Polygon or MultiPolygon
         alerts.forEach(alert => {
@@ -2527,7 +2536,7 @@
         if (!map || !_alertOverlayEnabled) return;
         try {
             const resp = await fetch(
-                'https://api.weather.gov/alerts/active?status=actual&message_type=alert',
+                'https://api.weather.gov/alerts/active?status=actual',
                 { headers: { 'Accept': 'application/geo+json' } }
             );
             if (!resp.ok) return;
