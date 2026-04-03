@@ -1640,32 +1640,6 @@
         </div>
     </div>
 
-    <!-- Alert Summary Popup — shown when clicking an alert banner -->
-    <div id="alert-summary-modal" class="alert-modal-overlay" onclick="if(event.target.id==='alert-summary-modal') closeAlertSummary()">
-        <div class="alert-summary-dialog" role="dialog" aria-modal="true" aria-labelledby="alert-summary-title">
-            <button class="alert-modal-close" onclick="closeAlertSummary()" aria-label="Close">&times;</button>
-            <div id="alert-summary-title" class="alert-modal-title">Weather Alert</div>
-            <div id="alert-summary-meta" class="alert-modal-meta"></div>
-            <div id="alert-summary-badges" class="alert-summary-badges"></div>
-            <div id="alert-summary-hazards" class="alert-summary-hazards" style="display:none;"></div>
-            <button class="alert-full-text-btn" onclick="openFullAlertText()">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                View Full Alert Text
-            </button>
-        </div>
-    </div>
-
-    <!-- Full Alert Text Popup — no map, opened from the summary popup -->
-    <div id="alert-text-modal" class="alert-modal-overlay" onclick="if(event.target.id==='alert-text-modal') closeAlertText()">
-        <div class="alert-text-dialog" role="dialog" aria-modal="true" aria-labelledby="alert-text-modal-title">
-            <button class="alert-modal-close" onclick="closeAlertText()" aria-label="Close">&times;</button>
-            <div id="alert-text-modal-title" class="alert-modal-title">Weather Alert</div>
-            <div id="alert-text-modal-meta" class="alert-modal-meta"></div>
-            <div id="alert-text-modal-extra"></div>
-            <div id="alert-text-modal-body" class="alert-modal-body"></div>
-        </div>
-    </div>
-
     <div id="alert-modal" class="alert-modal-overlay" onclick="if(event.target.id==='alert-modal') closeAlertDetail()">
         <div class="alert-modal" role="dialog" aria-modal="true" aria-labelledby="alert-modal-title">
             <button class="alert-modal-close" onclick="closeAlertDetail()" aria-label="Close alert details">&times;</button>
