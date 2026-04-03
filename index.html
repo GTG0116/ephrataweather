@@ -2070,6 +2070,7 @@
         // Reflectivity and precip type don't support click-to-value
         if (_currentRadarProduct === 'refl' || _currentRadarProduct === 'precip_type') return;
 
+        const seq = _startMapClick(e);
         const { lat, lng } = e.lngLat;
         // Derive bounds from the active sector's image corners [NW, NE, SE, SW]
         const sc = MRMS_SECTORS[_currentMrmsSector].coords;
@@ -2096,7 +2097,8 @@
             const r = imgData.data[idx], g = imgData.data[idx+1],
                   a = imgData.data[idx+3];
 
-            const meta    = (_radarMeta[_currentRadarProduct] || [])[_radarFrameIdx];
+            const cacheKey = _currentMrmsSector + ':' + _currentRadarProduct;
+            const meta    = (_radarMeta[cacheKey] || [])[_radarFrameIdx];
             const timeStr = meta?.time || '';
             let valueStr;
             if (a < 10) {
@@ -2105,12 +2107,10 @@
                 valueStr = _decodeMrmsValue(_currentRadarProduct, r, g);
             }
 
-            new mapboxgl.Popup({ closeButton: true, maxWidth: '240px' })
-                .setLngLat(e.lngLat)
-                .setHTML(`<div class="popup-title">MRMS ${def.label}</div>
-                          <div class="popup-stat"><span class="popup-key">${def.label}</span><span class="popup-val">${valueStr}</span></div>
-                          ${timeStr ? `<div class="popup-stat"><span class="popup-key" style="font-size:0.72rem;">Valid</span><span class="popup-val" style="font-size:0.72rem;">${timeStr}</span></div>` : ''}`)
-                .addTo(map);
+            const bodyHtml = `<div class="popup-title">MRMS ${def.label}</div>
+                <div class="popup-stat"><span class="popup-key">${def.label}</span><span class="popup-val">${valueStr}</span></div>
+                ${timeStr ? `<div class="popup-stat"><span class="popup-key" style="font-size:0.72rem;">Valid</span><span class="popup-val" style="font-size:0.72rem;">${timeStr}</span></div>` : ''}`;
+            _addMapPanel({ bodyHtml, type: 'mrms', label: def.label }, seq);
         } catch (err) {
             console.warn('MRMS click read error:', err);
         }
@@ -2618,43 +2618,86 @@
         _applyAlertFilters();
     }
 
-    // --- Click handler ---
-    // Stores the alert object for the currently-open map popup so the
-    // "View Full Alert" button can open the modal without serialization issues.
-    let _mapPopupAlerts = [];    // all unique alerts at the clicked point
-    let _mapPopupAlertIdx = 0;  // which one is currently shown
-    let _mapAlertPopup = null;
+    // ============================================================
+    // UNIFIED MAP POPUP — single popup, multiple panels, arrow nav
+    // All click handlers contribute panels; one popup shows them all.
+    // ============================================================
+    let _mapClickEvent  = null;  // e.originalEvent identity guard (resets per click)
+    let _mapClickSeq    = 0;     // incremented each click; stale-async guard for panels
+    let _mapClickLngLat = null;
+    let _mapClickPopup  = null;  // the single mapboxgl.Popup instance
+    let _mapPopupPanels = [];    // { bodyHtml, type, label, alertObj? }
+    let _mapPopupPanelIdx = 0;
 
-    function _openMapAlertModal() {
-        if (_mapAlertPopup) { _mapAlertPopup.remove(); _mapAlertPopup = null; }
-        const alertObj = _mapPopupAlerts[_mapPopupAlertIdx];
-        if (alertObj) openAlertDetail(alertObj, true);
+    // Call at the top of every click handler to reset state for a new click.
+    // Returns the current seq number — pass to _addMapPanel to avoid stale updates.
+    function _startMapClick(e) {
+        if (_mapClickEvent !== e.originalEvent) {
+            _mapClickEvent = e.originalEvent;
+            _mapClickSeq++;
+            _mapPopupPanels = [];
+            _mapPopupPanelIdx = 0;
+            _mapClickLngLat = e.lngLat;
+            if (_mapClickPopup) { _mapClickPopup.remove(); _mapClickPopup = null; }
+        }
+        return _mapClickSeq;
     }
 
-    // Global so inline onclick handlers in popup HTML can call it
-    window._navMapAlert = function(delta) {
-        if (!_mapPopupAlerts.length) return;
-        _mapPopupAlertIdx = (_mapPopupAlertIdx + delta + _mapPopupAlerts.length) % _mapPopupAlerts.length;
-        if (_mapAlertPopup) {
-            _mapAlertPopup.setHTML(_buildAlertPopupHtml(_mapPopupAlerts[_mapPopupAlertIdx], _mapPopupAlertIdx, _mapPopupAlerts.length));
+    // Add a panel and (re-)render the popup.
+    function _addMapPanel(panel, seq) {
+        if (seq !== _mapClickSeq || !_mapClickLngLat) return;
+        _mapPopupPanels.push(panel);
+        _refreshMapPopup();
+    }
+
+    function _buildUnifiedPopupHtml(idx) {
+        const total = _mapPopupPanels.length;
+        if (!total) return '';
+        const panel = _mapPopupPanels[idx];
+        const navHtml = total > 1
+            ? `<div class="alert-nav-bar">
+                   <button class="alert-nav-btn" ${idx === 0 ? 'disabled' : ''} onclick="_navMapPanel(-1)" title="Previous">&#8592;</button>
+                   <span class="alert-nav-count">${panel.label ? `${panel.label} &middot; ` : ''}${idx + 1} of ${total}</span>
+                   <button class="alert-nav-btn" ${idx === total - 1 ? 'disabled' : ''} onclick="_navMapPanel(1)" title="Next">&#8594;</button>
+               </div>`
+            : '';
+        return navHtml + panel.bodyHtml;
+    }
+
+    function _refreshMapPopup() {
+        if (!_mapClickLngLat || !_mapPopupPanels.length) return;
+        const html = _buildUnifiedPopupHtml(_mapPopupPanelIdx);
+        if (_mapClickPopup && _mapClickPopup.isOpen()) {
+            _mapClickPopup.setHTML(html);
+        } else {
+            if (_mapClickPopup) { _mapClickPopup.remove(); }
+            _mapClickPopup = new mapboxgl.Popup({ closeButton: true, maxWidth: 'min(360px, calc(100vw - 24px))' })
+                .setLngLat(_mapClickLngLat)
+                .setHTML(html)
+                .addTo(map);
+        }
+    }
+
+    function _openMapAlertModal() {
+        if (_mapClickPopup) { _mapClickPopup.remove(); _mapClickPopup = null; }
+        const panel = _mapPopupPanels[_mapPopupPanelIdx];
+        if (panel?.alertObj) openAlertDetail(panel.alertObj, true);
+    }
+
+    window._navMapPanel = function(delta) {
+        if (!_mapPopupPanels.length) return;
+        _mapPopupPanelIdx = (_mapPopupPanelIdx + delta + _mapPopupPanels.length) % _mapPopupPanels.length;
+        if (_mapClickPopup) {
+            _mapClickPopup.setHTML(_buildUnifiedPopupHtml(_mapPopupPanelIdx));
         }
     };
 
-    // Build popup HTML for a single alert, with optional prev/next navigation
-    function _buildAlertPopupHtml(alertObj, idx, total) {
+    // Build the body HTML (no nav bar) for a single NWS alert panel
+    function _buildAlertPanelHtml(alertObj) {
         const color = ALERT_OVERLAY_COLORS[alertObj.event] || '#AAAAAA';
         const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         const fmtTime = typeof _formatAlertTime === 'function' ? _formatAlertTime : (t => t || '—');
         const params = alertObj.parameters || {};
-
-        // ---- Nav bar (only when multiple alerts overlap) ----
-        const navHtml = total > 1
-            ? `<div class="alert-nav-bar">
-                   <button class="alert-nav-btn" ${idx === 0 ? 'disabled' : ''} onclick="_navMapAlert(-1)" title="Previous alert">&#8592;</button>
-                   <span class="alert-nav-count">${idx + 1} of ${total}</span>
-                   <button class="alert-nav-btn" ${idx === total - 1 ? 'disabled' : ''} onclick="_navMapAlert(1)" title="Next alert">&#8594;</button>
-               </div>`
-            : '';
 
         // ---- Subtype badge (PDS, Destructive, Tornado Emergency, etc.) ----
         const subtype = typeof _alertSubtype === 'function' ? _alertSubtype(alertObj) : null;
@@ -2700,8 +2743,7 @@
             ? `<div class="popup-stat" style="flex-direction:column;align-items:flex-start;gap:2px;"><span class="popup-key">Areas</span><span style="font-size:0.78rem;color:var(--text-secondary);line-height:1.4;max-height:3.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escHtml(alertObj.areaDesc)}</span></div>`
             : '';
 
-        return `${navHtml}
-            <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};padding-left:8px;font-weight:700;font-size:0.92rem;margin-bottom:6px;">${escHtml(alertObj.event)}</div>
+        return `<div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};padding-left:8px;font-weight:700;font-size:0.92rem;margin-bottom:6px;">${escHtml(alertObj.event)}</div>
             ${subtypeBadgeHtml}
             ${radarRowHtml}
             ${hazardHtml}
@@ -2718,12 +2760,10 @@
         const features = map.queryRenderedFeatures(e.point, { layers: ['alert-overlay-fill'] });
         if (!features.length) return;
 
-        // Stop other click handlers from also firing (e.g. WPC/fire outlook popup)
-        e.originalEvent._alertHandled = true;
+        const seq = _startMapClick(e);
 
         // Collect ALL unique alert features at the clicked point
         const seenKeys = new Set();
-        const alertObjs = [];
         for (const feat of features) {
             const alertFeature = _activeAlerts.find(f => f.id === feat.id)
                               || _activeAlerts.find(f =>
@@ -2739,7 +2779,7 @@
             let params = props.parameters || {};
             if (typeof params === 'string') { try { params = JSON.parse(params); } catch (_) {} }
 
-            alertObjs.push({
+            const alertObj = {
                 event:       props.event       || '',
                 headline:    props.headline    || props.event || '',
                 description: props.description || '',
@@ -2752,19 +2792,9 @@
                 parameters:  params,
                 raw:         { properties: { affectedZones: props.affectedZones || [] } },
                 geometry:    alertFeature.geometry || null,
-            });
+            };
+            _addMapPanel({ bodyHtml: _buildAlertPanelHtml(alertObj), type: 'alert', label: 'Alert', alertObj }, seq);
         }
-        if (!alertObjs.length) return;
-
-        // Store for nav and modal
-        _mapPopupAlerts = alertObjs;
-        _mapPopupAlertIdx = 0;
-
-        if (_mapAlertPopup) { _mapAlertPopup.remove(); _mapAlertPopup = null; }
-        _mapAlertPopup = new mapboxgl.Popup({ closeButton: true, maxWidth: 'min(360px, calc(100vw - 24px))' })
-            .setLngLat(e.lngLat)
-            .setHTML(_buildAlertPopupHtml(alertObjs[0], 0, alertObjs.length))
-            .addTo(map);
     }
 
     // ============================================================
@@ -3469,7 +3499,6 @@
     }
 
     async function handleOutlookClick(e) {
-        if (e.originalEvent?._alertHandled) return; // alert overlay took priority
         if (currentLayer !== 'wpc-rain' && currentLayer !== 'fire-wx') return;
         const layerId = currentLayer === 'wpc-rain' ? 'wpc-fill' : 'fire-fill';
         if (!map.getLayer(layerId)) return;
@@ -3477,22 +3506,19 @@
         if (!features.length) return;
         const cat = features[0].properties?.CATEGORY || '';
         if (!cat) return;
+
+        const seq = _startMapClick(e);
         if (currentLayer === 'wpc-rain') {
             const labels = { MRGL: 'Marginal', SLGT: 'Slight', MDT: 'Moderate', HIGH: 'High' };
-            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
-                .setLngLat(e.lngLat)
-                .setHTML(`<div class="popup-title">Excessive Rainfall Risk</div>
-                          <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`)
-                .addTo(map);
+            const bodyHtml = `<div class="popup-title">Excessive Rainfall Risk</div>
+                <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`;
+            _addMapPanel({ bodyHtml, type: 'outlook', label: 'Rainfall Risk' }, seq);
         } else {
             const labels = { ELEV: 'Elevated', CRIT: 'Critical', EXTCRIT: 'Extremely Critical' };
-            const typeLabel = 'Wind/RH';
-            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
-                .setLngLat(e.lngLat)
-                .setHTML(`<div class="popup-title">Fire Weather Risk</div>
-                          <div class="popup-stat"><span class="popup-key">Type</span><span class="popup-val">${typeLabel}</span></div>
-                          <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`)
-                .addTo(map);
+            const bodyHtml = `<div class="popup-title">Fire Weather Risk</div>
+                <div class="popup-stat"><span class="popup-key">Type</span><span class="popup-val">Wind/RH</span></div>
+                <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`;
+            _addMapPanel({ bodyHtml, type: 'outlook', label: 'Fire Risk' }, seq);
         }
     }
 
@@ -3624,6 +3650,8 @@
         if (currentLayer !== 'temperature' && currentLayer !== 'wind' && currentLayer !== 'clouds') return;
         const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
         if (!key || key === 'YOUR_OWM_API_KEY_HERE') return;
+
+        const seq = _startMapClick(e);
         const { lat, lng } = e.lngLat;
         try {
             const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${key}&units=imperial`;
@@ -3637,23 +3665,27 @@
             const windGust  = data.wind?.gust  != null ? Math.round(data.wind.gust)  + ' mph' : null;
             const windDir   = data.wind?.deg   != null ? degToCardinal(data.wind.deg) : '--';
             const humidity  = data.main?.humidity != null ? data.main.humidity + '%' : '--';
-            let html = `<div class="popup-title">${cityName}</div>`;
+            let bodyHtml = `<div class="popup-title">${cityName}</div>`;
+            let label;
             if (currentLayer === 'temperature') {
-                html += `<div class="popup-stat"><span class="popup-key">Temperature</span><span class="popup-val">${temp}</span></div>
+                label = 'Temperature';
+                bodyHtml += `<div class="popup-stat"><span class="popup-key">Temperature</span><span class="popup-val">${temp}</span></div>
                          <div class="popup-stat"><span class="popup-key">Feels Like</span><span class="popup-val">${feelsLike}</span></div>
                          <div class="popup-stat"><span class="popup-key">Humidity</span><span class="popup-val">${humidity}</span></div>`;
             } else if (currentLayer === 'clouds') {
+                label = 'Clouds';
                 const clouds = data.clouds?.all != null ? data.clouds.all + '%' : '--';
                 const cond = data.weather?.[0]?.description || '--';
-                html += `<div class="popup-stat"><span class="popup-key">Cloud Cover</span><span class="popup-val">${clouds}</span></div>
+                bodyHtml += `<div class="popup-stat"><span class="popup-key">Cloud Cover</span><span class="popup-val">${clouds}</span></div>
                          <div class="popup-stat"><span class="popup-key">Condition</span><span class="popup-val">${cond}</span></div>
                          <div class="popup-stat"><span class="popup-key">Humidity</span><span class="popup-val">${humidity}</span></div>`;
             } else {
-                html += `<div class="popup-stat"><span class="popup-key">Wind Speed</span><span class="popup-val">${windSpeed}</span></div>
+                label = 'Wind';
+                bodyHtml += `<div class="popup-stat"><span class="popup-key">Wind Speed</span><span class="popup-val">${windSpeed}</span></div>
                          ${windGust ? `<div class="popup-stat"><span class="popup-key">Gusts</span><span class="popup-val">${windGust}</span></div>` : ''}
                          <div class="popup-stat"><span class="popup-key">Direction</span><span class="popup-val">${windDir}</span></div>`;
             }
-            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' }).setLngLat(e.lngLat).setHTML(html).addTo(map);
+            _addMapPanel({ bodyHtml, type: 'owm', label }, seq);
         } catch (err) { console.error('OWM click error:', err); }
     }
     function degToCardinal(deg) {
@@ -4186,6 +4218,8 @@
         // Outside RTMA coverage area
         if (lat < RTMA_BOUNDS.latMin || lat > RTMA_BOUNDS.latMax ||
             lng < RTMA_BOUNDS.lngMin || lng > RTMA_BOUNDS.lngMax) return;
+
+        const seq = _startMapClick(e);
         try {
             // Determine grid dimensions (prefer live metadata, fall back to constants)
             let rows = RTMA_ROWS, cols = RTMA_COLS;
@@ -4211,13 +4245,11 @@
 
             const prod      = RTMA_PRODUCTS[_currentRtmaProduct];
             const formatted = prod?.format ? prod.format(val) : val.toFixed(1);
-            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
-                .setLngLat(e.lngLat)
-                .setHTML(
-                    `<div class="popup-title">RTMA Analysis</div>` +
-                    `<div class="popup-stat"><span class="popup-key">${prod?.label || _currentRtmaProduct}</span>` +
-                    `<span class="popup-val">${formatted}</span></div>`
-                ).addTo(map);
+            const prodLabel = prod?.label || _currentRtmaProduct;
+            const bodyHtml  = `<div class="popup-title">RTMA Analysis</div>` +
+                `<div class="popup-stat"><span class="popup-key">${prodLabel}</span>` +
+                `<span class="popup-val">${formatted}</span></div>`;
+            _addMapPanel({ bodyHtml, type: 'rtma', label: prodLabel }, seq);
         } catch (err) { console.error('RTMA click error:', err); }
     }
 
