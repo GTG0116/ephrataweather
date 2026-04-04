@@ -312,6 +312,14 @@
             background: linear-gradient(to right, #6a1b9a, #8e24aa);
             border-radius: 2px;
         }
+        /* Trough: dashed brown */
+        .sf-trough-line {
+            display: inline-block;
+            width: 28px;
+            height: 3px;
+            background: repeating-linear-gradient(to right, #7a5c00 0px, #7a5c00 6px, transparent 6px, transparent 10px);
+            border-radius: 2px;
+        }
 
         /* ---- METAR Section ---- */
         .metar-section { }
@@ -1532,12 +1540,13 @@
                 <!-- Surface Analysis Sub-Controls -->
                 <div class="spc-controls" id="surface-analysis-controls">
                     <div class="ctrl-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
-                        <span style="color:var(--text-muted);font-size:0.72rem;flex:1;min-width:180px;">Surface fronts, isobars &amp; pressure systems — NOAA WPC</span>
+                        <select id="sa-day-select" class="ctrl-select" onchange="selectSADay(parseInt(this.value))">
+                            <option value="1">Day 1</option>
+                            <option value="2">Day 2</option>
+                            <option value="3">Day 3</option>
+                        </select>
+                        <span style="color:var(--text-muted);font-size:0.72rem;flex:1;min-width:120px;">NWS National Forecast Chart</span>
                         <button class="icon-action-btn" onclick="refreshSurfaceAnalysis()" title="Refresh">&#8635;</button>
-                    </div>
-                    <div class="opacity-row">
-                        <span>Opacity:</span>
-                        <input type="range" min="0" max="100" value="85" oninput="setSurfaceAnalysisOpacity(this.value)" id="surface-analysis-opacity">
                     </div>
                     <!-- Front symbol legend -->
                     <div class="surface-front-legend">
@@ -1545,8 +1554,9 @@
                         <div class="sf-legend-item"><span class="sf-warm-front"></span>Warm Front</div>
                         <div class="sf-legend-item"><span class="sf-stationary-front"></span>Stationary Front</div>
                         <div class="sf-legend-item"><span class="sf-occluded-front"></span>Occluded Front</div>
-                        <div class="sf-legend-item"><span class="sf-pressure-h" style="color:#1565c0;font-weight:700;">H</span> High Pressure</div>
-                        <div class="sf-legend-item"><span class="sf-pressure-l" style="color:#c62828;font-weight:700;">L</span> Low Pressure</div>
+                        <div class="sf-legend-item"><span class="sf-trough-line"></span>Trough</div>
+                        <div class="sf-legend-item"><span style="color:#1565c0;font-weight:700;font-size:1rem;line-height:1;">H</span>&nbsp;High Pressure</div>
+                        <div class="sf-legend-item"><span style="color:#c62828;font-weight:700;font-size:1rem;line-height:1;">L</span>&nbsp;Low Pressure</div>
                     </div>
                 </div>
                 <!-- Basemap -->
@@ -4778,37 +4788,110 @@
     }
 
     // ============================================================
-    // SURFACE ANALYSIS LAYER (NOAA nowCOAST WMS)
+    // SURFACE ANALYSIS LAYER
+    // Data: NWS National Forecast Chart (mapservices.weather.noaa.gov)
+    // CORS-enabled, vector GeoJSON — fronts + H/L pressure centers
+    // Layer IDs: fronts = 2/14/26, H/L = 1/13/25  (Day 1/2/3)
     // ============================================================
-    let _surfaceAnalysisOpacity = 0.85;
-    let _surfaceAnalysisLoaded  = false;
+    let _surfaceAnalysisLoaded = false;
+    let _surfaceAnalysisDay    = 1;
 
-    // WMS tile URL — nowCOAST surface analysis (fronts, isobars, pressure centers)
-    // Layer 4 = surface analysis (fronts + isobars + H/L labels)
-    const SURFACE_ANALYSIS_WMS =
-        'https://nowcoast.noaa.gov/arcgis/services/nowcoast/analysis_meteohydro_sfc_analysis_time/MapServer/WMSServer' +
-        '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap' +
-        '&FORMAT=image%2Fpng&TRANSPARENT=TRUE&LAYERS=4' +
-        '&WIDTH=512&HEIGHT=512&SRS=EPSG%3A3857' +
-        '&BBOX={bbox-epsg-3857}';
+    const SA_BASE = 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/natl_fcst_wx_chart/MapServer';
+    // Layer IDs by day
+    const SA_FRONTS_LAYER = { 1: 2,  2: 14, 3: 26 };
+    const SA_HL_LAYER     = { 1: 1,  2: 13, 3: 25 };
 
-    function loadSurfaceAnalysisLayer() {
+    // Front line colours
+    const SA_FRONT_COLOR = ['match', ['get', 'feat'],
+        'Cold Front Valid',       '#1565c0',
+        'Warm Front Valid',       '#c62828',
+        'Occluded Front Valid',   '#6a1b9a',
+        'Stationary Front Valid', '#1d7a3f',   // green for stationary (half/half shown as single line)
+        'Trough Valid',           '#7a5c00',
+        '#888888'
+    ];
+    const SA_FRONT_WIDTH = ['match', ['get', 'feat'],
+        'Trough Valid', 2,
+        3.5
+    ];
+    const SA_FRONT_DASH = ['match', ['get', 'feat'],
+        'Trough Valid', ['literal', [4, 4]],
+        ['literal', [1, 0]]
+    ];
+
+    async function loadSurfaceAnalysisLayer() {
         if (!map) return;
         clearSurfaceAnalysisLayer();
         showLoading('Loading surface analysis\u2026');
         try {
-            map.addSource('surface-analysis-src', {
-                type: 'raster',
-                tiles: [SURFACE_ANALYSIS_WMS],
-                tileSize: 512,
-                attribution: '&copy; <a href="https://nowcoast.noaa.gov/" target="_blank">NOAA nowCOAST</a>'
-            });
+            const day   = _surfaceAnalysisDay;
+            const fLid  = SA_FRONTS_LAYER[day];
+            const hlLid = SA_HL_LAYER[day];
+            const qs    = '?where=1%3D1&outFields=*&f=geojson';
+
+            const [frontsResp, hlResp] = await Promise.all([
+                fetch(`${SA_BASE}/${fLid}/query${qs}`),
+                fetch(`${SA_BASE}/${hlLid}/query${qs}`)
+            ]);
+            if (!frontsResp.ok) throw new Error(`Fronts HTTP ${frontsResp.status}`);
+            if (!hlResp.ok)     throw new Error(`H/L HTTP ${hlResp.status}`);
+            const frontsData = await frontsResp.json();
+            const hlData     = await hlResp.json();
+
+            // Add fronts source + layers
+            map.addSource('sa-fronts-src', { type: 'geojson', data: frontsData });
             map.addLayer({
-                id: 'surface-analysis-layer',
-                type: 'raster',
-                source: 'surface-analysis-src',
-                paint: { 'raster-opacity': _surfaceAnalysisOpacity, 'raster-fade-duration': 200 }
+                id: 'sa-fronts-line', type: 'line', source: 'sa-fronts-src',
+                paint: {
+                    'line-color': SA_FRONT_COLOR,
+                    'line-width': SA_FRONT_WIDTH,
+                    'line-dasharray': SA_FRONT_DASH
+                }
             }, _overlayBefore());
+
+            // Add H/L source + symbol layer
+            map.addSource('sa-hl-src', { type: 'geojson', data: hlData });
+            map.addLayer({
+                id: 'sa-hl-circle', type: 'circle', source: 'sa-hl-src',
+                paint: {
+                    'circle-radius': 14,
+                    'circle-color': ['match', ['get', 'feat'],
+                        'High Valid', 'rgba(21,101,192,0.22)',
+                        'rgba(198,40,40,0.22)'
+                    ],
+                    'circle-stroke-width': 1.5,
+                    'circle-stroke-color': ['match', ['get', 'feat'],
+                        'High Valid', '#1565c0', '#c62828'
+                    ]
+                }
+            }, _overlayBefore());
+            map.addLayer({
+                id: 'sa-hl-label', type: 'symbol', source: 'sa-hl-src',
+                layout: {
+                    'text-field': ['case',
+                        ['==', ['get', 'feat'], 'High Valid'], 'H',
+                        'L'
+                    ],
+                    'text-size': 16,
+                    'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold']
+                },
+                paint: {
+                    'text-color': ['match', ['get', 'feat'],
+                        'High Valid', '#1565c0', '#c62828'
+                    ],
+                    'text-halo-color': 'rgba(255,255,255,0.9)',
+                    'text-halo-width': 1
+                }
+            });
+
+            // Popup on front click
+            map.on('click', 'sa-fronts-line', _handleSAClick);
+            map.on('click', 'sa-hl-circle',   _handleSAClick);
+            map.on('mouseenter', 'sa-fronts-line', () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mouseleave', 'sa-fronts-line', () => { map.getCanvas().style.cursor = ''; });
+            map.on('mouseenter', 'sa-hl-circle',   () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mouseleave', 'sa-hl-circle',   () => { map.getCanvas().style.cursor = ''; });
+
             _surfaceAnalysisLoaded = true;
         } catch (e) {
             console.error('Surface analysis load error:', e);
@@ -4817,17 +4900,36 @@
         }
     }
 
+    function _handleSAClick(e) {
+        const feat = e.features[0];
+        if (!feat) return;
+        const popup = feat.properties.popupconte || feat.properties.feat || '';
+        new mapboxgl.Popup({ closeButton: true, maxWidth: '260px' })
+            .setLngLat(e.lngLat)
+            .setHTML(`<div class="popup-title">${popup}</div>`)
+            .addTo(map);
+    }
+
     function clearSurfaceAnalysisLayer() {
         _surfaceAnalysisLoaded = false;
         if (!map) return;
-        if (map.getLayer('surface-analysis-layer')) map.removeLayer('surface-analysis-layer');
-        if (map.getSource('surface-analysis-src'))  map.removeSource('surface-analysis-src');
+        const layers = ['sa-fronts-line','sa-hl-circle','sa-hl-label'];
+        const srcs   = ['sa-fronts-src','sa-hl-src'];
+        layers.forEach(l => { if (map.getLayer(l)) map.removeLayer(l); });
+        srcs.forEach(s => { if (map.getSource(s)) map.removeSource(s); });
+        if (map.listens && map.listens('click')) {
+            try { map.off('click', 'sa-fronts-line', _handleSAClick); } catch (_) {}
+            try { map.off('click', 'sa-hl-circle',   _handleSAClick); } catch (_) {}
+        }
     }
 
-    function setSurfaceAnalysisOpacity(val) {
-        _surfaceAnalysisOpacity = val / 100;
-        if (map && map.getLayer('surface-analysis-layer'))
-            map.setPaintProperty('surface-analysis-layer', 'raster-opacity', _surfaceAnalysisOpacity);
+    function selectSADay(day) {
+        _surfaceAnalysisDay = day;
+        const sel = document.getElementById('sa-day-select');
+        if (sel) sel.value = day;
+        if (currentLayer === 'surface-analysis') {
+            _ensureMapReady().then(() => loadSurfaceAnalysisLayer());
+        }
     }
 
     function refreshSurfaceAnalysis() {
@@ -4839,8 +4941,9 @@
 
     // ============================================================
     // METAR VIEWER
+    // Data: NWS api.weather.gov/stations  (CORS-enabled)
     // ============================================================
-    const AWC_METAR_BASE = 'https://aviationweather.gov/api/data/metar';
+    const NWS_OBS_BASE = 'https://api.weather.gov/stations';
     let _metarTimeframeHours = 1;
     let _metarCurrentStation = null;
 
@@ -4861,16 +4964,15 @@
     function searchMetarByLocation() {
         _metarShowLoading('Finding nearest station\u2026');
         if (!navigator.geolocation) {
-            _metarShowError('Geolocation is not supported by your browser.');
+            _fetchNearestMetarStation(
+                LocationManager.getCurrent().lat,
+                LocationManager.getCurrent().lng
+            );
             return;
         }
         navigator.geolocation.getCurrentPosition(
-            pos => {
-                const { latitude: lat, longitude: lon } = pos.coords;
-                _fetchNearestMetarStation(lat, lon);
-            },
-            err => {
-                // Fall back to stored location
+            pos => _fetchNearestMetarStation(pos.coords.latitude, pos.coords.longitude),
+            _err => {
                 const loc = LocationManager.getCurrent();
                 _fetchNearestMetarStation(loc.lat, loc.lng);
             },
@@ -4881,23 +4983,22 @@
     async function _fetchNearestMetarStation(lat, lon) {
         _metarShowLoading('Finding nearest station\u2026');
         try {
-            // Query stations within 100 nm of the point, take most recent obs only
-            const url = `${AWC_METAR_BASE}?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&radial=100&hoursBeforeNow=2&mostRecent=true&format=json`;
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
-            if (!data || data.length === 0) {
-                _metarShowError('No stations found near your location. Try searching by ID.');
-                return;
-            }
-            // Sort by distance (Haversine)
-            const sorted = data.slice().sort((a, b) => {
-                const da = _haversineNm(lat, lon, a.lat, a.lon);
-                const db = _haversineNm(lat, lon, b.lat, b.lon);
-                return da - db;
-            });
-            const nearest = sorted[0];
-            const stationId = nearest.icaoId || nearest.id;
+            // Step 1: get grid point → observationStations URL
+            const ptResp = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
+            if (!ptResp.ok) throw new Error(`Points API HTTP ${ptResp.status}`);
+            const ptData = await ptResp.json();
+            const stationsUrl = ptData?.properties?.observationStations;
+            if (!stationsUrl) throw new Error('No observation stations found for this location.');
+
+            // Step 2: fetch station list (sorted nearest-first by NWS)
+            const stResp = await fetch(stationsUrl);
+            if (!stResp.ok) throw new Error(`Stations HTTP ${stResp.status}`);
+            const stData = await stResp.json();
+            const stations = stData?.features || [];
+            if (stations.length === 0) throw new Error('No stations found near this location.');
+
+            const stationId = stations[0]?.properties?.stationIdentifier;
+            if (!stationId) throw new Error('Could not read station ID.');
             const input = document.getElementById('metar-station-input');
             if (input) input.value = stationId;
             _fetchAndRenderMetar(stationId);
@@ -4910,25 +5011,33 @@
         _metarCurrentStation = stationId;
         _metarShowLoading('Loading observations for ' + stationId + '\u2026');
         try {
+            // Build start timestamp for the requested time window
             const hours = _metarTimeframeHours;
-            const url = `${AWC_METAR_BASE}?ids=${encodeURIComponent(stationId)}&hoursBeforeNow=${hours}&format=json`;
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
-            if (!data || data.length === 0) {
+            const startMs  = Date.now() - hours * 3600 * 1000;
+            const startISO = new Date(startMs).toISOString();
+            const limit    = Math.max(10, Math.ceil(hours * 4)); // ~4 obs/hr
+
+            // Fetch observations and station metadata in parallel
+            const [obsResp, stResp] = await Promise.all([
+                fetch(`${NWS_OBS_BASE}/${encodeURIComponent(stationId)}/observations?start=${encodeURIComponent(startISO)}&limit=${limit}`),
+                fetch(`${NWS_OBS_BASE}/${encodeURIComponent(stationId)}`)
+            ]);
+            if (!obsResp.ok) throw new Error(`HTTP ${obsResp.status} — station "${stationId}" may not exist. Check the ID and try again.`);
+            const obsData = await obsResp.json();
+            const stMeta  = stResp.ok ? await stResp.json() : null;
+
+            const feats = obsData?.features || [];
+            if (feats.length === 0) {
                 _metarHideAll();
                 document.getElementById('metar-empty').style.display = 'flex';
-                _metarShowStationBar(stationId, null);
+                _metarShowStationBar(stationId, stMeta);
                 return;
             }
-            // Sort newest first
-            const sorted = data.slice().sort((a, b) =>
-                new Date(b.obsTime || b.reportTime || 0) - new Date(a.obsTime || a.reportTime || 0));
             _metarHideAll();
-            _metarShowStationBar(stationId, sorted[0]);
-            _renderMetarObservations(sorted);
+            _metarShowStationBar(stationId, stMeta);
+            _renderMetarObservations(feats);
         } catch (e) {
-            _metarShowError('Failed to load data: ' + e.message);
+            _metarShowError(e.message || 'Failed to load observations.');
         }
     }
 
@@ -4952,20 +5061,24 @@
             if (el) { el.style.display = 'none'; if (id === 'metar-observations') el.innerHTML = ''; }
         });
     }
-    function _metarShowStationBar(stationId, obs) {
+    function _metarShowStationBar(stationId, stMeta) {
         const bar  = document.getElementById('metar-station-info');
         const name = document.getElementById('metar-station-name');
         const meta = document.getElementById('metar-station-meta');
         if (!bar) return;
         bar.style.display = 'flex';
-        const displayName = obs?.name ? `${stationId} — ${obs.name}` : stationId;
-        if (name) name.textContent = displayName;
-        if (meta && obs) {
+        const stName = stMeta?.properties?.name || '';
+        name.textContent = stName ? `${stationId} — ${stName}` : stationId;
+        if (meta) {
             const parts = [];
-            if (obs.elev != null) parts.push(`Elev: ${Math.round(obs.elev)} ft`);
-            if (obs.lat != null && obs.lon != null) parts.push(`${obs.lat.toFixed(2)}°N, ${Math.abs(obs.lon).toFixed(2)}°W`);
+            const elev = stMeta?.properties?.elevation?.value;
+            if (elev != null) parts.push(`Elev: ${Math.round(elev * 3.28084)} ft`);
+            const coords = stMeta?.geometry?.coordinates;
+            if (coords) parts.push(`${coords[1].toFixed(2)}°N, ${Math.abs(coords[0]).toFixed(2)}°W`);
+            const tz = stMeta?.properties?.timeZone;
+            if (tz) parts.push(tz.replace('America/', ''));
             meta.textContent = parts.join('  ·  ');
-        } else if (meta) { meta.textContent = ''; }
+        }
     }
 
     function clearMetarView() {
@@ -4976,79 +5089,109 @@
         if (input) input.value = '';
     }
 
-    function _renderMetarObservations(observations) {
+    function _renderMetarObservations(features) {
         const container = document.getElementById('metar-observations');
         if (!container) return;
         container.style.display = 'block';
-        container.innerHTML = observations.map((obs, i) => _buildMetarCard(obs, i === 0)).join('');
+        container.innerHTML = features.map((f, i) => _buildMetarCard(f.properties, i === 0)).join('');
     }
 
-    function _buildMetarCard(obs, isLatest) {
-        // --- Parse time ---
+    // Helper: extract numeric value safely from NWS quantity object
+    function _nwsVal(obj) { return (obj && obj.value != null) ? obj.value : null; }
+
+    function _buildMetarCard(props, isLatest) {
+        // --- Time ---
         let timeStr = '—';
-        if (obs.obsTime || obs.reportTime) {
+        if (props.timestamp) {
             try {
-                const d = new Date(obs.obsTime || obs.reportTime);
+                const d = new Date(props.timestamp);
                 timeStr = d.toLocaleString('en-US', {
                     month: 'short', day: 'numeric',
                     hour: 'numeric', minute: '2-digit',
                     timeZoneName: 'short'
                 });
-            } catch (_) { timeStr = obs.obsTime || obs.reportTime || '—'; }
+            } catch (_) { timeStr = props.timestamp; }
         }
 
-        // --- Wind ---
-        let windStr = 'Calm';
-        if (obs.wspd != null && obs.wspd > 0) {
-            const dir = obs.wdir === 0 || obs.wdir == null ? 'Vrb' : _degreesToCardinal(obs.wdir) + ` (${obs.wdir}°)`;
-            windStr = `${dir} at ${Math.round(obs.wspd)} kt`;
-            if (obs.wgst && obs.wgst > obs.wspd) windStr += `, gusting ${Math.round(obs.wgst)} kt`;
-        } else if (obs.wdir === 0 && obs.wspd === 0) { windStr = 'Calm'; }
-
-        // --- Visibility ---
-        const visStr = obs.visib != null
-            ? (obs.visib >= 9999 ? '10+ SM' : obs.visib === 9 ? '9 SM' : obs.visib + ' SM')
-            : '—';
-
-        // --- Temperature / Dew Point ---
-        const tempC = obs.temp != null ? obs.temp : null;
-        const dewpC = obs.dewp != null ? obs.dewp : null;
-        const tempF = tempC != null ? Math.round(tempC * 9 / 5 + 32) : null;
-        const dewpF = dewpC != null ? Math.round(dewpC * 9 / 5 + 32) : null;
+        // --- Temperature / Dew Point  (NWS gives °C) ---
+        const tempC = _nwsVal(props.temperature);
+        const dewpC = _nwsVal(props.dewpoint);
+        const tempF = tempC != null ? Math.round(tempC * 9/5 + 32) : null;
+        const dewpF = dewpC != null ? Math.round(dewpC * 9/5 + 32) : null;
         const tempStr = tempF != null ? `${tempF}°F (${Math.round(tempC)}°C)` : '—';
         const dewpStr = dewpF != null ? `${dewpF}°F (${Math.round(dewpC)}°C)` : '—';
 
-        // --- Relative Humidity (computed) ---
+        // --- Relative Humidity ---
         let rhStr = '—';
         if (tempC != null && dewpC != null) {
-            const rh = Math.round(100 * Math.exp((17.625 * dewpC) / (243.04 + dewpC)) /
-                                             Math.exp((17.625 * tempC) / (243.04 + tempC)));
+            const rh = Math.round(100 * Math.exp((17.625*dewpC)/(243.04+dewpC)) /
+                                             Math.exp((17.625*tempC)/(243.04+tempC)));
             rhStr = Math.min(100, Math.max(0, rh)) + '%';
         }
 
-        // --- Altimeter / SLP ---
-        const altimStr = obs.altim != null ? obs.altim.toFixed(2) + ' inHg' : '—';
-        const slpStr   = obs.slp   != null ? obs.slp.toFixed(1)   + ' mb'   : '—';
+        // --- Wind (NWS gives km/h → convert to knots) ---
+        const wdirVal  = _nwsVal(props.windDirection);
+        const wspdKmh  = _nwsVal(props.windSpeed);
+        const wgstKmh  = _nwsVal(props.windGust);
+        const wspdKt   = wspdKmh != null ? wspdKmh / 1.852 : null;
+        const wgstKt   = wgstKmh != null ? wgstKmh / 1.852 : null;
+        let windStr = 'Calm';
+        if (wspdKt != null && wspdKt > 0.5) {
+            const dir = wdirVal == null ? 'Vrb' : _degreesToCardinal(wdirVal) + ` (${Math.round(wdirVal)}°)`;
+            windStr = `${dir} at ${Math.round(wspdKt)} kt`;
+            if (wgstKt != null && wgstKt > wspdKt) windStr += `, gusting ${Math.round(wgstKt)} kt`;
+        } else if (wspdKt != null && wspdKt <= 0.5) { windStr = 'Calm'; }
 
-        // --- Clouds ---
+        // --- Visibility (NWS gives meters → statute miles) ---
+        const visMtr = _nwsVal(props.visibility);
+        let visStr = '—';
+        if (visMtr != null) {
+            const visSm = visMtr / 1609.344;
+            visStr = visSm >= 9.9 ? '10+ SM' : visSm.toFixed(1) + ' SM';
+        }
+
+        // --- Pressure (NWS gives Pascals → inHg and mb) ---
+        const pressurePa = _nwsVal(props.seaLevelPressure) || _nwsVal(props.barometricPressure);
+        let altimStr = '—', slpStr = '—';
+        if (pressurePa != null) {
+            altimStr = (pressurePa / 3386.39).toFixed(2) + ' inHg';
+            slpStr   = (pressurePa / 100).toFixed(1)     + ' mb';
+        }
+
+        // --- Clouds (NWS gives meters → feet) ---
         let cloudStr = '—';
-        if (obs.clouds && obs.clouds.length > 0) {
-            const COVER_LABEL = { CLR: 'Clear', SKC: 'Clear', FEW: 'Few', SCT: 'Scattered', BKN: 'Broken', OVC: 'Overcast', VV: 'Vertical Visibility' };
-            cloudStr = obs.clouds.map(c => {
-                const label = COVER_LABEL[c.cover] || c.cover;
-                return c.base != null ? `${label} ${c.base.toLocaleString()} ft` : label;
+        const clouds = props.cloudLayers;
+        if (clouds && clouds.length > 0) {
+            const COVER = { CLR:'Clear', SKC:'Clear', FEW:'Few', SCT:'Scattered', BKN:'Broken', OVC:'Overcast', VV:'Vert Vis' };
+            cloudStr = clouds.map(c => {
+                const lbl  = COVER[c.amount] || c.amount;
+                const baseFt = c.base?.value != null ? Math.round(c.base.value * 3.28084).toLocaleString() + ' ft' : '';
+                return baseFt ? `${lbl} ${baseFt}` : lbl;
             }).join('; ');
-        } else if (obs.cover != null) { cloudStr = obs.cover; }
+        }
 
-        // --- Weather phenomena ---
-        const wxStr = obs.wx ? obs.wx : (obs.wxString ? obs.wxString : '—');
+        // --- Weather ---
+        let wxStr = props.textDescription || '—';
+        if (props.presentWeather && props.presentWeather.length > 0) {
+            wxStr = props.presentWeather.map(w => w.rawString || w.weather || '').filter(Boolean).join(', ') || wxStr;
+        }
 
-        // --- Flight category color ---
-        const fltCat = obs.fltCat || obs.flightCategory || '';
+        // --- Flight category (compute from ceiling + visibility) ---
+        let fltCat = '';
+        const ceilingFt = (() => {
+            if (!clouds || clouds.length === 0) return 99999;
+            const ceilingLayers = clouds.filter(c => c.amount === 'BKN' || c.amount === 'OVC' || c.amount === 'VV');
+            if (ceilingLayers.length === 0) return 99999;
+            return Math.min(...ceilingLayers.map(c => c.base?.value != null ? c.base.value * 3.28084 : 99999));
+        })();
+        const visSm = visMtr != null ? visMtr / 1609.344 : 99;
+        if (ceilingFt < 500 || visSm < 1)            fltCat = 'LIFR';
+        else if (ceilingFt < 1000 || visSm < 3)       fltCat = 'IFR';
+        else if (ceilingFt <= 3000 || visSm <= 5)     fltCat = 'MVFR';
+        else if (ceilingFt > 3000 && visSm > 5)       fltCat = 'VFR';
         const catColor = { VFR: '#2e7d32', MVFR: '#1565c0', IFR: '#c62828', LIFR: '#6a1b9a' };
-        const catBg = catColor[fltCat] || 'transparent';
         const catBadge = fltCat
-            ? `<span class="metar-flt-badge" style="background:${catBg};">${fltCat}</span>`
+            ? `<span class="metar-flt-badge" style="background:${catColor[fltCat] || '#555'};">${fltCat}</span>`
             : '';
 
         return `
@@ -5058,44 +5201,16 @@
                 ${catBadge}
             </div>
             <div class="metar-obs-grid">
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Temperature</span>
-                    <span class="metar-obs-val">${tempStr}</span>
-                </div>
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Dew Point</span>
-                    <span class="metar-obs-val">${dewpStr}</span>
-                </div>
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Rel. Humidity</span>
-                    <span class="metar-obs-val">${rhStr}</span>
-                </div>
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Wind</span>
-                    <span class="metar-obs-val">${windStr}</span>
-                </div>
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Visibility</span>
-                    <span class="metar-obs-val">${visStr}</span>
-                </div>
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Clouds</span>
-                    <span class="metar-obs-val">${cloudStr}</span>
-                </div>
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Weather</span>
-                    <span class="metar-obs-val">${wxStr !== '—' ? wxStr : 'None'}</span>
-                </div>
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Altimeter</span>
-                    <span class="metar-obs-val">${altimStr}</span>
-                </div>
-                <div class="metar-obs-item">
-                    <span class="metar-obs-label">Sea-Level Pressure</span>
-                    <span class="metar-obs-val">${slpStr}</span>
-                </div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Temperature</span><span class="metar-obs-val">${tempStr}</span></div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Dew Point</span><span class="metar-obs-val">${dewpStr}</span></div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Rel. Humidity</span><span class="metar-obs-val">${rhStr}</span></div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Wind</span><span class="metar-obs-val">${windStr}</span></div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Visibility</span><span class="metar-obs-val">${visStr}</span></div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Clouds</span><span class="metar-obs-val">${cloudStr}</span></div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Conditions</span><span class="metar-obs-val">${wxStr}</span></div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Altimeter</span><span class="metar-obs-val">${altimStr}</span></div>
+                <div class="metar-obs-item"><span class="metar-obs-label">Sea-Level Pressure</span><span class="metar-obs-val">${slpStr}</span></div>
             </div>
-            ${obs.rawOb ? `<div class="metar-raw"><span class="metar-raw-label">Raw METAR</span><code class="metar-raw-code">${obs.rawOb}</code></div>` : ''}
         </div>`;
     }
 
@@ -5105,7 +5220,7 @@
     }
 
     function _haversineNm(lat1, lon1, lat2, lon2) {
-        const R = 3440.065; // Earth radius in nautical miles
+        const R = 3440.065;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
