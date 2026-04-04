@@ -245,6 +245,331 @@
         .owm-key-warn.visible { display: block; }
         .layer-notice { font-size: 0.78rem; color: var(--text-muted); padding: 4px 0; }
 
+        /* ---- Surface Analysis Front Legend ---- */
+        .surface-front-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 14px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+        }
+        .sf-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        /* Cold front: blue with triangles */
+        .sf-cold-front {
+            display: inline-block;
+            width: 28px;
+            height: 6px;
+            background: linear-gradient(to right, #1565c0, #1e88e5);
+            border-radius: 2px;
+            position: relative;
+        }
+        .sf-cold-front::after {
+            content: '▶';
+            position: absolute;
+            right: -6px;
+            top: -5px;
+            font-size: 8px;
+            color: #1565c0;
+        }
+        /* Warm front: red with bumps */
+        .sf-warm-front {
+            display: inline-block;
+            width: 28px;
+            height: 6px;
+            background: linear-gradient(to right, #c62828, #e53935);
+            border-radius: 2px;
+            position: relative;
+        }
+        .sf-warm-front::after {
+            content: '●';
+            position: absolute;
+            right: -4px;
+            top: -6px;
+            font-size: 8px;
+            color: #c62828;
+        }
+        /* Stationary front: alternating blue/red */
+        .sf-stationary-front {
+            display: inline-block;
+            width: 28px;
+            height: 6px;
+            background: repeating-linear-gradient(to right, #1565c0 0px, #1565c0 14px, #c62828 14px, #c62828 28px);
+            border-radius: 2px;
+        }
+        /* Occluded front: purple */
+        .sf-occluded-front {
+            display: inline-block;
+            width: 28px;
+            height: 6px;
+            background: linear-gradient(to right, #6a1b9a, #8e24aa);
+            border-radius: 2px;
+        }
+
+        /* ---- METAR Section ---- */
+        .metar-section { }
+        .metar-header-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .metar-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0 0 4px;
+            color: var(--text-primary);
+        }
+        .metar-subtitle {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+        .metar-search-bar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .metar-search-input {
+            flex: 1;
+            min-width: 140px;
+            max-width: 220px;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-family: monospace;
+            letter-spacing: 0.05em;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .metar-search-input:focus { border-color: rgba(100,180,255,0.5); }
+        .metar-search-input::placeholder { color: var(--text-muted); font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; letter-spacing: 0; }
+        .metar-search-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: rgba(100,180,255,0.15);
+            border: 1px solid rgba(100,180,255,0.3);
+            border-radius: var(--radius-sm);
+            color: #8dd4ff;
+            font-size: 0.82rem;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.18s;
+        }
+        .metar-search-btn:hover { background: rgba(100,180,255,0.25); }
+        .metar-location-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: rgba(100,230,120,0.1);
+            border: 1px solid rgba(100,230,120,0.25);
+            border-radius: var(--radius-sm);
+            color: #7de0a0;
+            font-size: 0.82rem;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.18s;
+        }
+        .metar-location-btn:hover { background: rgba(100,230,120,0.2); }
+        .metar-timeframe-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .metar-tf-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .metar-tf-btns {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .metar-tf-btn {
+            padding: 5px 11px;
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.13);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.18s;
+        }
+        .metar-tf-btn:hover { background: rgba(100,180,255,0.12); border-color: rgba(100,180,255,0.3); color: #8dd4ff; }
+        .metar-tf-btn.active { background: rgba(100,180,255,0.2); border-color: rgba(100,180,255,0.45); color: #8dd4ff; }
+        .metar-station-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+            background: rgba(100,180,255,0.07);
+            border: 1px solid rgba(100,180,255,0.18);
+            border-radius: var(--radius-sm);
+        }
+        .metar-station-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .metar-station-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            flex: 1;
+        }
+        .metar-clear-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 2px 6px;
+            border-radius: 50%;
+            line-height: 1;
+            transition: color 0.18s, background 0.18s;
+        }
+        .metar-clear-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
+        .metar-status-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            font-size: 0.84rem;
+            color: var(--text-muted);
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: var(--radius-sm);
+        }
+        .metar-error-box { color: #ff8a8a; border-color: rgba(255,100,100,0.25); background: rgba(255,100,100,0.06); }
+        .metar-obs-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+        .metar-obs-card.metar-obs-latest {
+            border-color: rgba(100,180,255,0.3);
+            background: rgba(100,180,255,0.05);
+        }
+        .metar-obs-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 9px 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            background: rgba(255,255,255,0.03);
+        }
+        .metar-obs-time {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .metar-latest-tag {
+            display: inline-block;
+            padding: 1px 7px;
+            background: rgba(100,180,255,0.2);
+            border: 1px solid rgba(100,180,255,0.35);
+            border-radius: 100px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            color: #8dd4ff;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .metar-flt-badge {
+            display: inline-block;
+            padding: 2px 9px;
+            border-radius: 100px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .metar-obs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 0;
+        }
+        .metar-obs-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 9px 14px;
+            border-right: 1px solid rgba(255,255,255,0.06);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .metar-obs-item:last-child { border-right: none; }
+        .metar-obs-label {
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+        .metar-obs-val {
+            font-size: 0.88rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .metar-raw {
+            padding: 10px 14px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+            background: rgba(0,0,0,0.15);
+        }
+        .metar-raw-label {
+            display: block;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+        }
+        .metar-raw-code {
+            display: block;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #b0d4ff;
+            word-break: break-all;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            background: none;
+        }
+        @media (max-width: 500px) {
+            .metar-search-bar { flex-direction: column; align-items: stretch; }
+            .metar-search-input { max-width: 100%; }
+            .metar-obs-grid { grid-template-columns: 1fr 1fr; }
+        }
+
         /* ---- SPC Image Gallery ---- */
         .spc-img-card {
             border-radius: 8px;
@@ -1042,6 +1367,7 @@
                     <button class="layer-btn active" data-layer="spc" onclick="switchLayer('spc')">SPC Outlook</button>
                     <button class="layer-btn" data-layer="satellite" onclick="switchLayer('satellite')">Satellite</button>
                     <button class="layer-btn" data-layer="radar" onclick="switchLayer('radar')">Radar</button>
+                    <button class="layer-btn" data-layer="surface-analysis" onclick="switchLayer('surface-analysis')">Surface Analysis</button>
                     <button class="layer-btn" data-layer="temperature" onclick="switchLayer('temperature')">Temperature</button>
                     <button class="layer-btn" data-layer="wind" onclick="switchLayer('wind')">Wind</button>
                     <button class="layer-btn" data-layer="clouds" onclick="switchLayer('clouds')">Clouds</button>
@@ -1203,6 +1529,26 @@
                     <span>Opacity:</span>
                     <input type="range" min="0" max="100" value="70" oninput="setOWMOpacity(this.value)" id="owm-opacity">
                 </div>
+                <!-- Surface Analysis Sub-Controls -->
+                <div class="spc-controls" id="surface-analysis-controls">
+                    <div class="ctrl-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span style="color:var(--text-muted);font-size:0.72rem;flex:1;min-width:180px;">Surface fronts, isobars &amp; pressure systems — NOAA WPC</span>
+                        <button class="icon-action-btn" onclick="refreshSurfaceAnalysis()" title="Refresh">&#8635;</button>
+                    </div>
+                    <div class="opacity-row">
+                        <span>Opacity:</span>
+                        <input type="range" min="0" max="100" value="85" oninput="setSurfaceAnalysisOpacity(this.value)" id="surface-analysis-opacity">
+                    </div>
+                    <!-- Front symbol legend -->
+                    <div class="surface-front-legend">
+                        <div class="sf-legend-item"><span class="sf-cold-front"></span>Cold Front</div>
+                        <div class="sf-legend-item"><span class="sf-warm-front"></span>Warm Front</div>
+                        <div class="sf-legend-item"><span class="sf-stationary-front"></span>Stationary Front</div>
+                        <div class="sf-legend-item"><span class="sf-occluded-front"></span>Occluded Front</div>
+                        <div class="sf-legend-item"><span class="sf-pressure-h" style="color:#1565c0;font-weight:700;">H</span> High Pressure</div>
+                        <div class="sf-legend-item"><span class="sf-pressure-l" style="color:#c62828;font-weight:700;">L</span> Low Pressure</div>
+                    </div>
+                </div>
                 <!-- Basemap -->
                 <div class="spc-controls" id="basemap-controls">
                     <div class="ctrl-row">
@@ -1360,6 +1706,72 @@
                     </button>
                 </div>
                 <div id="fire-wx-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
+            </div>
+
+            <!-- =====================================================
+                 METAR VIEWER — surface observation lookup
+                 ===================================================== -->
+            <div id="metar-view" class="glass-static metar-section" style="margin-top:16px;padding:16px;">
+                <div class="metar-header-row">
+                    <div>
+                        <h3 class="metar-title">Surface Weather Observations (METAR)</h3>
+                        <p class="metar-subtitle">Search by station ID or use your location to view observed data.</p>
+                    </div>
+                </div>
+
+                <!-- Search controls -->
+                <div class="metar-search-bar">
+                    <input type="text" id="metar-station-input" class="metar-search-input"
+                           placeholder="Station ID (e.g. KLNS, KPHL, KJFK)"
+                           maxlength="10"
+                           oninput="this.value = this.value.toUpperCase()"
+                           onkeydown="if(event.key==='Enter') searchMetarByStation()">
+                    <button class="metar-search-btn" onclick="searchMetarByStation()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Search
+                    </button>
+                    <button class="metar-location-btn" onclick="searchMetarByLocation()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="9" opacity=".3"/></svg>
+                        Nearest Station
+                    </button>
+                </div>
+
+                <!-- Time frame selector -->
+                <div class="metar-timeframe-row">
+                    <span class="metar-tf-label">Time Range:</span>
+                    <div class="metar-tf-btns">
+                        <button class="metar-tf-btn" data-hours="0.25" onclick="setMetarTimeframe(0.25)">15 min</button>
+                        <button class="metar-tf-btn" data-hours="0.5" onclick="setMetarTimeframe(0.5)">30 min</button>
+                        <button class="metar-tf-btn active" data-hours="1" onclick="setMetarTimeframe(1)">1 hr</button>
+                        <button class="metar-tf-btn" data-hours="6" onclick="setMetarTimeframe(6)">6 hr</button>
+                        <button class="metar-tf-btn" data-hours="12" onclick="setMetarTimeframe(12)">12 hr</button>
+                        <button class="metar-tf-btn" data-hours="24" onclick="setMetarTimeframe(24)">24 hr</button>
+                    </div>
+                </div>
+
+                <!-- Station info bar (shown once a station is loaded) -->
+                <div id="metar-station-info" style="display:none;" class="metar-station-bar">
+                    <div id="metar-station-name" class="metar-station-name"></div>
+                    <div id="metar-station-meta" class="metar-station-meta"></div>
+                    <button class="metar-clear-btn" onclick="clearMetarView()" title="Clear">&#10005;</button>
+                </div>
+
+                <!-- Loading / error / empty states -->
+                <div id="metar-loading" style="display:none;" class="metar-status-box">
+                    <div class="spinner" style="width:22px;height:22px;border-width:2px;"></div>
+                    <span id="metar-loading-msg">Loading observations&hellip;</span>
+                </div>
+                <div id="metar-error" style="display:none;" class="metar-status-box metar-error-box">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <span id="metar-error-msg">Could not load METAR data.</span>
+                </div>
+                <div id="metar-empty" style="display:none;" class="metar-status-box">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <span>No observations found for this time range. Try a longer range.</span>
+                </div>
+
+                <!-- Observations output -->
+                <div id="metar-observations"></div>
             </div>
 
         </section>
@@ -4337,6 +4749,7 @@
             else if (currentLayer === 'radar') { _radarLoaded = false; showRadarFrame(_radarFrameIdx); }
             else if (currentLayer === 'satellite') { _satLoaded = false; showSatFrame(_satFrameIdx); }
             else if (currentLayer === 'rtma') { _rtmaLoaded = false; loadRtmaLayer(); }
+            else if (currentLayer === 'surface-analysis') { _surfaceAnalysisLoaded = false; loadSurfaceAnalysisLayer(); }
             // Re-apply alert overlay after style change clears all layers
             _reloadAlertOverlayAfterStyleChange();
             // Re-apply my-location marker if enabled
@@ -4364,10 +4777,347 @@
         }
     }
 
+    // ============================================================
+    // SURFACE ANALYSIS LAYER (NOAA nowCOAST WMS)
+    // ============================================================
+    let _surfaceAnalysisOpacity = 0.85;
+    let _surfaceAnalysisLoaded  = false;
+
+    // WMS tile URL — nowCOAST surface analysis (fronts, isobars, pressure centers)
+    // Layer 4 = surface analysis (fronts + isobars + H/L labels)
+    const SURFACE_ANALYSIS_WMS =
+        'https://nowcoast.noaa.gov/arcgis/services/nowcoast/analysis_meteohydro_sfc_analysis_time/MapServer/WMSServer' +
+        '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap' +
+        '&FORMAT=image%2Fpng&TRANSPARENT=TRUE&LAYERS=4' +
+        '&WIDTH=512&HEIGHT=512&SRS=EPSG%3A3857' +
+        '&BBOX={bbox-epsg-3857}';
+
+    function loadSurfaceAnalysisLayer() {
+        if (!map) return;
+        clearSurfaceAnalysisLayer();
+        showLoading('Loading surface analysis\u2026');
+        try {
+            map.addSource('surface-analysis-src', {
+                type: 'raster',
+                tiles: [SURFACE_ANALYSIS_WMS],
+                tileSize: 512,
+                attribution: '&copy; <a href="https://nowcoast.noaa.gov/" target="_blank">NOAA nowCOAST</a>'
+            });
+            map.addLayer({
+                id: 'surface-analysis-layer',
+                type: 'raster',
+                source: 'surface-analysis-src',
+                paint: { 'raster-opacity': _surfaceAnalysisOpacity, 'raster-fade-duration': 200 }
+            }, _overlayBefore());
+            _surfaceAnalysisLoaded = true;
+        } catch (e) {
+            console.error('Surface analysis load error:', e);
+        } finally {
+            hideLoading();
+        }
+    }
+
+    function clearSurfaceAnalysisLayer() {
+        _surfaceAnalysisLoaded = false;
+        if (!map) return;
+        if (map.getLayer('surface-analysis-layer')) map.removeLayer('surface-analysis-layer');
+        if (map.getSource('surface-analysis-src'))  map.removeSource('surface-analysis-src');
+    }
+
+    function setSurfaceAnalysisOpacity(val) {
+        _surfaceAnalysisOpacity = val / 100;
+        if (map && map.getLayer('surface-analysis-layer'))
+            map.setPaintProperty('surface-analysis-layer', 'raster-opacity', _surfaceAnalysisOpacity);
+    }
+
+    function refreshSurfaceAnalysis() {
+        if (currentLayer !== 'surface-analysis') return;
+        clearSurfaceAnalysisLayer();
+        _ensureMapReady().then(() => loadSurfaceAnalysisLayer());
+    }
+
+
+    // ============================================================
+    // METAR VIEWER
+    // ============================================================
+    const AWC_METAR_BASE = 'https://aviationweather.gov/api/data/metar';
+    let _metarTimeframeHours = 1;
+    let _metarCurrentStation = null;
+
+    function setMetarTimeframe(hours) {
+        _metarTimeframeHours = hours;
+        document.querySelectorAll('.metar-tf-btn').forEach(b =>
+            b.classList.toggle('active', parseFloat(b.dataset.hours) === hours));
+        if (_metarCurrentStation) _fetchAndRenderMetar(_metarCurrentStation);
+    }
+
+    function searchMetarByStation() {
+        const input = document.getElementById('metar-station-input');
+        const id = (input?.value || '').trim().toUpperCase();
+        if (!id) { _metarShowError('Please enter a station ID (e.g. KLNS)'); return; }
+        _fetchAndRenderMetar(id);
+    }
+
+    function searchMetarByLocation() {
+        _metarShowLoading('Finding nearest station\u2026');
+        if (!navigator.geolocation) {
+            _metarShowError('Geolocation is not supported by your browser.');
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                const { latitude: lat, longitude: lon } = pos.coords;
+                _fetchNearestMetarStation(lat, lon);
+            },
+            err => {
+                // Fall back to stored location
+                const loc = LocationManager.getCurrent();
+                _fetchNearestMetarStation(loc.lat, loc.lng);
+            },
+            { timeout: 8000, maximumAge: 60000 }
+        );
+    }
+
+    async function _fetchNearestMetarStation(lat, lon) {
+        _metarShowLoading('Finding nearest station\u2026');
+        try {
+            // Query stations within 100 nm of the point, take most recent obs only
+            const url = `${AWC_METAR_BASE}?lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}&radial=100&hoursBeforeNow=2&mostRecent=true&format=json`;
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            if (!data || data.length === 0) {
+                _metarShowError('No stations found near your location. Try searching by ID.');
+                return;
+            }
+            // Sort by distance (Haversine)
+            const sorted = data.slice().sort((a, b) => {
+                const da = _haversineNm(lat, lon, a.lat, a.lon);
+                const db = _haversineNm(lat, lon, b.lat, b.lon);
+                return da - db;
+            });
+            const nearest = sorted[0];
+            const stationId = nearest.icaoId || nearest.id;
+            const input = document.getElementById('metar-station-input');
+            if (input) input.value = stationId;
+            _fetchAndRenderMetar(stationId);
+        } catch (e) {
+            _metarShowError('Could not find nearest station: ' + e.message);
+        }
+    }
+
+    async function _fetchAndRenderMetar(stationId) {
+        _metarCurrentStation = stationId;
+        _metarShowLoading('Loading observations for ' + stationId + '\u2026');
+        try {
+            const hours = _metarTimeframeHours;
+            const url = `${AWC_METAR_BASE}?ids=${encodeURIComponent(stationId)}&hoursBeforeNow=${hours}&format=json`;
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            if (!data || data.length === 0) {
+                _metarHideAll();
+                document.getElementById('metar-empty').style.display = 'flex';
+                _metarShowStationBar(stationId, null);
+                return;
+            }
+            // Sort newest first
+            const sorted = data.slice().sort((a, b) =>
+                new Date(b.obsTime || b.reportTime || 0) - new Date(a.obsTime || a.reportTime || 0));
+            _metarHideAll();
+            _metarShowStationBar(stationId, sorted[0]);
+            _renderMetarObservations(sorted);
+        } catch (e) {
+            _metarShowError('Failed to load data: ' + e.message);
+        }
+    }
+
+    function _metarShowLoading(msg) {
+        _metarHideAll();
+        const el = document.getElementById('metar-loading');
+        const msgEl = document.getElementById('metar-loading-msg');
+        if (el) el.style.display = 'flex';
+        if (msgEl && msg) msgEl.textContent = msg;
+    }
+    function _metarShowError(msg) {
+        _metarHideAll();
+        const el = document.getElementById('metar-error');
+        const msgEl = document.getElementById('metar-error-msg');
+        if (el) el.style.display = 'flex';
+        if (msgEl && msg) msgEl.textContent = msg;
+    }
+    function _metarHideAll() {
+        ['metar-loading','metar-error','metar-empty','metar-observations'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.style.display = 'none'; if (id === 'metar-observations') el.innerHTML = ''; }
+        });
+    }
+    function _metarShowStationBar(stationId, obs) {
+        const bar  = document.getElementById('metar-station-info');
+        const name = document.getElementById('metar-station-name');
+        const meta = document.getElementById('metar-station-meta');
+        if (!bar) return;
+        bar.style.display = 'flex';
+        const displayName = obs?.name ? `${stationId} — ${obs.name}` : stationId;
+        if (name) name.textContent = displayName;
+        if (meta && obs) {
+            const parts = [];
+            if (obs.elev != null) parts.push(`Elev: ${Math.round(obs.elev)} ft`);
+            if (obs.lat != null && obs.lon != null) parts.push(`${obs.lat.toFixed(2)}°N, ${Math.abs(obs.lon).toFixed(2)}°W`);
+            meta.textContent = parts.join('  ·  ');
+        } else if (meta) { meta.textContent = ''; }
+    }
+
+    function clearMetarView() {
+        _metarCurrentStation = null;
+        _metarHideAll();
+        document.getElementById('metar-station-info').style.display = 'none';
+        const input = document.getElementById('metar-station-input');
+        if (input) input.value = '';
+    }
+
+    function _renderMetarObservations(observations) {
+        const container = document.getElementById('metar-observations');
+        if (!container) return;
+        container.style.display = 'block';
+        container.innerHTML = observations.map((obs, i) => _buildMetarCard(obs, i === 0)).join('');
+    }
+
+    function _buildMetarCard(obs, isLatest) {
+        // --- Parse time ---
+        let timeStr = '—';
+        if (obs.obsTime || obs.reportTime) {
+            try {
+                const d = new Date(obs.obsTime || obs.reportTime);
+                timeStr = d.toLocaleString('en-US', {
+                    month: 'short', day: 'numeric',
+                    hour: 'numeric', minute: '2-digit',
+                    timeZoneName: 'short'
+                });
+            } catch (_) { timeStr = obs.obsTime || obs.reportTime || '—'; }
+        }
+
+        // --- Wind ---
+        let windStr = 'Calm';
+        if (obs.wspd != null && obs.wspd > 0) {
+            const dir = obs.wdir === 0 || obs.wdir == null ? 'Vrb' : _degreesToCardinal(obs.wdir) + ` (${obs.wdir}°)`;
+            windStr = `${dir} at ${Math.round(obs.wspd)} kt`;
+            if (obs.wgst && obs.wgst > obs.wspd) windStr += `, gusting ${Math.round(obs.wgst)} kt`;
+        } else if (obs.wdir === 0 && obs.wspd === 0) { windStr = 'Calm'; }
+
+        // --- Visibility ---
+        const visStr = obs.visib != null
+            ? (obs.visib >= 9999 ? '10+ SM' : obs.visib === 9 ? '9 SM' : obs.visib + ' SM')
+            : '—';
+
+        // --- Temperature / Dew Point ---
+        const tempC = obs.temp != null ? obs.temp : null;
+        const dewpC = obs.dewp != null ? obs.dewp : null;
+        const tempF = tempC != null ? Math.round(tempC * 9 / 5 + 32) : null;
+        const dewpF = dewpC != null ? Math.round(dewpC * 9 / 5 + 32) : null;
+        const tempStr = tempF != null ? `${tempF}°F (${Math.round(tempC)}°C)` : '—';
+        const dewpStr = dewpF != null ? `${dewpF}°F (${Math.round(dewpC)}°C)` : '—';
+
+        // --- Relative Humidity (computed) ---
+        let rhStr = '—';
+        if (tempC != null && dewpC != null) {
+            const rh = Math.round(100 * Math.exp((17.625 * dewpC) / (243.04 + dewpC)) /
+                                             Math.exp((17.625 * tempC) / (243.04 + tempC)));
+            rhStr = Math.min(100, Math.max(0, rh)) + '%';
+        }
+
+        // --- Altimeter / SLP ---
+        const altimStr = obs.altim != null ? obs.altim.toFixed(2) + ' inHg' : '—';
+        const slpStr   = obs.slp   != null ? obs.slp.toFixed(1)   + ' mb'   : '—';
+
+        // --- Clouds ---
+        let cloudStr = '—';
+        if (obs.clouds && obs.clouds.length > 0) {
+            const COVER_LABEL = { CLR: 'Clear', SKC: 'Clear', FEW: 'Few', SCT: 'Scattered', BKN: 'Broken', OVC: 'Overcast', VV: 'Vertical Visibility' };
+            cloudStr = obs.clouds.map(c => {
+                const label = COVER_LABEL[c.cover] || c.cover;
+                return c.base != null ? `${label} ${c.base.toLocaleString()} ft` : label;
+            }).join('; ');
+        } else if (obs.cover != null) { cloudStr = obs.cover; }
+
+        // --- Weather phenomena ---
+        const wxStr = obs.wx ? obs.wx : (obs.wxString ? obs.wxString : '—');
+
+        // --- Flight category color ---
+        const fltCat = obs.fltCat || obs.flightCategory || '';
+        const catColor = { VFR: '#2e7d32', MVFR: '#1565c0', IFR: '#c62828', LIFR: '#6a1b9a' };
+        const catBg = catColor[fltCat] || 'transparent';
+        const catBadge = fltCat
+            ? `<span class="metar-flt-badge" style="background:${catBg};">${fltCat}</span>`
+            : '';
+
+        return `
+        <div class="metar-obs-card${isLatest ? ' metar-obs-latest' : ''}">
+            <div class="metar-obs-header">
+                <span class="metar-obs-time">${timeStr}${isLatest ? ' <span class="metar-latest-tag">Latest</span>' : ''}</span>
+                ${catBadge}
+            </div>
+            <div class="metar-obs-grid">
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Temperature</span>
+                    <span class="metar-obs-val">${tempStr}</span>
+                </div>
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Dew Point</span>
+                    <span class="metar-obs-val">${dewpStr}</span>
+                </div>
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Rel. Humidity</span>
+                    <span class="metar-obs-val">${rhStr}</span>
+                </div>
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Wind</span>
+                    <span class="metar-obs-val">${windStr}</span>
+                </div>
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Visibility</span>
+                    <span class="metar-obs-val">${visStr}</span>
+                </div>
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Clouds</span>
+                    <span class="metar-obs-val">${cloudStr}</span>
+                </div>
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Weather</span>
+                    <span class="metar-obs-val">${wxStr !== '—' ? wxStr : 'None'}</span>
+                </div>
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Altimeter</span>
+                    <span class="metar-obs-val">${altimStr}</span>
+                </div>
+                <div class="metar-obs-item">
+                    <span class="metar-obs-label">Sea-Level Pressure</span>
+                    <span class="metar-obs-val">${slpStr}</span>
+                </div>
+            </div>
+            ${obs.rawOb ? `<div class="metar-raw"><span class="metar-raw-label">Raw METAR</span><code class="metar-raw-code">${obs.rawOb}</code></div>` : ''}
+        </div>`;
+    }
+
+    function _degreesToCardinal(deg) {
+        const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+        return dirs[Math.round(deg / 22.5) % 16];
+    }
+
+    function _haversineNm(lat1, lon1, lat2, lon2) {
+        const R = 3440.065; // Earth radius in nautical miles
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+
     function switchLayer(layer) {
-        if (layer !== 'radar') clearRadarLayer(); // always clean up radar when leaving
-        if (layer !== 'satellite') clearSatLayer(); // always clean up satellite when leaving
-        if (layer !== 'rtma') clearRtmaLayer(); // always clean up RTMA when leaving
+        if (layer !== 'radar')            clearRadarLayer();          // clean up when leaving
+        if (layer !== 'satellite')        clearSatLayer();
+        if (layer !== 'rtma')             clearRtmaLayer();
+        if (layer !== 'surface-analysis') clearSurfaceAnalysisLayer();
         currentLayer = layer;
         document.querySelectorAll('.layer-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.layer === layer));
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
@@ -4376,12 +5126,14 @@
         document.getElementById('fire-controls').classList.toggle('visible', layer === 'fire-wx');
         document.getElementById('rtma-controls').classList.toggle('visible', layer === 'rtma');
         document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
+        document.getElementById('surface-analysis-controls').classList.toggle('visible', layer === 'surface-analysis');
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = layer === 'spc' ? '' : 'none';
         const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
         const hasInteractiveMap = mapLayer || layer === 'spc' || layer === 'radar' ||
-            layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx' || layer === 'rtma';
+            layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx' ||
+            layer === 'rtma' || layer === 'surface-analysis';
         document.getElementById('basemap-controls').classList.toggle('visible', hasInteractiveMap);
         _showAlertOverlayControls(hasInteractiveMap);
         // Re-apply alert overlay when switching layers (overlay persists across layer changes)
@@ -4402,6 +5154,10 @@
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showRadarView();
             _ensureMapReady().then(() => loadRadarLayer());
+        } else if (layer === 'surface-analysis') {
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
+            _showMapView();
+            _ensureMapReady().then(() => loadSurfaceAnalysisLayer());
         } else if (layer === 'wpc-rain') {
             clearSPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showWPCRainView();
