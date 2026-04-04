@@ -330,23 +330,79 @@
             flex-wrap: wrap;
             margin-bottom: 10px;
         }
-        .metar-search-input {
+        .metar-input-wrap {
+            position: relative;
             flex: 1;
-            min-width: 140px;
-            max-width: 220px;
+            min-width: 200px;
+        }
+        .metar-search-input {
+            width: 100%;
+            box-sizing: border-box;
             padding: 8px 12px;
             background: rgba(255,255,255,0.07);
             border: 1px solid rgba(255,255,255,0.15);
             border-radius: var(--radius-sm);
             color: var(--text-primary);
             font-size: 0.9rem;
-            font-family: monospace;
-            letter-spacing: 0.05em;
+            font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
             outline: none;
             transition: border-color 0.2s;
         }
         .metar-search-input:focus { border-color: rgba(100,180,255,0.5); }
-        .metar-search-input::placeholder { color: var(--text-muted); font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; letter-spacing: 0; }
+        .metar-search-input::placeholder { color: var(--text-muted); }
+        .metar-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #1a2030;
+            border: 1px solid rgba(100,180,255,0.3);
+            border-radius: var(--radius-sm);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            z-index: 200;
+            overflow: hidden;
+        }
+        .metar-dropdown.open { display: block; }
+        .metar-dd-item {
+            padding: 9px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            transition: background 0.12s;
+        }
+        .metar-dd-item:last-child { border-bottom: none; }
+        .metar-dd-item:hover, .metar-dd-item.highlighted { background: rgba(100,180,255,0.12); }
+        .metar-dd-item-top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 2px;
+        }
+        .metar-dd-place {
+            font-size: 0.88rem;
+            color: var(--text-primary);
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .metar-dd-station {
+            font-size: 0.78rem;
+            font-family: monospace;
+            font-weight: 600;
+            color: #8dd4ff;
+            background: rgba(100,180,255,0.12);
+            border: 1px solid rgba(100,180,255,0.25);
+            border-radius: 4px;
+            padding: 1px 6px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .metar-dd-station.loading { color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); font-family: inherit; }
+        .metar-dd-meta {
+            font-size: 0.73rem;
+            color: var(--text-muted);
+        }
         .metar-search-btn {
             display: flex;
             align-items: center;
@@ -599,7 +655,7 @@
 
         @media (max-width: 500px) {
             .metar-search-bar { flex-direction: column; align-items: stretch; }
-            .metar-search-input { max-width: 100%; }
+            .metar-input-wrap { min-width: 0; }
             .metar-obs-grid { grid-template-columns: 1fr 1fr; }
         }
 
@@ -1794,10 +1850,16 @@
 
                 <!-- Search controls -->
                 <div class="metar-search-bar">
-                    <input type="text" id="metar-station-input" class="metar-search-input"
-                           placeholder="Station ID (e.g. KLNS) or town name (e.g. Lancaster, PA)"
-                           maxlength="80"
-                           onkeydown="if(event.key==='Enter') searchMetarByStation()">
+                    <div class="metar-input-wrap">
+                        <input type="text" id="metar-station-input" class="metar-search-input"
+                               placeholder="Station ID (e.g. KLNS) or town name (e.g. Lancaster, PA)"
+                               maxlength="80"
+                               autocomplete="off"
+                               oninput="_onMetarInput(this.value)"
+                               onkeydown="_onMetarInputKey(event)"
+                               onblur="_onMetarInputBlur()">
+                        <div id="metar-dropdown" class="metar-dropdown"></div>
+                    </div>
                     <button class="metar-search-btn" onclick="searchMetarByStation()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         Search
@@ -5023,6 +5085,177 @@
     let _metarTimeframeHours = 1;
     let _metarCurrentStation = null;
 
+    // ---- Dropdown state ----
+    let _metarDdTimer   = null;
+    let _metarDdResults = [];   // [{lat, lon, displayName, state, country}]
+    let _metarDdActive  = -1;   // keyboard-highlighted index
+
+    function _onMetarInput(val) {
+        clearTimeout(_metarDdTimer);
+        const raw = val.trim();
+        if (raw.length < 2) { _hideMetarDropdown(); return; }
+        // If it already looks like a station ID don't show dropdown
+        if (/^[A-Za-z0-9]{3,5}$/.test(raw)) { _hideMetarDropdown(); return; }
+        _metarDdTimer = setTimeout(() => _fetchMetarDropdown(raw), 350);
+    }
+
+    function _onMetarInputKey(e) {
+        const dd = document.getElementById('metar-dropdown');
+        const items = dd ? dd.querySelectorAll('.metar-dd-item') : [];
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            _metarDdActive = Math.min(_metarDdActive + 1, items.length - 1);
+            _highlightDdItem(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            _metarDdActive = Math.max(_metarDdActive - 1, -1);
+            _highlightDdItem(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (_metarDdActive >= 0 && items[_metarDdActive]) {
+                items[_metarDdActive].click();
+            } else {
+                searchMetarByStation();
+            }
+        } else if (e.key === 'Escape') {
+            _hideMetarDropdown();
+        }
+    }
+
+    function _highlightDdItem(items) {
+        items.forEach((el, i) => el.classList.toggle('highlighted', i === _metarDdActive));
+        if (_metarDdActive >= 0 && items[_metarDdActive]) {
+            items[_metarDdActive].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function _onMetarInputBlur() {
+        // Delay so a click on a dropdown item can fire first
+        setTimeout(_hideMetarDropdown, 200);
+    }
+
+    async function _fetchMetarDropdown(query) {
+        const params = new URLSearchParams({
+            q: query, format: 'json', limit: '5',
+            addressdetails: '1', 'accept-language': 'en'
+        });
+        let results;
+        try {
+            const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+                headers: { 'User-Agent': 'EphrataWeatherApp/1.0' }
+            });
+            if (!resp.ok) return;
+            results = await resp.json();
+        } catch (_) { return; }
+
+        if (!results || results.length === 0) { _hideMetarDropdown(); return; }
+
+        _metarDdResults = results.map(r => {
+            const addr = r.address || {};
+            const city  = addr.city || addr.town || addr.village || addr.hamlet || r.name || '';
+            const state = addr.state || '';
+            const country = addr.country_code?.toUpperCase() || '';
+            const parts = [];
+            if (city)  parts.push(city);
+            if (state) parts.push(state);
+            if (country && country !== 'US') parts.push(country);
+            return {
+                lat: parseFloat(r.lat),
+                lon: parseFloat(r.lon),
+                displayName: parts.join(', ') || r.display_name.split(',').slice(0, 2).join(',').trim(),
+                type: r.type || ''
+            };
+        });
+
+        _metarDdActive = -1;
+        _renderMetarDropdown();
+
+        // Pre-fetch nearest station for each result in the background
+        _metarDdResults.forEach((loc, idx) => _resolveDropdownStation(loc, idx));
+    }
+
+    function _renderMetarDropdown() {
+        const dd = document.getElementById('metar-dropdown');
+        if (!dd) return;
+        dd.innerHTML = _metarDdResults.map((loc, i) => `
+            <div class="metar-dd-item" data-idx="${i}"
+                 onmousedown="_selectMetarDdItem(${i})">
+                <div class="metar-dd-item-top">
+                    <span class="metar-dd-place">${_esc(loc.displayName)}</span>
+                    <span class="metar-dd-station loading" id="metar-dd-stn-${i}">finding&hellip;</span>
+                </div>
+                <div class="metar-dd-meta" id="metar-dd-meta-${i}">${loc.lat.toFixed(3)}&deg;, ${loc.lon.toFixed(3)}&deg;</div>
+            </div>`).join('');
+        dd.classList.add('open');
+    }
+
+    async function _resolveDropdownStation(loc, idx) {
+        const nwsH = { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' };
+        try {
+            const ptResp = await fetch(
+                `https://api.weather.gov/points/${loc.lat.toFixed(4)},${loc.lon.toFixed(4)}`,
+                { headers: nwsH }
+            );
+            if (!ptResp.ok) throw new Error('no points');
+            const ptData = await ptResp.json();
+            const stUrl  = ptData?.properties?.observationStations;
+            if (!stUrl) throw new Error('no stations url');
+
+            const stResp = await fetch(stUrl, { headers: nwsH });
+            if (!stResp.ok) throw new Error('no stations');
+            const stData = await stResp.json();
+            const station = stData?.features?.[0]?.properties;
+            if (!station) throw new Error('empty');
+
+            const stationId   = station.stationIdentifier || '';
+            const stationName = station.name || '';
+            // Store on the result object so selection can use it
+            if (_metarDdResults[idx]) {
+                _metarDdResults[idx].stationId   = stationId;
+                _metarDdResults[idx].stationName = stationName;
+            }
+            // Update the DOM badge
+            const badge = document.getElementById(`metar-dd-stn-${idx}`);
+            if (badge) {
+                badge.textContent  = stationId;
+                badge.className    = 'metar-dd-station';
+            }
+            // Update meta line
+            const meta = document.getElementById(`metar-dd-meta-${idx}`);
+            if (meta && stationName) {
+                meta.textContent = stationName;
+            }
+        } catch (_) {
+            const badge = document.getElementById(`metar-dd-stn-${idx}`);
+            if (badge) { badge.textContent = 'N/A'; badge.className = 'metar-dd-station loading'; }
+        }
+    }
+
+    function _selectMetarDdItem(idx) {
+        const loc = _metarDdResults[idx];
+        if (!loc) return;
+        _hideMetarDropdown();
+        const input = document.getElementById('metar-station-input');
+        if (loc.stationId) {
+            if (input) input.value = loc.stationId;
+            _fetchAndRenderMetar(loc.stationId);
+        } else {
+            // Station not resolved yet — fall back to location-based lookup
+            if (input) input.value = loc.displayName;
+            _fetchNearestMetarStation(loc.lat, loc.lon);
+        }
+    }
+
+    function _hideMetarDropdown() {
+        const dd = document.getElementById('metar-dropdown');
+        if (dd) { dd.classList.remove('open'); dd.innerHTML = ''; }
+        _metarDdActive = -1;
+    }
+
+    function _esc(str) {
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     function setMetarTimeframe(hours) {
         _metarTimeframeHours = hours;
         document.querySelectorAll('.metar-tf-btn').forEach(b =>
@@ -5031,6 +5264,7 @@
     }
 
     function searchMetarByStation() {
+        _hideMetarDropdown();
         const input = document.getElementById('metar-station-input');
         const raw = (input?.value || '').trim();
         if (!raw) { _metarShowError('Please enter a station ID (e.g. KLNS) or a town name.'); return; }
@@ -5188,6 +5422,7 @@
 
     function clearMetarView() {
         _metarCurrentStation = null;
+        _hideMetarDropdown();
         _metarHideAll();
         document.getElementById('metar-station-info').style.display = 'none';
         const input = document.getElementById('metar-station-input');
