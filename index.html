@@ -572,6 +572,49 @@
             line-height: 1.5;
             background: none;
         }
+        /* ---- METAR Charts ---- */
+        .metar-chart-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+        .metar-chart-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .metar-chart-tabs {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .metar-chart-tab {
+            padding: 4px 11px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.18s;
+        }
+        .metar-chart-tab:hover { background: rgba(100,180,255,0.1); border-color: rgba(100,180,255,0.28); color: var(--text-secondary); }
+        .metar-chart-tab.active { background: rgba(100,180,255,0.18); border-color: rgba(100,180,255,0.4); color: #8dd4ff; }
+        #metar-chart-svg {
+            border-radius: var(--radius-sm);
+            background: rgba(0,0,0,0.18);
+            padding: 4px 0 10px;
+        }
+
         @media (max-width: 500px) {
             .metar-search-bar { flex-direction: column; align-items: stretch; }
             .metar-search-input { max-width: 100%; }
@@ -1778,6 +1821,21 @@
                 <div id="metar-empty" style="display:none;" class="metar-status-box">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                     <span>No observations found for this time range. Try a longer range.</span>
+                </div>
+
+                <!-- Chart section (shown when data is loaded) -->
+                <div id="metar-chart-wrap" style="display:none;margin-bottom:4px;">
+                    <div class="metar-chart-header">
+                        <span class="metar-chart-title">Trend Chart</span>
+                        <div class="metar-chart-tabs">
+                            <button class="metar-chart-tab active" data-mmetric="temp"    onclick="switchMetarChart('temp')">Temp &amp; Dew Point</button>
+                            <button class="metar-chart-tab"        data-mmetric="wind"    onclick="switchMetarChart('wind')">Wind</button>
+                            <button class="metar-chart-tab"        data-mmetric="vis"     onclick="switchMetarChart('vis')">Visibility</button>
+                            <button class="metar-chart-tab"        data-mmetric="pressure" onclick="switchMetarChart('pressure')">Pressure</button>
+                            <button class="metar-chart-tab"        data-mmetric="humidity" onclick="switchMetarChart('humidity')">Humidity</button>
+                        </div>
+                    </div>
+                    <svg id="metar-chart-svg" width="100%" style="display:block;overflow:visible;"></svg>
                 </div>
 
                 <!-- Observations output -->
@@ -5056,7 +5114,7 @@
         if (msgEl && msg) msgEl.textContent = msg;
     }
     function _metarHideAll() {
-        ['metar-loading','metar-error','metar-empty','metar-observations'].forEach(id => {
+        ['metar-loading','metar-error','metar-empty','metar-observations','metar-chart-wrap'].forEach(id => {
             const el = document.getElementById(id);
             if (el) { el.style.display = 'none'; if (id === 'metar-observations') el.innerHTML = ''; }
         });
@@ -5094,10 +5152,217 @@
         if (!container) return;
         container.style.display = 'block';
         container.innerHTML = features.map((f, i) => _buildMetarCard(f.properties, i === 0)).join('');
+        // Render chart with the same data
+        _metarChartFeatures = features;
+        _renderMetarCharts(features);
     }
 
     // Helper: extract numeric value safely from NWS quantity object
     function _nwsVal(obj) { return (obj && obj.value != null) ? obj.value : null; }
+
+    // ---- METAR CHARTS ----
+    let _metarChartFeatures = [];
+    let _activeMetarChart   = 'temp';
+
+    function switchMetarChart(metric) {
+        _activeMetarChart = metric;
+        document.querySelectorAll('.metar-chart-tab').forEach(b =>
+            b.classList.toggle('active', b.dataset.mmetric === metric));
+        _drawMetarChart(metric, _metarChartFeatures);
+    }
+
+    function _renderMetarCharts(features) {
+        const wrap = document.getElementById('metar-chart-wrap');
+        if (!wrap) return;
+        if (!features || features.length < 2) { wrap.style.display = 'none'; return; }
+        wrap.style.display = 'block';
+        _drawMetarChart(_activeMetarChart, features);
+    }
+
+    function _drawMetarChart(metric, features) {
+        const svg = document.getElementById('metar-chart-svg');
+        if (!svg || !features || features.length < 2) return;
+
+        // Data is newest-first from NWS — reverse so time flows left→right
+        const props = features.map(f => f.properties).reverse();
+        const W = svg.clientWidth || 700;
+
+        // ---------- extract series by metric ----------
+        let series1 = [], series2 = [], unit = '', label1 = '', label2 = '';
+        let color1 = '#FF7043', color2 = '#42A5F5';
+
+        if (metric === 'temp') {
+            series1 = props.map(p => {
+                const c = _nwsVal(p.temperature);
+                return c != null ? +(c * 9/5 + 32).toFixed(1) : null;
+            });
+            series2 = props.map(p => {
+                const c = _nwsVal(p.dewpoint);
+                return c != null ? +(c * 9/5 + 32).toFixed(1) : null;
+            });
+            unit = '°F'; label1 = 'Temp'; label2 = 'Dew Point';
+            color1 = '#FF7043'; color2 = '#42A5F5';
+        } else if (metric === 'wind') {
+            series1 = props.map(p => {
+                const kmh = _nwsVal(p.windSpeed);
+                return kmh != null ? +(kmh / 1.852).toFixed(1) : null;
+            });
+            series2 = props.map(p => {
+                const kmh = _nwsVal(p.windGust);
+                return kmh != null ? +(kmh / 1.852).toFixed(1) : null;
+            });
+            unit = 'kt'; label1 = 'Wind Speed'; label2 = 'Gusts';
+            color1 = '#42A5F5'; color2 = '#FFB300';
+        } else if (metric === 'vis') {
+            series1 = props.map(p => {
+                const m = _nwsVal(p.visibility);
+                return m != null ? Math.min(10, +(m / 1609.344).toFixed(1)) : null;
+            });
+            unit = 'SM'; label1 = 'Visibility';
+            color1 = '#26C6DA';
+        } else if (metric === 'pressure') {
+            series1 = props.map(p => {
+                const pa = _nwsVal(p.seaLevelPressure) || _nwsVal(p.barometricPressure);
+                return pa != null ? +(pa / 3386.39).toFixed(2) : null;
+            });
+            unit = 'inHg'; label1 = 'Pressure';
+            color1 = '#AB47BC';
+        } else if (metric === 'humidity') {
+            series1 = props.map(p => {
+                const tc = _nwsVal(p.temperature);
+                const dc = _nwsVal(p.dewpoint);
+                if (tc == null || dc == null) return null;
+                const rh = 100 * Math.exp((17.625*dc)/(243.04+dc)) / Math.exp((17.625*tc)/(243.04+tc));
+                return Math.min(100, Math.max(0, Math.round(rh)));
+            });
+            unit = '%'; label1 = 'Rel. Humidity';
+            color1 = '#66BB6A';
+        }
+
+        // ---------- timestamps for x-axis ----------
+        const times = props.map(p => p.timestamp ? new Date(p.timestamp) : null);
+        const timeRange = times.filter(Boolean);
+        const spanHrs = timeRange.length > 1
+            ? (timeRange[timeRange.length-1] - timeRange[0]) / 3600000 : 1;
+        const xFmtOpts = spanHrs > 20
+            ? { month: 'short', day: 'numeric', hour: 'numeric' }
+            : { hour: 'numeric', minute: '2-digit' };
+
+        // ---------- chart dimensions ----------
+        const hasGusts = metric === 'wind' && series2.some(v => v != null);
+        const H = 180;
+        svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+        svg.setAttribute('height', H);
+
+        const PAD_L = 48, PAD_R = 20, PAD_T = 22, PAD_B = 42;
+        const plotW = W - PAD_L - PAD_R;
+        const plotH = H - PAD_T - PAD_B;
+        const n = props.length;
+
+        // ---------- value range ----------
+        const allVals = [...series1, ...(label2 ? series2 : [])].filter(v => v != null);
+        if (allVals.length < 2) { svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="12">No data available for this metric</text>'; return; }
+
+        let minV = Math.min(...allVals);
+        let maxV = Math.max(...allVals);
+        const spread = maxV - minV || 1;
+        // Add comfortable padding, but keep 0 as floor for wind/vis/humidity
+        const floorAtZero = metric === 'wind' || metric === 'vis' || metric === 'humidity';
+        minV = floorAtZero ? Math.max(0, minV - spread * 0.12) : minV - spread * 0.12;
+        maxV = maxV + spread * 0.15;
+
+        const xOf = i => PAD_L + (i / Math.max(n - 1, 1)) * plotW;
+        const yOf = v => PAD_T + plotH - ((v - minV) / (maxV - minV)) * plotH;
+
+        // ---------- Y-axis grid + labels ----------
+        let yGrid = '';
+        const yTickCount = 5;
+        for (let t = 0; t <= yTickCount; t++) {
+            const v = minV + (maxV - minV) * (t / yTickCount);
+            const y = yOf(v);
+            const lbl = metric === 'pressure' ? v.toFixed(2) : Math.round(v);
+            yGrid += `<line x1="${PAD_L}" y1="${y}" x2="${PAD_L+plotW}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                      <text x="${PAD_L-5}" y="${y+4}" text-anchor="end" fill="rgba(255,255,255,0.42)" font-size="9.5">${lbl}</text>`;
+        }
+
+        // ---------- X-axis labels (pick ~6 evenly-spaced ticks) ----------
+        let xLabels = '';
+        const xStep = Math.max(1, Math.floor(n / 6));
+        for (let i = 0; i < n; i += xStep) {
+            const t = times[i];
+            if (!t) continue;
+            const lbl = t.toLocaleString('en-US', xFmtOpts);
+            // rotate long labels
+            xLabels += `<text x="${xOf(i)}" y="${H - 24}" text-anchor="middle" fill="rgba(255,255,255,0.42)" font-size="8.5" transform="rotate(-30 ${xOf(i)} ${H-24})">${lbl}</text>`;
+        }
+
+        // ---------- Build line + area path ----------
+        const _buildPaths = (series, clr, gradId) => {
+            const pts = series.map((v, i) => v != null ? { x: xOf(i), y: yOf(v) } : null);
+            let linePts = pts.filter(Boolean);
+            if (linePts.length < 2) return { linePath: '', areaPath: '', dots: '' };
+
+            let linePath = '', areaPath = '';
+            // Smooth through valid points, treating nulls as gaps
+            let segStart = true;
+            pts.forEach((p, i) => {
+                if (!p) { segStart = true; return; }
+                if (segStart) { linePath += `M${p.x},${p.y}`; areaPath += `M${p.x},${PAD_T+plotH} L${p.x},${p.y}`; segStart = false; }
+                else          { linePath += ` L${p.x},${p.y}`; areaPath += ` L${p.x},${p.y}`; }
+            });
+            if (linePts.length > 0) areaPath += ` L${linePts[linePts.length-1].x},${PAD_T+plotH} Z`;
+
+            // Data dots + value labels (show only for small datasets)
+            let dots = '';
+            if (n <= 20) {
+                series.forEach((v, i) => {
+                    if (v == null) return;
+                    const px = xOf(i), py = yOf(v);
+                    const anchor = i === 0 ? 'start' : i === n-1 ? 'end' : 'middle';
+                    const lbl = metric === 'pressure' ? v.toFixed(2) : Math.round(v);
+                    dots += `<circle cx="${px}" cy="${py}" r="3" fill="${clr}" stroke="rgba(15,20,40,0.85)" stroke-width="1.5"/>
+                             <text x="${px}" y="${py-7}" text-anchor="${anchor}" fill="${clr}" font-size="8" font-weight="600">${lbl}</text>`;
+                });
+            }
+
+            return { linePath, areaPath, dots };
+        };
+
+        const p1 = _buildPaths(series1, color1, 'mg1');
+        const p2 = label2 ? _buildPaths(series2, color2, 'mg2') : null;
+
+        // ---------- Legend (top-right) ----------
+        let legend = `<text x="${PAD_L+10}" y="${PAD_T-6}" fill="${color1}" font-size="9.5" font-weight="600">${label1}</text>`;
+        if (label2 && hasGusts) {
+            legend += `<text x="${PAD_L+10 + label1.length*5.5 + 8}" y="${PAD_T-6}" fill="${color2}" font-size="9.5" font-weight="600">${label2}</text>`;
+        } else if (label2 && metric === 'temp') {
+            legend += `<text x="${PAD_L+10 + label1.length*5.5 + 8}" y="${PAD_T-6}" fill="${color2}" font-size="9.5" font-weight="600">${label2}</text>`;
+        }
+        const unitLabel = `<text x="${W - PAD_R}" y="${PAD_T-6}" text-anchor="end" fill="rgba(255,255,255,0.3)" font-size="8.5">${unit}</text>`;
+
+        svg.innerHTML = `
+            <defs>
+                <linearGradient id="mg1_${metric}" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="${color1}" stop-opacity="0.28"/>
+                    <stop offset="100%" stop-color="${color1}" stop-opacity="0.02"/>
+                </linearGradient>
+                ${label2 ? `<linearGradient id="mg2_${metric}" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="${color2}" stop-opacity="0.20"/>
+                    <stop offset="100%" stop-color="${color2}" stop-opacity="0.02"/>
+                </linearGradient>` : ''}
+            </defs>
+            ${yGrid}${xLabels}
+            ${p1.areaPath ? `<path d="${p1.areaPath}" fill="url(#mg1_${metric})"/>` : ''}
+            ${p1.linePath ? `<path d="${p1.linePath}" fill="none" stroke="${color1}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+            ${p1.dots}
+            ${p2 && (metric === 'temp' || hasGusts) ? `
+                ${p2.areaPath ? `<path d="${p2.areaPath}" fill="url(#mg2_${metric})"/>` : ''}
+                ${p2.linePath ? `<path d="${p2.linePath}" fill="none" stroke="${color2}" stroke-width="2" stroke-dasharray="${metric === 'wind' ? '4 3' : '1 0'}" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+                ${p2.dots}
+            ` : ''}
+            ${legend}${unitLabel}
+        `;
+    }
 
     function _buildMetarCard(props, isLatest) {
         // --- Time ---
