@@ -262,46 +262,28 @@
             color: var(--text-secondary);
             white-space: nowrap;
         }
-        /* Cold front: blue with triangles */
+        /* Cold front: blue line */
         .sf-cold-front {
             display: inline-block;
             width: 28px;
             height: 6px;
-            background: linear-gradient(to right, #1565c0, #1e88e5);
+            background: #1565c0;
             border-radius: 2px;
-            position: relative;
         }
-        .sf-cold-front::after {
-            content: '▶';
-            position: absolute;
-            right: -6px;
-            top: -5px;
-            font-size: 8px;
-            color: #1565c0;
-        }
-        /* Warm front: red with bumps */
+        /* Warm front: red line */
         .sf-warm-front {
             display: inline-block;
             width: 28px;
             height: 6px;
-            background: linear-gradient(to right, #c62828, #e53935);
+            background: #c62828;
             border-radius: 2px;
-            position: relative;
         }
-        .sf-warm-front::after {
-            content: '●';
-            position: absolute;
-            right: -4px;
-            top: -6px;
-            font-size: 8px;
-            color: #c62828;
-        }
-        /* Stationary front: alternating blue/red */
+        /* Stationary front: green line (matches map render color) */
         .sf-stationary-front {
             display: inline-block;
             width: 28px;
             height: 6px;
-            background: repeating-linear-gradient(to right, #1565c0 0px, #1565c0 14px, #c62828 14px, #c62828 28px);
+            background: #1d7a3f;
             border-radius: 2px;
         }
         /* Occluded front: purple */
@@ -1139,6 +1121,18 @@
                 </svg>
                 Maps
             </a>
+            <a href="#metar" class="nav-link" data-view="metar">
+                <!-- Barometer/observation icon for METAR -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                    <circle cx="12" cy="13" r="8"/>
+                    <path d="M12 13 L8.5 7.5" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M12 13 L16 13" stroke-width="2" stroke-linecap="round"/>
+                    <circle cx="12" cy="13" r="1.5" fill="currentColor" stroke="none"/>
+                    <path d="M6.3 19.7 A8 8 0 0 1 4 13" stroke-opacity="0.5"/>
+                    <path d="M17.7 19.7 A8 8 0 0 0 20 13" stroke-opacity="0.5"/>
+                </svg>
+                METAR
+            </a>
         </nav>
 
         <!-- ===================================================
@@ -1208,6 +1202,29 @@
                         </div>
                         <h3>Maps</h3>
                         <p>SPC outlooks, radar, satellite, temperature, and wind on an interactive map</p>
+                    </a>
+                    <!-- METAR: Barometer icon -->
+                    <a href="#metar" class="nav-card glass" data-view="metar">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <!-- Outer ring -->
+                                <circle cx="32" cy="36" r="22" stroke="rgba(180,210,255,0.4)" stroke-width="1.5"/>
+                                <!-- Tick marks -->
+                                <line x1="32" y1="15" x2="32" y2="19" stroke="rgba(180,210,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+                                <line x1="53" y1="36" x2="49" y2="36" stroke="rgba(180,210,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+                                <line x1="11" y1="36" x2="15" y2="36" stroke="rgba(180,210,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+                                <!-- Pressure needle -->
+                                <line x1="32" y1="36" x2="22" y2="22" stroke="rgba(255,200,80,0.9)" stroke-width="2.5" stroke-linecap="round"/>
+                                <!-- Wind needle -->
+                                <line x1="32" y1="36" x2="46" y2="36" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round"/>
+                                <!-- Center -->
+                                <circle cx="32" cy="36" r="3" fill="rgba(255,255,255,0.8)"/>
+                                <!-- Label -->
+                                <text x="32" y="54" text-anchor="middle" fill="rgba(180,210,255,0.85)" font-size="9" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-weight="600">METAR</text>
+                            </svg>
+                        </div>
+                        <h3>METAR</h3>
+                        <p>Surface weather observations by station ID or nearest location</p>
                     </a>
                 </div>
             </div>
@@ -1761,10 +1778,13 @@
                 <div id="fire-wx-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;"></div>
             </div>
 
-            <!-- =====================================================
-                 METAR VIEWER — surface observation lookup
-                 ===================================================== -->
-            <div id="metar-view" class="glass-static metar-section" style="margin-top:16px;padding:16px;">
+        </section>
+
+        <!-- ===================================================
+             VIEW: METAR
+             =================================================== -->
+        <section id="view-metar" class="view">
+            <div id="metar-view" class="glass-static metar-section" style="padding:16px;">
                 <div class="metar-header-row">
                     <div>
                         <h3 class="metar-title">Surface Weather Observations (METAR)</h3>
@@ -1841,7 +1861,6 @@
                 <!-- Observations output -->
                 <div id="metar-observations"></div>
             </div>
-
         </section>
 
     </div><!-- end app-container -->
@@ -3389,7 +3408,7 @@
     // ============================================================
     // SPA ROUTER
     // ============================================================
-    const VALID_VIEWS = ['home', 'current', 'forecast', 'maps'];
+    const VALID_VIEWS = ['home', 'current', 'forecast', 'maps', 'metar'];
     const viewInited = {};
     let currentViewId = null;
 
@@ -3418,7 +3437,7 @@
 
         // Update page title
         const forecastTitle = WeatherAPI.getDataSource() === 'nws' ? '7-Day Forecast' : '10-Day Forecast';
-        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: forecastTitle, maps: 'Maps' };
+        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: forecastTitle, maps: 'Maps', metar: 'METAR' };
         document.title = (titles[viewId] || 'Ephrata Weather') + ' – Ephrata Weather';
 
         // Init view if not already done
