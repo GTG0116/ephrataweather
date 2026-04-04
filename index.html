@@ -1795,9 +1795,8 @@
                 <!-- Search controls -->
                 <div class="metar-search-bar">
                     <input type="text" id="metar-station-input" class="metar-search-input"
-                           placeholder="Station ID (e.g. KLNS, KPHL, KJFK)"
-                           maxlength="10"
-                           oninput="this.value = this.value.toUpperCase()"
+                           placeholder="Station ID (e.g. KLNS) or town name (e.g. Lancaster, PA)"
+                           maxlength="80"
                            onkeydown="if(event.key==='Enter') searchMetarByStation()">
                     <button class="metar-search-btn" onclick="searchMetarByStation()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -5033,9 +5032,36 @@
 
     function searchMetarByStation() {
         const input = document.getElementById('metar-station-input');
-        const id = (input?.value || '').trim().toUpperCase();
-        if (!id) { _metarShowError('Please enter a station ID (e.g. KLNS)'); return; }
-        _fetchAndRenderMetar(id);
+        const raw = (input?.value || '').trim();
+        if (!raw) { _metarShowError('Please enter a station ID (e.g. KLNS) or a town name.'); return; }
+        // Station IDs are 3–5 alphanumeric characters (ICAO format)
+        if (/^[A-Za-z0-9]{3,5}$/.test(raw)) {
+            _fetchAndRenderMetar(raw.toUpperCase());
+        } else {
+            _fetchMetarByPlaceName(raw);
+        }
+    }
+
+    async function _fetchMetarByPlaceName(placeName) {
+        _metarShowLoading('Searching for \u201c' + placeName + '\u201d\u2026');
+        try {
+            const params = new URLSearchParams({
+                q: placeName, format: 'json', limit: '1',
+                addressdetails: '1', 'accept-language': 'en'
+            });
+            const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+                headers: { 'User-Agent': 'EphrataWeatherApp/1.0' }
+            });
+            if (!resp.ok) throw new Error('Geocoding service unavailable.');
+            const results = await resp.json();
+            if (!results || results.length === 0)
+                throw new Error(`No location found for \u201c${placeName}\u201d. Try a station ID (e.g. KLNS) instead.`);
+            const lat = parseFloat(results[0].lat);
+            const lon = parseFloat(results[0].lon);
+            _fetchNearestMetarStation(lat, lon);
+        } catch (e) {
+            _metarShowError(e.message || 'Could not find location.');
+        }
     }
 
     function searchMetarByLocation() {
@@ -5060,15 +5086,16 @@
     async function _fetchNearestMetarStation(lat, lon) {
         _metarShowLoading('Finding nearest station\u2026');
         try {
+            const _nwsHeaders = { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' };
             // Step 1: get grid point → observationStations URL
-            const ptResp = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`);
+            const ptResp = await fetch(`https://api.weather.gov/points/${lat.toFixed(4)},${lon.toFixed(4)}`, { headers: _nwsHeaders });
             if (!ptResp.ok) throw new Error(`Points API HTTP ${ptResp.status}`);
             const ptData = await ptResp.json();
             const stationsUrl = ptData?.properties?.observationStations;
             if (!stationsUrl) throw new Error('No observation stations found for this location.');
 
             // Step 2: fetch station list (sorted nearest-first by NWS)
-            const stResp = await fetch(stationsUrl);
+            const stResp = await fetch(stationsUrl, { headers: _nwsHeaders });
             if (!stResp.ok) throw new Error(`Stations HTTP ${stResp.status}`);
             const stData = await stResp.json();
             const stations = stData?.features || [];
@@ -5094,10 +5121,11 @@
             const startISO = new Date(startMs).toISOString();
             const limit    = Math.max(10, Math.ceil(hours * 4)); // ~4 obs/hr
 
+            const _nwsHdrs = { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' };
             // Fetch observations and station metadata in parallel
             const [obsResp, stResp] = await Promise.all([
-                fetch(`${NWS_OBS_BASE}/${encodeURIComponent(stationId)}/observations?start=${encodeURIComponent(startISO)}&limit=${limit}`),
-                fetch(`${NWS_OBS_BASE}/${encodeURIComponent(stationId)}`)
+                fetch(`${NWS_OBS_BASE}/${encodeURIComponent(stationId)}/observations?start=${encodeURIComponent(startISO)}&limit=${limit}`, { headers: _nwsHdrs }),
+                fetch(`${NWS_OBS_BASE}/${encodeURIComponent(stationId)}`, { headers: _nwsHdrs })
             ]);
             if (!obsResp.ok) throw new Error(`HTTP ${obsResp.status} — station "${stationId}" may not exist. Check the ID and try again.`);
             const obsData = await obsResp.json();
