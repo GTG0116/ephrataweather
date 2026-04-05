@@ -659,6 +659,54 @@
             .metar-obs-grid { grid-template-columns: 1fr 1fr; }
         }
 
+        /* ---- METAR Favorites ---- */
+        .metar-fav-section {
+            margin-bottom: 10px;
+        }
+        .metar-fav-label {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+        .metar-fav-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .metar-fav-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px 4px 8px;
+            background: rgba(100,180,255,0.08);
+            border: 1px solid rgba(100,180,255,0.2);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            transition: background 0.18s, color 0.18s, border-color 0.18s;
+            white-space: nowrap;
+        }
+        .metar-fav-chip:hover { background: rgba(100,180,255,0.18); border-color: rgba(100,180,255,0.4); color: var(--text-primary); }
+        .metar-fav-chip-remove {
+            background: none; border: none; cursor: pointer;
+            color: var(--text-muted); font-size: 0.8rem; line-height: 1;
+            padding: 0 0 0 2px; display: flex; align-items: center;
+            transition: color 0.15s;
+        }
+        .metar-fav-chip-remove:hover { color: #ff8a8a; }
+        .metar-fav-btn {
+            background: none; border: none; cursor: pointer;
+            padding: 3px 6px; border-radius: 4px;
+            display: flex; align-items: center;
+            transition: background 0.18s;
+            color: var(--text-muted);
+        }
+        .metar-fav-btn:hover { background: rgba(255,255,255,0.1); }
+        .metar-fav-btn.active { color: rgba(255,220,100,0.9); }
+
         /* ---- SPC Image Gallery ---- */
         .spc-img-card {
             border-radius: 8px;
@@ -1178,14 +1226,23 @@
                 Maps
             </a>
             <a href="#metar" class="nav-link" data-view="metar">
-                <!-- Barometer/observation icon for METAR -->
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-                    <circle cx="12" cy="13" r="8"/>
-                    <path d="M12 13 L8.5 7.5" stroke-width="2" stroke-linecap="round"/>
-                    <path d="M12 13 L16 13" stroke-width="2" stroke-linecap="round"/>
-                    <circle cx="12" cy="13" r="1.5" fill="currentColor" stroke="none"/>
-                    <path d="M6.3 19.7 A8 8 0 0 1 4 13" stroke-opacity="0.5"/>
-                    <path d="M17.7 19.7 A8 8 0 0 0 20 13" stroke-opacity="0.5"/>
+                <!-- Weather station icon for METAR -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <!-- Main mast -->
+                    <line x1="12" y1="22" x2="12" y2="3"/>
+                    <!-- Anemometer hub -->
+                    <circle cx="12" cy="5" r="1.2" fill="currentColor" stroke="none"/>
+                    <!-- 3 anemometer arms + cups -->
+                    <line x1="12" y1="5" x2="8.2" y2="8.2" stroke-width="1.5"/>
+                    <circle cx="7.2" cy="9.2" r="1.5"/>
+                    <line x1="12" y1="5" x2="15.8" y2="8.2" stroke-width="1.5"/>
+                    <circle cx="16.8" cy="9.2" r="1.5"/>
+                    <line x1="12" y1="5" x2="12" y2="9" stroke-width="1.5"/>
+                    <circle cx="12" cy="10.2" r="1.5"/>
+                    <!-- Instrument shelter box -->
+                    <rect x="9.5" y="14" width="5" height="3.5" rx="0.8"/>
+                    <!-- Base platform -->
+                    <line x1="8.5" y1="22" x2="15.5" y2="22"/>
                 </svg>
                 METAR
             </a>
@@ -1259,24 +1316,32 @@
                         <h3>Maps</h3>
                         <p>SPC outlooks, radar, satellite, temperature, and wind on an interactive map</p>
                     </a>
-                    <!-- METAR: Barometer icon -->
+                    <!-- METAR: Weather station icon -->
                     <a href="#metar" class="nav-card glass" data-view="metar">
                         <div class="nav-icon">
                             <svg viewBox="0 0 64 64" fill="none">
-                                <!-- Outer ring -->
-                                <circle cx="32" cy="36" r="22" stroke="rgba(180,210,255,0.4)" stroke-width="1.5"/>
-                                <!-- Tick marks -->
-                                <line x1="32" y1="15" x2="32" y2="19" stroke="rgba(180,210,255,0.7)" stroke-width="2" stroke-linecap="round"/>
-                                <line x1="53" y1="36" x2="49" y2="36" stroke="rgba(180,210,255,0.7)" stroke-width="2" stroke-linecap="round"/>
-                                <line x1="11" y1="36" x2="15" y2="36" stroke="rgba(180,210,255,0.7)" stroke-width="2" stroke-linecap="round"/>
-                                <!-- Pressure needle -->
-                                <line x1="32" y1="36" x2="22" y2="22" stroke="rgba(255,200,80,0.9)" stroke-width="2.5" stroke-linecap="round"/>
-                                <!-- Wind needle -->
-                                <line x1="32" y1="36" x2="46" y2="36" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round"/>
-                                <!-- Center -->
-                                <circle cx="32" cy="36" r="3" fill="rgba(255,255,255,0.8)"/>
-                                <!-- Label -->
-                                <text x="32" y="54" text-anchor="middle" fill="rgba(180,210,255,0.85)" font-size="9" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-weight="600">METAR</text>
+                                <!-- Main mast -->
+                                <line x1="32" y1="60" x2="32" y2="7" stroke="rgba(180,210,255,0.8)" stroke-width="3" stroke-linecap="round"/>
+                                <!-- Anemometer hub -->
+                                <circle cx="32" cy="10" r="3.5" fill="rgba(180,210,255,0.9)"/>
+                                <!-- Arm 1: upper-left -->
+                                <line x1="32" y1="10" x2="20" y2="20" stroke="rgba(180,210,255,0.8)" stroke-width="2.5" stroke-linecap="round"/>
+                                <circle cx="17" cy="22.5" r="4" stroke="rgba(180,210,255,0.7)" stroke-width="2" fill="rgba(100,180,255,0.15)"/>
+                                <!-- Arm 2: upper-right -->
+                                <line x1="32" y1="10" x2="44" y2="20" stroke="rgba(180,210,255,0.8)" stroke-width="2.5" stroke-linecap="round"/>
+                                <circle cx="47" cy="22.5" r="4" stroke="rgba(180,210,255,0.7)" stroke-width="2" fill="rgba(100,180,255,0.15)"/>
+                                <!-- Arm 3: downward -->
+                                <line x1="32" y1="10" x2="32" y2="23" stroke="rgba(180,210,255,0.8)" stroke-width="2.5" stroke-linecap="round"/>
+                                <circle cx="32" cy="26.5" r="4" stroke="rgba(180,210,255,0.7)" stroke-width="2" fill="rgba(100,180,255,0.15)"/>
+                                <!-- Crossbar -->
+                                <line x1="24" y1="36" x2="40" y2="36" stroke="rgba(180,210,255,0.55)" stroke-width="2" stroke-linecap="round"/>
+                                <!-- Instrument shelter box -->
+                                <rect x="26" y="43" width="12" height="9" rx="2" stroke="rgba(180,210,255,0.7)" stroke-width="2" fill="rgba(100,180,255,0.1)"/>
+                                <!-- Shelter slats -->
+                                <line x1="26.5" y1="46.5" x2="37.5" y2="46.5" stroke="rgba(180,210,255,0.45)" stroke-width="1.5" stroke-linecap="round"/>
+                                <line x1="26.5" y1="49.5" x2="37.5" y2="49.5" stroke="rgba(180,210,255,0.45)" stroke-width="1.5" stroke-linecap="round"/>
+                                <!-- Base platform -->
+                                <line x1="22" y1="60" x2="42" y2="60" stroke="rgba(180,210,255,0.6)" stroke-width="3" stroke-linecap="round"/>
                             </svg>
                         </div>
                         <h3>METAR</h3>
@@ -1848,6 +1913,12 @@
                     </div>
                 </div>
 
+                <!-- METAR Favorites -->
+                <div id="metar-fav-section" class="metar-fav-section" style="display:none;">
+                    <div class="metar-fav-label">Favorite Stations</div>
+                    <div id="metar-fav-chips" class="metar-fav-chips"></div>
+                </div>
+
                 <!-- Search controls -->
                 <div class="metar-search-bar">
                     <div class="metar-input-wrap">
@@ -1887,6 +1958,9 @@
                 <div id="metar-station-info" style="display:none;" class="metar-station-bar">
                     <div id="metar-station-name" class="metar-station-name"></div>
                     <div id="metar-station-meta" class="metar-station-meta"></div>
+                    <button id="metar-fav-toggle-btn" class="metar-fav-btn" onclick="toggleMetarFavorite()" title="Add to favorites">
+                        <svg id="metar-fav-star" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </button>
                     <button class="metar-clear-btn" onclick="clearMetarView()" title="Clear">&#10005;</button>
                 </div>
 
@@ -3548,6 +3622,19 @@
 
         } else if (viewId === 'maps') {
             await initMapsView();
+
+        } else if (viewId === 'metar') {
+            // Render saved favorites chips
+            _renderMetarFavorites();
+            // Auto-load nearest station for the selected location on first visit
+            const savedStation = localStorage.getItem('ephrata_metar_last_station');
+            if (savedStation) {
+                const input = document.getElementById('metar-station-input');
+                if (input) input.value = savedStation;
+                _fetchAndRenderMetar(savedStation);
+            } else {
+                searchMetarByLocation();
+            }
         }
     }
 
@@ -4965,16 +5052,27 @@
             const day   = _surfaceAnalysisDay;
             const fLid  = SA_FRONTS_LAYER[day];
             const hlLid = SA_HL_LAYER[day];
-            const qs    = '?where=1%3D1&outFields=*&f=geojson';
+            // Cache-bust with timestamp so we always get the latest data
+            const ts    = Date.now();
+            const qs    = `?where=1%3D1&outFields=*&f=geojson&_t=${ts}`;
 
             const [frontsResp, hlResp] = await Promise.all([
-                fetch(`${SA_BASE}/${fLid}/query${qs}`),
-                fetch(`${SA_BASE}/${hlLid}/query${qs}`)
+                fetch(`${SA_BASE}/${fLid}/query${qs}`, { cache: 'no-store' }),
+                fetch(`${SA_BASE}/${hlLid}/query${qs}`, { cache: 'no-store' })
             ]);
             if (!frontsResp.ok) throw new Error(`Fronts HTTP ${frontsResp.status}`);
             if (!hlResp.ok)     throw new Error(`H/L HTTP ${hlResp.status}`);
             const frontsData = await frontsResp.json();
             const hlData     = await hlResp.json();
+
+            // Check if NWS returned an error object instead of GeoJSON
+            if (frontsData.error) throw new Error(`NWS: ${frontsData.error.message || 'Service error'}`);
+            const frontsFeatureCount = frontsData?.features?.length ?? 0;
+            const hlFeatureCount     = hlData?.features?.length ?? 0;
+            if (frontsFeatureCount === 0 && hlFeatureCount === 0) {
+                // Service returned empty — data may not be published yet for this day
+                console.warn('Surface analysis: no features returned for Day', day, '— service may not have data yet.');
+            }
 
             // Add fronts source + layers
             map.addSource('sa-fronts-src', { type: 'geojson', data: frontsData });
@@ -5055,10 +5153,12 @@
         const srcs   = ['sa-fronts-src','sa-hl-src'];
         layers.forEach(l => { if (map.getLayer(l)) map.removeLayer(l); });
         srcs.forEach(s => { if (map.getSource(s)) map.removeSource(s); });
-        if (map.listens && map.listens('click')) {
-            try { map.off('click', 'sa-fronts-line', _handleSAClick); } catch (_) {}
-            try { map.off('click', 'sa-hl-circle',   _handleSAClick); } catch (_) {}
-        }
+        try { map.off('click', 'sa-fronts-line', _handleSAClick); } catch (_) {}
+        try { map.off('click', 'sa-hl-circle',   _handleSAClick); } catch (_) {}
+        try { map.off('mouseenter', 'sa-fronts-line'); } catch (_) {}
+        try { map.off('mouseleave', 'sa-fronts-line'); } catch (_) {}
+        try { map.off('mouseenter', 'sa-hl-circle');   } catch (_) {}
+        try { map.off('mouseleave', 'sa-hl-circle');   } catch (_) {}
     }
 
     function selectSADay(day) {
@@ -5076,6 +5176,75 @@
         _ensureMapReady().then(() => loadSurfaceAnalysisLayer());
     }
 
+
+    // ============================================================
+    // METAR FAVORITES
+    // Stored in localStorage as [{stationId, stationName}]
+    // ============================================================
+    const METAR_FAV_KEY = 'ephrata_metar_favorites';
+
+    function _metarGetFavorites() {
+        try { return JSON.parse(localStorage.getItem(METAR_FAV_KEY) || '[]'); } catch(_) { return []; }
+    }
+    function _metarIsFavorite(stationId) {
+        return _metarGetFavorites().some(f => f.stationId === stationId);
+    }
+    function _metarAddFavorite(stationId, stationName) {
+        const favs = _metarGetFavorites();
+        if (favs.some(f => f.stationId === stationId)) return;
+        favs.unshift({ stationId, stationName: stationName || stationId });
+        localStorage.setItem(METAR_FAV_KEY, JSON.stringify(favs.slice(0, 20)));
+        _renderMetarFavorites();
+        _updateMetarFavBtn();
+    }
+    function _metarRemoveFavorite(stationId) {
+        const favs = _metarGetFavorites().filter(f => f.stationId !== stationId);
+        localStorage.setItem(METAR_FAV_KEY, JSON.stringify(favs));
+        _renderMetarFavorites();
+        _updateMetarFavBtn();
+    }
+    function toggleMetarFavorite() {
+        if (!_metarCurrentStation) return;
+        if (_metarIsFavorite(_metarCurrentStation)) {
+            _metarRemoveFavorite(_metarCurrentStation);
+        } else {
+            const nameEl = document.getElementById('metar-station-name');
+            const rawName = nameEl ? nameEl.textContent : '';
+            // Strip the "KLNS — " prefix if present to get just the station name
+            const stationName = rawName.includes('—') ? rawName.split('—')[1].trim() : rawName;
+            _metarAddFavorite(_metarCurrentStation, stationName || _metarCurrentStation);
+        }
+    }
+    function _updateMetarFavBtn() {
+        const btn  = document.getElementById('metar-fav-toggle-btn');
+        const star = document.getElementById('metar-fav-star');
+        if (!btn || !star) return;
+        const isFav = _metarCurrentStation && _metarIsFavorite(_metarCurrentStation);
+        btn.classList.toggle('active', !!isFav);
+        btn.title = isFav ? 'Remove from favorites' : 'Add to favorites';
+        star.setAttribute('fill', isFav ? 'rgba(255,220,100,0.85)' : 'none');
+        star.setAttribute('stroke', isFav ? 'rgba(255,220,100,0.85)' : 'currentColor');
+    }
+    function _renderMetarFavorites() {
+        const favs    = _metarGetFavorites();
+        const section = document.getElementById('metar-fav-section');
+        const chips   = document.getElementById('metar-fav-chips');
+        if (!section || !chips) return;
+        if (favs.length === 0) { section.style.display = 'none'; return; }
+        section.style.display = '';
+        chips.innerHTML = favs.map(f => `
+            <div class="metar-fav-chip" onclick="_loadMetarFavorite('${_esc(f.stationId)}')">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="rgba(255,220,100,0.85)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span>${_esc(f.stationId)}</span>
+                <button class="metar-fav-chip-remove" onclick="event.stopPropagation();_metarRemoveFavorite('${_esc(f.stationId)}')" title="Remove">&#10005;</button>
+            </div>
+        `).join('');
+    }
+    function _loadMetarFavorite(stationId) {
+        const input = document.getElementById('metar-station-input');
+        if (input) input.value = stationId;
+        _fetchAndRenderMetar(stationId);
+    }
 
     // ============================================================
     // METAR VIEWER
@@ -5347,6 +5516,7 @@
 
     async function _fetchAndRenderMetar(stationId) {
         _metarCurrentStation = stationId;
+        localStorage.setItem('ephrata_metar_last_station', stationId);
         _metarShowLoading('Loading observations for ' + stationId + '\u2026');
         try {
             // Build start timestamp for the requested time window
@@ -5418,10 +5588,12 @@
             if (tz) parts.push(tz.replace('America/', ''));
             meta.textContent = parts.join('  ·  ');
         }
+        _updateMetarFavBtn();
     }
 
     function clearMetarView() {
         _metarCurrentStation = null;
+        localStorage.removeItem('ephrata_metar_last_station');
         _hideMetarDropdown();
         _metarHideAll();
         document.getElementById('metar-station-info').style.display = 'none';
