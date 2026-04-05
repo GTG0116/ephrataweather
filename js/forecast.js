@@ -541,6 +541,17 @@ function renderForecast(data) {
     const list = document.getElementById('forecast-list');
     forecastDays = data.forecastDays || [];
 
+    // Detect if NWS omitted today (happens near end-of-day when no daytime period remains).
+    // _spcDayOffset = how many days ahead of today forecastDays[0] is (normally 0, sometimes 1).
+    {
+        const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+        const firstRaw = forecastDays[0]?.displayDate || forecastDays[0]?.interval?.startTime;
+        const firstStr = firstRaw ? firstRaw.slice(0, 10) : todayStr;
+        _spcDayOffset = Math.max(0, Math.round(
+            (new Date(firstStr + 'T12:00:00') - new Date(todayStr + 'T12:00:00')) / 86400000
+        ));
+    }
+
     // Update the forecast section title to reflect how many days are available
     const isNWS = WeatherAPI.getDataSource() === 'nws';
     const titleEl = document.getElementById('forecast-section-title');
@@ -893,6 +904,7 @@ function _renderDayDetailFWI(day) {
 let _forecastLat = null;
 let _forecastLng = null;
 let _spcRiskCache = {};     // keyed by SPC day number (1, 2, 3) → risk object
+let _spcDayOffset = 0;      // days forecastDays[0] is ahead of today (normally 0; 1 when NWS omits today near end-of-day)
 let _wpcRainCache = {};     // keyed by day number (1, 2, 3) → { risk: 'MRGL'|'SLGT'|'MDT'|'HIGH'|null }
 let _spcFireCache = {};     // keyed by day number (1, 2) → { risk: 'ELEV'|'CRIT'|'EXTM'|null }
 let _openDayDetailIndex = -1;
@@ -1071,9 +1083,10 @@ function _buildSPCText(risk) {
     return sentence + '.';
 }
 
-// Return cached risk for the given forecast day index (0 = today)
+// Return cached risk for the given forecast day index (0 = first day shown).
+// _spcDayOffset shifts the mapping when NWS omits today (e.g. near midnight).
 function _spcRiskForForecastDay(dayIndex) {
-    const spcDay = dayIndex + 1;  // forecast day 0 → SPC day 1
+    const spcDay = dayIndex + 1 + _spcDayOffset;
     return spcDay <= 3 ? (_spcRiskCache[spcDay] || null) : null;
 }
 
@@ -1124,7 +1137,10 @@ async function _loadSPCForecastData(lat, lng) {
             try {
                 const risk = await _fetchSPCRisk(lat, lng, spcDay);
                 _spcRiskCache[spcDay] = risk;
-                _updateSPCBadge(spcDay - 1);  // forecast row index = spcDay - 1
+                // Map SPC day to forecast row index, accounting for any day offset
+                // (when NWS omits "today" near end-of-day, _spcDayOffset = 1).
+                const forecastIdx = spcDay - 1 - _spcDayOffset;
+                if (forecastIdx >= 0) _updateSPCBadge(forecastIdx);
             } catch (_) { /* graceful degradation — no SPC info shown */ }
         })
     );

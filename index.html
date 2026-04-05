@@ -419,6 +419,35 @@
             transition: all 0.18s;
         }
         .metar-search-btn:hover { background: rgba(100,180,255,0.25); }
+        .metar-obs-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 7px 10px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: var(--radius-sm);
+        }
+        .metar-nav-btn {
+            display: flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; flex-shrink: 0;
+            background: rgba(100,180,255,0.1);
+            border: 1px solid rgba(100,180,255,0.25);
+            border-radius: var(--radius-sm);
+            color: #8dd4ff; cursor: pointer; font-size: 1.1rem;
+            transition: all 0.18s;
+        }
+        .metar-nav-btn:hover:not([disabled]) { background: rgba(100,180,255,0.25); }
+        .metar-nav-btn[disabled] { opacity: 0.3; cursor: default; pointer-events: none; }
+        .metar-nav-count {
+            flex: 1; text-align: center;
+            font-size: 0.8rem; color: var(--text-secondary);
+        }
+        .metar-nav-label {
+            font-size: 0.72rem; color: var(--text-muted);
+            display: block; margin-top: 1px;
+        }
         .metar-location-btn {
             display: flex;
             align-items: center;
@@ -5429,14 +5458,51 @@
         if (input) input.value = '';
     }
 
+    // ---- METAR single-card navigation ----
+    let _metarFeatures  = [];
+    let _metarNavIdx    = 0;   // 0 = latest (NWS returns newest-first)
+
     function _renderMetarObservations(features) {
-        const container = document.getElementById('metar-observations');
-        if (!container) return;
-        container.style.display = 'block';
-        container.innerHTML = features.map((f, i) => _buildMetarCard(f.properties, i === 0)).join('');
-        // Render chart with the same data
+        _metarFeatures = features;
+        _metarNavIdx   = 0;
+        _showMetarCard(0);
         _metarChartFeatures = features;
         _renderMetarCharts(features);
+    }
+
+    function _showMetarCard(idx) {
+        const container = document.getElementById('metar-observations');
+        if (!container || !_metarFeatures.length) return;
+        container.style.display = 'block';
+        const total = _metarFeatures.length;
+        const f     = _metarFeatures[idx];
+
+        // Left (←) → more recent (lower index).  Right (→) → older (higher index).
+        const prevDis = idx <= 0           ? 'disabled' : '';
+        const nextDis = idx >= total - 1   ? 'disabled' : '';
+
+        let ageLabel;
+        if (idx === 0)      ageLabel = 'Latest update';
+        else if (idx === 1) ageLabel = '1 update back';
+        else                ageLabel = idx + ' updates back';
+
+        container.innerHTML =
+            `<div class="metar-obs-nav">
+                <button class="metar-nav-btn" onclick="_metarNav(-1)" ${prevDis} title="More recent update">&#8592;</button>
+                <div class="metar-nav-count">
+                    Update <strong>${idx + 1}</strong> of <strong>${total}</strong>
+                    <span class="metar-nav-label">${ageLabel}</span>
+                </div>
+                <button class="metar-nav-btn" onclick="_metarNav(1)" ${nextDis} title="Older update">&#8594;</button>
+            </div>
+            ${_buildMetarCard(f.properties, idx === 0)}`;
+    }
+
+    function _metarNav(delta) {
+        const next = _metarNavIdx + delta;
+        if (next < 0 || next >= _metarFeatures.length) return;
+        _metarNavIdx = next;
+        _showMetarCard(_metarNavIdx);
     }
 
     // Helper: extract numeric value safely from NWS quantity object
@@ -5997,6 +6063,10 @@
     // BOOTSTRAP
     // ============================================================
     (async function () {
+        // Show current time in the badge immediately on load
+        const _tsInit = document.getElementById('last-updated');
+        if (_tsInit) _tsInit.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
         const loc = await LocationManager.init();
         const nameEl = document.getElementById('location-name');
         if (nameEl) nameEl.textContent = loc.name;
