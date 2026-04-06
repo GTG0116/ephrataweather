@@ -6101,9 +6101,11 @@
 
         if (!types.length) {
             if (typeSelect) typeSelect.style.display = 'none';
-            clearSPCLayers(); hideSPCLegend();
-            _showSPCView();
-            renderSPCImages(day);
+            if (currentLayer === 'spc') {
+                clearSPCLayers(); hideSPCLegend();
+                _showSPCView();
+                renderSPCImages(day);
+            }
             return;
         }
 
@@ -6117,6 +6119,11 @@
         });
         typeSelect.value = currentType;
         typeSelect.style.display = '';
+
+        // Only switch the view and load SPC data when SPC is the active layer.
+        // buildTypeButtons is also called on init to pre-populate the selector
+        // for later use, so it must not hijack whatever layer is currently shown.
+        if (currentLayer !== 'spc') return;
 
         // Show the interactive map and only the static image for the selected type
         _showSPCMapView(true);
