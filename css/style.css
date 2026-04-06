@@ -948,6 +948,161 @@ body {
 .alert-sws::before { background: #00BBCC; }
 .alert-sws .alert-title { color: #44DDEE; }
 
+/* Flood Warning — forest green */
+.alert-flood-warning { background: rgba(34,139,34,0.16); border: 1px solid rgba(34,139,34,0.38); }
+.alert-flood-warning::before { background: #228B22; }
+.alert-flood-warning .alert-title { color: #55CC55; }
+
+/* Flood Watch — sea green */
+.alert-flood-watch { background: rgba(46,139,87,0.16); border: 1px solid rgba(46,139,87,0.38); }
+.alert-flood-watch::before { background: #2E8B57; }
+.alert-flood-watch .alert-title { color: #55BB88; }
+
+/* Flood Advisory — chartreuse */
+.alert-flood-advisory { background: rgba(127,255,0,0.12); border: 1px solid rgba(127,255,0,0.30); }
+.alert-flood-advisory::before { background: #7FFF00; }
+.alert-flood-advisory .alert-title { color: #AAFF44; }
+
+/* Coastal Flood Warning — dark green */
+.alert-coastal-flood-warning { background: rgba(32,92,29,0.18); border: 1px solid rgba(32,92,29,0.42); }
+.alert-coastal-flood-warning::before { background: #205c1d; }
+.alert-coastal-flood-warning .alert-title { color: #4A9A47; }
+
+/* Coastal Flood Watch — medium green */
+.alert-coastal-flood-watch { background: rgba(58,128,54,0.16); border: 1px solid rgba(58,128,54,0.38); }
+.alert-coastal-flood-watch::before { background: #3a8036; }
+.alert-coastal-flood-watch .alert-title { color: #66BB66; }
+
+/* Coastal Flood Advisory — lighter green */
+.alert-coastal-flood-advisory { background: rgba(85,163,81,0.16); border: 1px solid rgba(85,163,81,0.38); }
+.alert-coastal-flood-advisory::before { background: #55a351; }
+.alert-coastal-flood-advisory .alert-title { color: #88CC88; }
+
+/* Coastal Flood Statement — yellow-green */
+.alert-coastal-flood-stmt { background: rgba(154,205,50,0.14); border: 1px solid rgba(154,205,50,0.35); }
+.alert-coastal-flood-stmt::before { background: #9ACD32; }
+.alert-coastal-flood-stmt .alert-title { color: #C0E060; }
+
+/* Heat Advisory — coral */
+.alert-heat-advisory { background: rgba(255,127,80,0.16); border: 1px solid rgba(255,127,80,0.38); }
+.alert-heat-advisory::before { background: #FF7F50; }
+.alert-heat-advisory .alert-title { color: #FFB08A; }
+
+/* Air Quality Alert — gray */
+.alert-air-quality { background: rgba(128,128,128,0.16); border: 1px solid rgba(128,128,128,0.38); }
+.alert-air-quality::before { background: #808080; }
+.alert-air-quality .alert-title { color: #AAAAAA; }
+
+/* High Wind Warning — goldenrod */
+.alert-high-wind-warning { background: rgba(218,165,32,0.16); border: 1px solid rgba(218,165,32,0.38); }
+.alert-high-wind-warning::before { background: #DAA520; }
+.alert-high-wind-warning .alert-title { color: #FFCC44; }
+
+/* High Wind Watch — dark goldenrod */
+.alert-high-wind-watch { background: rgba(184,134,11,0.16); border: 1px solid rgba(184,134,11,0.38); }
+.alert-high-wind-watch::before { background: #b8860b; }
+.alert-high-wind-watch .alert-title { color: #E8B840; }
+
+/* Wind Advisory — tan */
+.alert-wind-advisory { background: rgba(210,180,140,0.16); border: 1px solid rgba(180,150,110,0.35); }
+.alert-wind-advisory::before { background: #D2B48C; }
+.alert-wind-advisory .alert-title { color: #E8CCAA; }
+
+/* Dense Fog Advisory — slate gray */
+.alert-dense-fog { background: rgba(112,128,144,0.16); border: 1px solid rgba(112,128,144,0.38); }
+.alert-dense-fog::before { background: #708090; }
+.alert-dense-fog .alert-title { color: #99AABC; }
+
+/* Fire Weather Watch — deep pink */
+.alert-fire-weather-watch { background: rgba(255,20,147,0.14); border: 1px solid rgba(255,20,147,0.35); }
+.alert-fire-weather-watch::before { background: #FF1493; }
+.alert-fire-weather-watch .alert-title { color: #FF70B8; }
+
+/* Red Flag Warning — deep pink */
+.alert-red-flag-warning { background: rgba(255,20,147,0.14); border: 1px solid rgba(255,20,147,0.35); }
+.alert-red-flag-warning::before { background: #FF1493; }
+.alert-red-flag-warning .alert-title { color: #FF70B8; }
+
+/* Gale Warning — lavender */
+.alert-gale-warning { background: rgba(180,180,220,0.14); border: 1px solid rgba(180,180,220,0.38); }
+.alert-gale-warning::before { background: #E6E6FA; }
+.alert-gale-warning .alert-title { color: #E6E6FA; }
+
+/* Gale Watch — pink */
+.alert-gale-watch { background: rgba(220,160,170,0.14); border: 1px solid rgba(220,160,170,0.35); }
+.alert-gale-watch::before { background: #ffc0cb; }
+.alert-gale-watch .alert-title { color: #FFD8E0; }
+
+/* Storm Warning — dark violet */
+.alert-storm-warning { background: rgba(148,0,211,0.16); border: 1px solid rgba(148,0,211,0.38); }
+.alert-storm-warning::before { background: #9400d3; }
+.alert-storm-warning .alert-title { color: #CC60FF; }
+
+/* Beach Hazards Statement — cyan */
+.alert-beach-hazards { background: rgba(0,220,220,0.12); border: 1px solid rgba(0,220,220,0.35); }
+.alert-beach-hazards::before { background: #00FFFF; }
+.alert-beach-hazards .alert-title { color: #66FFFF; }
+
+/* Freeze Warning — dodger blue */
+.alert-freeze-warning { background: rgba(30,144,255,0.16); border: 1px solid rgba(30,144,255,0.38); }
+.alert-freeze-warning::before { background: #1E90FF; }
+.alert-freeze-warning .alert-title { color: #66BBFF; }
+
+/* Frost Advisory — light blue */
+.alert-frost-advisory { background: rgba(140,180,200,0.14); border: 1px solid rgba(140,180,200,0.35); }
+.alert-frost-advisory::before { background: #ADD8E6; }
+.alert-frost-advisory .alert-title { color: #C8E8F0; }
+
+/* Small Craft Advisory — light periwinkle */
+.alert-small-craft { background: rgba(180,180,240,0.12); border: 1px solid rgba(180,180,240,0.30); }
+.alert-small-craft::before { background: #C8C8FF; }
+.alert-small-craft .alert-title { color: #F0EFFF; }
+
+/* Marine Weather Statement — light goldenrod */
+.alert-marine-weather-stmt { background: rgba(200,200,160,0.12); border: 1px solid rgba(200,200,160,0.30); }
+.alert-marine-weather-stmt::before { background: #CCCC88; }
+.alert-marine-weather-stmt .alert-title { color: #FAFAD2; }
+
+/* Special Marine Warning — orange */
+.alert-special-marine-warning { background: rgba(255,165,0,0.16); border: 1px solid rgba(255,165,0,0.38); }
+.alert-special-marine-warning::before { background: #FFA500; }
+.alert-special-marine-warning .alert-title { color: #FFCC55; }
+
+/* Rip Current Statement — turquoise */
+.alert-rip-current { background: rgba(64,224,208,0.14); border: 1px solid rgba(64,224,208,0.35); }
+.alert-rip-current::before { background: #40e0d0; }
+.alert-rip-current .alert-title { color: #80EEE4; }
+
+/* Hazardous Seas Warning — thistle */
+.alert-hazardous-seas { background: rgba(180,160,180,0.14); border: 1px solid rgba(180,160,180,0.35); }
+.alert-hazardous-seas::before { background: #d8bfd8; }
+.alert-hazardous-seas .alert-title { color: #E8D8E8; }
+
+/* Heavy Freezing Spray Warning — deep sky blue */
+.alert-heavy-freezing-spray { background: rgba(0,191,255,0.14); border: 1px solid rgba(0,191,255,0.35); }
+.alert-heavy-freezing-spray::before { background: #00bfff; }
+.alert-heavy-freezing-spray .alert-title { color: #55D9FF; }
+
+/* High Surf Advisory — medium orchid */
+.alert-high-surf-advisory { background: rgba(186,85,211,0.16); border: 1px solid rgba(186,85,211,0.38); }
+.alert-high-surf-advisory::before { background: #ba55d3; }
+.alert-high-surf-advisory .alert-title { color: #D888EE; }
+
+/* Winter Weather Advisory — medium slate blue */
+.alert-winter-weather-advisory { background: rgba(123,104,238,0.16); border: 1px solid rgba(123,104,238,0.38); }
+.alert-winter-weather-advisory::before { background: #7b68ee; }
+.alert-winter-weather-advisory .alert-title { color: #AA99FF; }
+
+/* Lake Wind Advisory — tan */
+.alert-lake-wind-advisory { background: rgba(210,180,140,0.16); border: 1px solid rgba(180,150,110,0.35); }
+.alert-lake-wind-advisory::before { background: #D2B48C; }
+.alert-lake-wind-advisory .alert-title { color: #E8CCAA; }
+
+/* Low Water Advisory — brown */
+.alert-low-water-advisory { background: rgba(165,42,42,0.16); border: 1px solid rgba(165,42,42,0.38); }
+.alert-low-water-advisory::before { background: #a52a2a; }
+.alert-low-water-advisory .alert-title { color: #CC6666; }
+
 /* --- SPC Outlooks --- */
 .spc-outlook-grid {
     display: grid;
