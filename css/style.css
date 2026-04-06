@@ -1048,6 +1048,11 @@ body {
 .alert-freeze-warning::before { background: #1E90FF; }
 .alert-freeze-warning .alert-title { color: #66BBFF; }
 
+/* Freeze Watch — cyan */
+.alert-freeze-watch { background: rgba(0,220,220,0.12); border: 1px solid rgba(0,220,220,0.35); }
+.alert-freeze-watch::before { background: #00FFFF; }
+.alert-freeze-watch .alert-title { color: #66FFFF; }
+
 /* Frost Advisory — light blue */
 .alert-frost-advisory { background: rgba(140,180,200,0.14); border: 1px solid rgba(140,180,200,0.35); }
 .alert-frost-advisory::before { background: #ADD8E6; }
@@ -1102,6 +1107,16 @@ body {
 .alert-low-water-advisory { background: rgba(165,42,42,0.16); border: 1px solid rgba(165,42,42,0.38); }
 .alert-low-water-advisory::before { background: #a52a2a; }
 .alert-low-water-advisory .alert-title { color: #CC6666; }
+
+/* Brisk Wind Advisory — same periwinkle as small craft advisory */
+.alert-brisk-wind-advisory { background: rgba(180,180,240,0.12); border: 1px solid rgba(180,180,240,0.30); }
+.alert-brisk-wind-advisory::before { background: #C8C8FF; }
+.alert-brisk-wind-advisory .alert-title { color: #F0EFFF; }
+
+/* Hydrologic Outlook — light green */
+.alert-hydrologic-outlook { background: rgba(144,238,144,0.14); border: 1px solid rgba(100,200,100,0.35); }
+.alert-hydrologic-outlook::before { background: #90EE90; }
+.alert-hydrologic-outlook .alert-title { color: #AAFFAA; }
 
 /* --- SPC Outlooks --- */
 .spc-outlook-grid {

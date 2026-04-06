@@ -1582,9 +1582,9 @@
             <div class="map-controls-panel glass-static" style="margin-bottom:14px;">
                 <!-- Layer selector -->
                 <div class="layer-row">
-                    <button class="layer-btn active" data-layer="spc" onclick="switchLayer('spc')">SPC Outlook</button>
+                    <button class="layer-btn" data-layer="spc" onclick="switchLayer('spc')">SPC Outlook</button>
                     <button class="layer-btn" data-layer="satellite" onclick="switchLayer('satellite')">Satellite</button>
-                    <button class="layer-btn" data-layer="radar" onclick="switchLayer('radar')">Radar</button>
+                    <button class="layer-btn active" data-layer="radar" onclick="switchLayer('radar')">Radar</button>
                     <button class="layer-btn" data-layer="surface-analysis" onclick="switchLayer('surface-analysis')">Surface Analysis</button>
                     <button class="layer-btn" data-layer="temperature" onclick="switchLayer('temperature')">Temperature</button>
                     <button class="layer-btn" data-layer="wind" onclick="switchLayer('wind')">Wind</button>
@@ -3688,7 +3688,7 @@
     // MAPS VIEW LOGIC (ported from maps.html)
     // ============================================================
     let map = null;
-    let currentLayer = 'spc';
+    let currentLayer = 'radar';
     let currentDay = 1;
     let currentType = 'cat';
     let firstSymbolLayerId = undefined;
@@ -6164,10 +6164,10 @@
     }
 
     async function initMapsView() {
-        // Ensure the SPC info row (discussion + category info buttons) is visible on init
-        // switchLayer() is not called on first load, so we set it explicitly here.
-        const spcInfoRow = document.getElementById('spc-info-row');
-        if (spcInfoRow) spcInfoRow.style.display = '';
+        // Set the initial UI state to radar (switchLayer handles controls visibility).
+        // switchLayer is safe to call before the map exists — map-dependent work
+        // (showRadarFrame) guards against null map internally.
+        switchLayer('radar');
 
         // Auto-detect MRMS sector from saved location
         {
@@ -6187,7 +6187,7 @@
         _showAlertOverlayControls(true);
         _syncAlertOverlayUI();
 
-        // Load Day 1 SPC outlook on init (map will load async via _ensureMapReady)
+        // Pre-build SPC type buttons so they are ready if the user switches to SPC.
         buildTypeButtons(currentDay);
 
         // Initialize Mapbox map now so it is ready for the interactive SPC GeoJSON overlay.
@@ -6218,9 +6218,11 @@
                 map.on('click', handleMrmsClick);
                 map.on('click', handleRtmaClick);
                 map.on('click', handleAlertOverlayClick);
-                // Fix: _ensureMapReady() returns immediately when map===null during
-                // buildTypeButtons(), so loadSPCLayer() exits early. Force initial load here.
-                if (currentLayer === 'spc' && currentDay > 0) {
+                // switchLayer() called before map existed, so the initial layer load
+                // was a no-op. Force it now that the map is ready.
+                if (currentLayer === 'radar') {
+                    loadRadarLayer();
+                } else if (currentLayer === 'spc' && currentDay > 0) {
                     loadSPCLayer(currentDay, currentType);
                 }
                 // Restore alert overlay if it was enabled
