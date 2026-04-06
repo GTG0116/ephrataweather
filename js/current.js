@@ -271,6 +271,7 @@ function _alertClass(alert) {
     const severity = (alert.severity || '').toLowerCase();
 
     // Event-specific classes (match the NWS standard alert color palette)
+    // More-specific checks must come before broader ones (e.g. coastal flood before flood)
     if (event.includes('tornado warning'))               return 'alert-tornado-warning';
     if (event.includes('tornado watch'))                 return 'alert-tornado-watch';
     if (event.includes('severe thunderstorm warning'))   return 'alert-svr-warning';
@@ -281,6 +282,55 @@ function _alertClass(alert) {
     if (event.includes('blizzard warning'))              return 'alert-blizzard-warning';
     if (event.includes('snow squall warning'))           return 'alert-snow-squall-warning';
     if (event.includes('special weather statement'))     return 'alert-sws';
+
+    // Coastal flood (before generic flood checks)
+    if (event.includes('coastal flood warning'))         return 'alert-coastal-flood-warning';
+    if (event.includes('coastal flood watch'))           return 'alert-coastal-flood-watch';
+    if (event.includes('coastal flood advisory'))        return 'alert-coastal-flood-advisory';
+    if (event.includes('coastal flood statement'))       return 'alert-coastal-flood-stmt';
+
+    // Flood
+    if (event.includes('flood warning'))                 return 'alert-flood-warning';
+    if (event.includes('flood watch'))                   return 'alert-flood-watch';
+    if (event.includes('flood advisory'))                return 'alert-flood-advisory';
+
+    // High wind (more specific before wind advisory)
+    if (event.includes('high wind warning'))             return 'alert-high-wind-warning';
+    if (event.includes('high wind watch'))               return 'alert-high-wind-watch';
+
+    // Gale (more specific before storm warning)
+    if (event.includes('gale warning'))                  return 'alert-gale-warning';
+    if (event.includes('gale watch'))                    return 'alert-gale-watch';
+
+    // Other marine/coastal
+    if (event.includes('storm warning'))                 return 'alert-storm-warning';
+    if (event.includes('special marine warning'))        return 'alert-special-marine-warning';
+    if (event.includes('small craft advisory'))          return 'alert-small-craft';
+    if (event.includes('marine weather statement'))      return 'alert-marine-weather-stmt';
+    if (event.includes('hazardous seas warning'))        return 'alert-hazardous-seas';
+    if (event.includes('heavy freezing spray warning'))  return 'alert-heavy-freezing-spray';
+    if (event.includes('rip current statement'))         return 'alert-rip-current';
+    if (event.includes('beach hazards statement'))       return 'alert-beach-hazards';
+    if (event.includes('high surf advisory'))            return 'alert-high-surf-advisory';
+    if (event.includes('low water advisory'))            return 'alert-low-water-advisory';
+
+    // Winter (after winter storm checks above)
+    if (event.includes('winter weather advisory'))       return 'alert-winter-weather-advisory';
+    if (event.includes('freeze warning'))                return 'alert-freeze-warning';
+    if (event.includes('frost advisory'))                return 'alert-frost-advisory';
+
+    // Wind (lake wind advisory before generic wind advisory)
+    if (event.includes('lake wind advisory'))            return 'alert-lake-wind-advisory';
+    if (event.includes('wind advisory'))                 return 'alert-wind-advisory';
+
+    // Fire weather
+    if (event.includes('red flag warning'))              return 'alert-red-flag-warning';
+    if (event.includes('fire weather watch'))            return 'alert-fire-weather-watch';
+
+    // Other
+    if (event.includes('heat advisory'))                 return 'alert-heat-advisory';
+    if (event.includes('air quality alert'))             return 'alert-air-quality';
+    if (event.includes('dense fog advisory'))            return 'alert-dense-fog';
 
     // Fall back to generic severity-based classes
     if (severity === 'extreme' || severity === 'severe') return 'alert-extreme';
