@@ -317,10 +317,12 @@ function _alertClass(alert) {
     // Winter (after winter storm checks above)
     if (event.includes('winter weather advisory'))       return 'alert-winter-weather-advisory';
     if (event.includes('freeze warning'))                return 'alert-freeze-warning';
+    if (event.includes('freeze watch'))                  return 'alert-freeze-watch';
     if (event.includes('frost advisory'))                return 'alert-frost-advisory';
 
-    // Wind (lake wind advisory before generic wind advisory)
+    // Wind (more specific before generic; brisk wind before wind advisory)
     if (event.includes('lake wind advisory'))            return 'alert-lake-wind-advisory';
+    if (event.includes('brisk wind advisory'))           return 'alert-brisk-wind-advisory';
     if (event.includes('wind advisory'))                 return 'alert-wind-advisory';
 
     // Fire weather
@@ -331,6 +333,7 @@ function _alertClass(alert) {
     if (event.includes('heat advisory'))                 return 'alert-heat-advisory';
     if (event.includes('air quality alert'))             return 'alert-air-quality';
     if (event.includes('dense fog advisory'))            return 'alert-dense-fog';
+    if (event.includes('hydrologic outlook'))            return 'alert-hydrologic-outlook';
 
     // Fall back to generic severity-based classes
     if (severity === 'extreme' || severity === 'severe') return 'alert-extreme';
