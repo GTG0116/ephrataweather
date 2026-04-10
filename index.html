@@ -4551,6 +4551,7 @@
             south: -81.0, north: 81.0,
             // Mapbox image corners [lng, lat]: NW, NE, SE, SW
             coords: [[-156.0, 81.0], [6.0, 81.0], [6.0, -81.0], [-156.0, -81.0]],
+            fulldisk: true,
         },
         himawari: {
             label:  'Himawari Full Disk',
@@ -4559,6 +4560,7 @@
             // East bound 200° = 160°W; Mapbox accepts longitudes >180 for antimeridian-crossing overlays
             south: -60.0, north: 60.0,
             coords: [[80.0, 60.0], [200.0, 60.0], [200.0, -60.0], [80.0, -60.0]],
+            fulldisk: true,
         },
         goes18: {
             label:  'GOES-18 Full Disk',
@@ -4567,6 +4569,7 @@
             // West -220° = 140°E in extended western notation; crosses antimeridian
             south: -80.0, north: 80.0,
             coords: [[-220.0, 80.0], [-55.0, 80.0], [-55.0, -80.0], [-220.0, -80.0]],
+            fulldisk: true,
         },
     };
     const SAT_MAX_FRAMES = 10;
@@ -4578,6 +4581,8 @@
     // correctly on Mapbox's Mercator basemap. Returns a blob URL on success,
     // or the original rawUrl as a fallback if cross-origin pixel access fails.
     // south/north are the latitude extents of the source image in degrees.
+    // Images are downsampled to MAX_DIM on the longest side before processing
+    // to prevent out-of-memory crashes on mobile with large full-disk imagery.
     async function _toMercator(rawUrl, south, north) {
         if (_satMercCache.has(rawUrl)) return _satMercCache.get(rawUrl);
         try {
@@ -4588,16 +4593,22 @@
                 i.onerror = rej;
                 i.src = rawUrl;
             });
-            const W = img.width, H = img.height;
+            // Cap working canvas to MAX_DIM on the longest side.
+            // Full-disk images can be 2500×2500+; without capping, two such canvases
+            // plus the pixel array (~100 MB) crash Safari on iPhone.
+            const MAX_DIM = 1024;
+            const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+            const W = Math.round(img.width  * scale);
+            const H = Math.round(img.height * scale);
             // Mercator Y values for the latitude bounds
             const mY  = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
             const mN  = mY(north), mS = mY(south);
             const mRng = mN - mS;
-            // Draw source (PlateCarree) image to an offscreen canvas
+            // Draw source (PlateCarree) image scaled down into an offscreen canvas
             const sc = document.createElement('canvas');
             sc.width = W; sc.height = H;
             const sctx = sc.getContext('2d');
-            sctx.drawImage(img, 0, 0);
+            sctx.drawImage(img, 0, 0, W, H);
             const sd = sctx.getImageData(0, 0, W, H).data;
             // Build Mercator-projected output
             const oc = document.createElement('canvas');
@@ -4621,7 +4632,7 @@
             octx.putImageData(od, 0, 0);
             const blobUrl = await new Promise(res => oc.toBlob(b => res(URL.createObjectURL(b))));
             // Evict oldest entry to cap memory use
-            if (_satMercCache.size >= 20) {
+            if (_satMercCache.size >= 8) {
                 const oldest = _satMercCache.keys().next().value;
                 const oldBlob = _satMercCache.get(oldest);
                 if (oldBlob && oldBlob.startsWith('blob:')) URL.revokeObjectURL(oldBlob);
@@ -4738,9 +4749,18 @@
             const slider = document.getElementById('sat-frame-slider');
             if (slider) { slider.max = _satFrames.length - 1; slider.value = _satFrames.length - 1; }
             await showSatFrame(0);
-            // Pre-load remaining frames in background for smooth animation
-            for (const frameIdx of _satFrames.slice(1)) {
-                _toMercator(_satFrameUrl(frameIdx), src.south, src.north).catch(() => {});
+            // Pre-load remaining frames in background for smooth animation.
+            // Full-disk images are large: stagger loading and cap at 2 extra frames
+            // to avoid saturating mobile memory (Safari on iPhone crashes otherwise).
+            const preloadFrames = src.fulldisk
+                ? _satFrames.slice(1, 3)
+                : _satFrames.slice(1);
+            let delay = 0;
+            for (const frameIdx of preloadFrames) {
+                setTimeout(() => {
+                    _toMercator(_satFrameUrl(frameIdx), src.south, src.north).catch(() => {});
+                }, delay);
+                delay += src.fulldisk ? 1500 : 0;
             }
             // Fetch timestamp from last_updated.txt
             const cb = Math.floor(Date.now() / 60000);
