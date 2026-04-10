@@ -1622,6 +1622,13 @@
                 <!-- Satellite Sub-Controls -->
                 <div class="radar-controls" id="satellite-controls">
                     <div class="ctrl-row" style="gap:8px;align-items:center;">
+                        <select id="sat-source-select" class="ctrl-select" onchange="switchSatSource(this.value)">
+                            <option value="goes19">GOES-19 Full Disk</option>
+                            <option value="himawari">Himawari Full Disk</option>
+                            <option value="goes18">GOES-18 Full Disk</option>
+                        </select>
+                    </div>
+                    <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <select id="sat-band-select" class="ctrl-select" onchange="selectSatBand(this.value)">
                             <option value="geocolor">GeoColor</option>
                             <option value="visible">Visible</option>
@@ -4527,12 +4534,33 @@
     // ============================================================
     // SATELLITE VIEWER (interactive map, GitHub-hosted frames)
     // ============================================================
-    const SAT_BASE = 'https://raw.githubusercontent.com/GTG0116/Satellite/main/site/data/';
-    // GOES-East CONUS image corners [lng, lat]: NW, NE, SE, SW  (must match EXTENT in process_data.py: [-135, -60, 20, 55])
-    const SAT_COORDS = [[-135.0, 55.0], [-60.0, 55.0], [-60.0, 20.0], [-135.0, 20.0]];
+    const SAT_SOURCES = {
+        goes19: {
+            label:  'GOES-19 Full Disk',
+            base:   'https://raw.githubusercontent.com/GTG0116/goes19fulldisk/main/site/data/',
+            // EXTENT in process_data.py: [W, E, S, N] = [-156, 6, -81, 81]
+            south: -81.0, north: 81.0,
+            // Mapbox image corners [lng, lat]: NW, NE, SE, SW
+            coords: [[-156.0, 81.0], [6.0, 81.0], [6.0, -81.0], [-156.0, -81.0]],
+        },
+        himawari: {
+            label:  'Himawari Full Disk',
+            base:   'https://raw.githubusercontent.com/GTG0116/Himawari_Satellite/main/site/data/',
+            // EXTENT in process_data.py: [W, E, S, N] = [80, 200, -60, 60]
+            // East bound 200° = 160°W; Mapbox accepts longitudes >180 for antimeridian-crossing overlays
+            south: -60.0, north: 60.0,
+            coords: [[80.0, 60.0], [200.0, 60.0], [200.0, -60.0], [80.0, -60.0]],
+        },
+        goes18: {
+            label:  'GOES-18 Full Disk',
+            base:   'https://raw.githubusercontent.com/GTG0116/Goes18satellite/main/site/data/',
+            // EXTENT in process_data.py: [W, E, S, N] = [-220, -55, -80, 80]
+            // West -220° = 140°E in extended western notation; crosses antimeridian
+            south: -80.0, north: 80.0,
+            coords: [[-220.0, 80.0], [-55.0, 80.0], [-55.0, -80.0], [-220.0, -80.0]],
+        },
+    };
     const SAT_MAX_FRAMES = 10;
-    // Satellite extent constants (must match EXTENT in process_data.py)
-    const SAT_SOUTH = 20.0, SAT_NORTH = 55.0;
 
     // Cache of reprojected blob URLs: raw url → blob url (or raw url on CORS failure)
     const _satMercCache = new Map();
@@ -4540,7 +4568,8 @@
     // Reproject a PlateCarree satellite image to Web Mercator so it aligns
     // correctly on Mapbox's Mercator basemap. Returns a blob URL on success,
     // or the original rawUrl as a fallback if cross-origin pixel access fails.
-    async function _toMercator(rawUrl) {
+    // south/north are the latitude extents of the source image in degrees.
+    async function _toMercator(rawUrl, south, north) {
         if (_satMercCache.has(rawUrl)) return _satMercCache.get(rawUrl);
         try {
             const img = await new Promise((res, rej) => {
@@ -4553,7 +4582,7 @@
             const W = img.width, H = img.height;
             // Mercator Y values for the latitude bounds
             const mY  = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
-            const mN  = mY(SAT_NORTH), mS = mY(SAT_SOUTH);
+            const mN  = mY(north), mS = mY(south);
             const mRng = mN - mS;
             // Draw source (PlateCarree) image to an offscreen canvas
             const sc = document.createElement('canvas');
@@ -4567,14 +4596,14 @@
             const octx = oc.getContext('2d');
             const od = octx.createImageData(W, H);
             const oda = od.data;
-            const latRange = SAT_NORTH - SAT_SOUTH;
+            const latRange = north - south;
             for (let y = 0; y < H; y++) {
                 // Mercator Y for this output row (top = north)
                 const my  = mN - (y / H) * mRng;
                 // Corresponding geographic latitude
                 const lat = (2 * Math.atan(Math.exp(my)) - Math.PI / 2) * 180 / Math.PI;
-                // Source row in the PlateCarree image (top = SAT_NORTH)
-                const sy  = Math.round((SAT_NORTH - lat) / latRange * H);
+                // Source row in the PlateCarree image (top = north)
+                const sy  = Math.round((north - lat) / latRange * H);
                 if (sy >= 0 && sy < H) {
                     const so = sy * W * 4, oo = y * W * 4;
                     oda.set(sd.subarray(so, so + W * 4), oo);
@@ -4605,26 +4634,28 @@
         watervapor: { label: 'Water Vapor',  prefix: 'water_vapor' },
     };
 
+    let _currentSatSource  = 'goes19';  // which satellite feed
     let _currentSatProduct = 'geocolor';
     let _satFrameIdx       = 0;      // 0 = newest
-    let _satFrameCount     = 1;      // determined on load
     let _satAnimTimer      = null;
     let _satLoaded         = false;
     let _satFrames         = [];     // ordered list of available frame indices (newest first)
 
     function _satFrameUrl(idx, product) {
+        const src  = SAT_SOURCES[_currentSatSource];
         const prod = SAT_PRODUCTS[product || _currentSatProduct];
         const frame = String(idx).padStart(2, '0');
         const cb = Math.floor(Date.now() / 60000);
-        return SAT_BASE + prod.prefix + '_' + frame + '.png?cb=' + cb;
+        return src.base + prod.prefix + '_' + frame + '.png?cb=' + cb;
     }
 
     async function _probeSatFrames(product) {
-        const cb = Math.floor(Date.now() / 60000);
+        const src  = SAT_SOURCES[_currentSatSource];
+        const cb   = Math.floor(Date.now() / 60000);
         const prod = SAT_PRODUCTS[product || _currentSatProduct];
         const checks = Array.from({ length: SAT_MAX_FRAMES }, (_, i) => {
             const frame = String(i).padStart(2, '0');
-            const url = SAT_BASE + prod.prefix + '_' + frame + '.png?cb=' + cb;
+            const url = src.base + prod.prefix + '_' + frame + '.png?cb=' + cb;
             return fetch(url, { method: 'HEAD', cache: 'no-store' })
                 .then(r => r.ok ? i : null).catch(() => null);
         });
@@ -4651,15 +4682,16 @@
     async function showSatFrame(pos) {
         if (!map) return;
         _satFrameIdx = pos;
+        const src    = SAT_SOURCES[_currentSatSource];
         const frameIdx = _satFrames[pos];
         const rawUrl = _satFrameUrl(frameIdx);
-        const url = await _toMercator(rawUrl);
+        const url = await _toMercator(rawUrl, src.south, src.north);
         if (_satLoaded && map.getSource('sat-overlay')) {
             map.getSource('sat-overlay').updateImage({ url });
         } else {
             if (map.getLayer('sat-overlay-layer')) map.removeLayer('sat-overlay-layer');
             if (map.getSource('sat-overlay'))      map.removeSource('sat-overlay');
-            map.addSource('sat-overlay', { type: 'image', url, coordinates: SAT_COORDS });
+            map.addSource('sat-overlay', { type: 'image', url, coordinates: src.coords });
             map.addLayer({
                 id: 'sat-overlay-layer', type: 'raster', source: 'sat-overlay',
                 paint: {
@@ -4685,6 +4717,7 @@
     async function loadSatLayer() {
         showLoading('Loading satellite\u2026');
         try {
+            const src = SAT_SOURCES[_currentSatSource];
             _satLoaded = false;
             if (map) {
                 if (map.getLayer('sat-overlay-layer')) map.removeLayer('sat-overlay-layer');
@@ -4698,11 +4731,11 @@
             await showSatFrame(0);
             // Pre-load remaining frames in background for smooth animation
             for (const frameIdx of _satFrames.slice(1)) {
-                _toMercator(_satFrameUrl(frameIdx)).catch(() => {});
+                _toMercator(_satFrameUrl(frameIdx), src.south, src.north).catch(() => {});
             }
             // Fetch timestamp from last_updated.txt
             const cb = Math.floor(Date.now() / 60000);
-            fetch(SAT_BASE + 'last_updated.txt?cb=' + cb, { cache: 'no-store' })
+            fetch(src.base + 'last_updated.txt?cb=' + cb, { cache: 'no-store' })
                 .then(r => r.ok ? r.text() : null)
                 .then(txt => {
                     const timeEl = document.getElementById('sat-time-display');
@@ -4742,6 +4775,20 @@
             map.setPaintProperty('sat-overlay-layer', 'raster-opacity', parseInt(val, 10) / 100);
     }
 
+    function switchSatSource(sourceKey) {
+        if (!SAT_SOURCES[sourceKey]) return;
+        _satMercCache.forEach((v) => { if (v && v.startsWith('blob:')) URL.revokeObjectURL(v); });
+        _satMercCache.clear();
+        _currentSatSource = sourceKey;
+        const srcSel = document.getElementById('sat-source-select');
+        if (srcSel) srcSel.value = sourceKey;
+        if (currentLayer === 'satellite') {
+            stopSatAnimation();
+            clearSatLayer();
+            _ensureMapReady().then(() => loadSatLayer());
+        }
+    }
+
     function selectSatBand(band) {
         if (!SAT_PRODUCTS[band]) return;
         // Clear reprojection cache for old band
@@ -4761,6 +4808,8 @@
         stopSatAnimation();
         _satLoaded = false;
         _satFrames = [];
+        _satMercCache.forEach((v) => { if (v && v.startsWith('blob:')) URL.revokeObjectURL(v); });
+        _satMercCache.clear();
         await _ensureMapReady();
         await loadSatLayer();
     }
