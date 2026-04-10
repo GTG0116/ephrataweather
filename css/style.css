@@ -1943,6 +1943,97 @@ body {
     }
 }
 
+/* --- Alert Modal Action Buttons (screenshot / share / view on radar) --- */
+.alert-modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.alert-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    background: rgba(100,180,255,0.08);
+    border: 1px solid rgba(100,180,255,0.22);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.18s;
+    white-space: nowrap;
+    touch-action: manipulation;
+}
+
+.alert-action-btn:hover {
+    background: rgba(100,180,255,0.18);
+    border-color: rgba(100,180,255,0.42);
+    color: var(--text-primary);
+}
+
+.alert-action-btn svg {
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+/* --- Map Screenshot Button overlay --- */
+.map-screenshot-btn {
+    position: absolute;
+    bottom: 76px;
+    left: 12px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: rgba(12,18,38,0.88);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.18s;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    touch-action: manipulation;
+}
+
+.map-screenshot-btn:hover {
+    background: rgba(100,180,255,0.14);
+    border-color: rgba(100,180,255,0.35);
+    color: var(--text-primary);
+}
+
+/* --- Share / Copy toast notification --- */
+.alert-share-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(17,30,60,0.96);
+    border: 1px solid rgba(100,180,255,0.4);
+    color: #8dd4ff;
+    padding: 10px 22px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    z-index: 99999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    white-space: nowrap;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
 /* --- SPC Severe Weather Risk Banners --- */
 .spc-risk-banner {
     display: flex;

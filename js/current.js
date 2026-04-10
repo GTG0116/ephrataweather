@@ -152,6 +152,10 @@ if (typeof _SPA_MODE === 'undefined') {
 // ---- Alerts ----
 let _renderedAlerts = [];
 let _alertMap = null;
+// The alert currently open in the modal — used by action buttons.
+let _currentOpenAlert = null;
+// Bounds [[west,south],[east,north]] of the last-drawn alert map polygon (for radar nav).
+let _lastAlertMapBounds = null;
 // Timezone of the currently-viewed location (IANA string, e.g. "America/Chicago").
 // Set when alerts are loaded so times are shown in the location's local timezone.
 let _locationTimeZone = null;
@@ -378,6 +382,19 @@ async function loadAndRenderAlerts(lat, lng) {
     const currentAlerts = byLocation.find((x) => x.location.isCurrent)?.alerts || [];
     renderAlerts(currentAlerts);
 
+    // Handle shared alert link: if the URL contains an alert ID, open it now
+    const pendingId = window._pendingSharedAlertId;
+    if (pendingId) {
+        window._pendingSharedAlertId = null;
+        const found = currentAlerts.find(a => a.id === pendingId);
+        if (found) {
+            setTimeout(() => openAlertDetail(found), 300);
+        } else {
+            // Alert may be outside current location or expired — fetch directly from NWS
+            _fetchAndOpenAlertById(pendingId);
+        }
+    }
+
     // Fetch SPC and WPC outlooks in parallel instead of sequentially
     await Promise.allSettled([
         loadAndRenderSPCOutlook(lat, lng).catch(err => console.warn('SPC outlook error:', err)),
@@ -551,6 +568,9 @@ function openAlertDetail(indexOrAlert, skipMap) {
     const alert = (typeof indexOrAlert === 'number') ? _renderedAlerts[indexOrAlert] : indexOrAlert;
     if (!alert) return;
 
+    // Store the currently open alert so action buttons can reference it
+    _currentOpenAlert = alert;
+
     const modal = document.getElementById('alert-modal');
     const titleEl = document.getElementById('alert-modal-title');
     const metaEl = document.getElementById('alert-modal-meta');
@@ -592,6 +612,27 @@ function openAlertDetail(indexOrAlert, skipMap) {
     const parts = [alert.description, alert.instruction].filter(Boolean);
     bodyEl.textContent = parts.length ? parts.join('\n\n') : 'No additional text provided by NWS.';
 
+    // ---- Action buttons: View on Radar / Screenshot / Share ----
+    const existingActions = document.getElementById('alert-modal-actions');
+    if (existingActions) existingActions.remove();
+    const actionsEl = document.createElement('div');
+    actionsEl.id = 'alert-modal-actions';
+    actionsEl.className = 'alert-modal-actions';
+    actionsEl.innerHTML = `
+        <button class="alert-action-btn" onclick="navigateAlertToRadar()" title="View alert area on radar map">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            View on Radar
+        </button>
+        <button class="alert-action-btn" onclick="screenshotAlert()" title="Save screenshot with alert text and radar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Screenshot
+        </button>
+        <button class="alert-action-btn" onclick="shareAlert()" title="Copy shareable link to this alert">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Share Link
+        </button>`;
+    bodyEl.insertAdjacentElement('afterend', actionsEl);
+
     // Optionally hide the map section (e.g. when opened from the map view)
     const mapEl = document.getElementById('alert-modal-map');
     if (skipMap) {
@@ -629,7 +670,8 @@ function _drawAlertMap(alert) {
             container: 'alert-modal-map',
             style: 'mapbox://styles/mapbox/dark-v11',
             center: [LocationManager.getCurrent().lng, LocationManager.getCurrent().lat],
-            zoom: 6
+            zoom: 6,
+            preserveDrawingBuffer: true
         });
         _alertMap.addControl(new mapboxgl.NavigationControl(), 'top-right');
     }
@@ -657,9 +699,11 @@ function _drawAlertMap(alert) {
             _loadMRMSToAlertMap();
             if (geojson.features.length && window.turf) {
                 const bounds = turf.bbox(geojson);
-                _alertMap.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 30, duration: 0 });
+                _lastAlertMapBounds = [[bounds[0], bounds[1]], [bounds[2], bounds[3]]];
+                _alertMap.fitBounds(_lastAlertMapBounds, { padding: 30, duration: 0 });
             } else {
                 const loc = LocationManager.getCurrent();
+                _lastAlertMapBounds = [[loc.lng - 2, loc.lat - 1.5], [loc.lng + 2, loc.lat + 1.5]];
                 _alertMap.easeTo({ center: [loc.lng, loc.lat], zoom: 7, duration: 0 });
             }
             _alertMap.resize();
@@ -1589,4 +1633,243 @@ function renderPollen(data) {
             }
         }
     });
+}
+
+// ============================================================
+// ALERT ACTION FUNCTIONS
+// ============================================================
+
+// Navigate the maps view to radar, zoomed to the current alert's area.
+function navigateAlertToRadar() {
+    if (!_currentOpenAlert) return;
+    closeAlertDetail();
+
+    // Use the bounds saved when the alert map polygon was drawn
+    if (_lastAlertMapBounds) {
+        window._alertRadarTarget = { bounds: _lastAlertMapBounds };
+    } else if (_currentOpenAlert.geometry) {
+        const coords = _extractGeometryCoords(_currentOpenAlert.geometry);
+        if (coords.length >= 2) {
+            const lngs = coords.map(c => c[0]);
+            const lats = coords.map(c => c[1]);
+            window._alertRadarTarget = {
+                bounds: [
+                    [Math.min(...lngs), Math.min(...lats)],
+                    [Math.max(...lngs), Math.max(...lats)]
+                ]
+            };
+        }
+    }
+    if (!window._alertRadarTarget) {
+        const loc = LocationManager.getCurrent();
+        window._alertRadarTarget = { center: [loc.lng, loc.lat], zoom: 8 };
+    }
+
+    // Tell showView to switch to radar layer
+    window._spcTargetLayer = 'radar';
+    window.location.hash = '#maps';
+    if (typeof showView === 'function') showView('maps');
+}
+
+// Extract all coordinates from a GeoJSON geometry for bounding-box calculation.
+function _extractGeometryCoords(geometry) {
+    if (!geometry) return [];
+    if (geometry.type === 'Polygon') return geometry.coordinates[0] || [];
+    if (geometry.type === 'MultiPolygon') return geometry.coordinates.flatMap(poly => poly[0] || []);
+    return [];
+}
+
+// Save a composite PNG (alert text left + radar map right) and trigger a download.
+function screenshotAlert() {
+    const alert = _currentOpenAlert;
+    if (!alert) return;
+
+    const W = 1200, H = 660;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Dark background
+    ctx.fillStyle = '#0d1525';
+    ctx.fillRect(0, 0, W, H);
+
+    // Right half — radar/alert map canvas
+    let mapDrawn = false;
+    if (_alertMap) {
+        try {
+            const mc = _alertMap.getCanvas();
+            if (mc && mc.width > 0) {
+                ctx.drawImage(mc, W / 2, 0, W / 2, H);
+                mapDrawn = true;
+            }
+        } catch (e) { /* canvas may not be readable */ }
+    }
+
+    // Divider
+    if (mapDrawn) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(W / 2, 0);
+        ctx.lineTo(W / 2, H);
+        ctx.stroke();
+    }
+
+    // Left half — colour strip + text
+    const textW = (mapDrawn ? W / 2 : W) - 48;
+    const x = 24;
+
+    // Alert-type colour strip on left edge
+    const _STRIP_COLORS = {
+        'alert-tornado-warning': '#DD0000', 'alert-tornado-watch': '#BB44BB',
+        'alert-svr-warning': '#FF8800',     'alert-svr-watch': '#DDC000',
+        'alert-flash-flood-warning': '#00AA44', 'alert-flood-warning': '#00CC44',
+        'alert-flood-watch': '#22BB66',     'alert-blizzard-warning': '#FF4400',
+        'alert-winter-storm-warning': '#EE66AA', 'alert-winter-storm-watch': '#4488EE',
+        'alert-high-wind-warning': '#DAA520', 'alert-red-flag-warning': '#FF1493',
+        'alert-sws': '#00BBCC',             'alert-extreme': '#FF4444',
+        'alert-warning': '#FF8800',         'alert-watch': '#DDC000',
+        'alert-advisory': '#6688BB'
+    };
+    const stripColor = _STRIP_COLORS[_alertClass(alert)] || '#6688BB';
+    ctx.fillStyle = stripColor;
+    ctx.fillRect(0, 0, 5, H);
+
+    // Title
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px system-ui,-apple-system,Arial,sans-serif';
+    let y = _drawWrappedText(ctx, alert.headline || alert.event || 'Weather Alert', x + 8, 38, textW - 8, 24);
+    y += 12;
+
+    // Meta
+    ctx.fillStyle = '#88a0b8';
+    ctx.font = '12px system-ui,-apple-system,Arial,sans-serif';
+    ctx.fillText(`Effective: ${_formatAlertTime(alert.onset || alert.effective)}`, x + 8, y); y += 17;
+    ctx.fillText(`Expires:   ${_formatAlertTime(alert.expires)}`, x + 8, y); y += 17;
+    if (alert.areaDesc) {
+        ctx.font = '11px system-ui,-apple-system,Arial,sans-serif';
+        ctx.fillStyle = '#607890';
+        const area = alert.areaDesc.length > 110 ? alert.areaDesc.slice(0, 107) + '\u2026' : alert.areaDesc;
+        y = _drawWrappedText(ctx, `Areas: ${area}`, x + 8, y, textW - 8, 16);
+    }
+
+    // Divider line
+    y += 10;
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + textW, y); ctx.stroke();
+    y += 14;
+
+    // Description / Instruction body text
+    ctx.fillStyle = '#b0c8e0';
+    ctx.font = '11px system-ui,-apple-system,Arial,sans-serif';
+    const bodyText = [alert.description, alert.instruction].filter(Boolean).join('\n\n');
+    for (const line of bodyText.split('\n')) {
+        if (y > H - 36) break;
+        if (!line.trim()) { y += 8; continue; }
+        y = _drawWrappedText(ctx, line.trim(), x + 8, y, textW - 8, 15);
+        y += 2;
+    }
+
+    // Watermark
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.font = '10px system-ui,-apple-system,Arial,sans-serif';
+    ctx.fillText('ephrataweather.com', x + 8, H - 12);
+
+    // Trigger download
+    const a = document.createElement('a');
+    a.download = `weather-alert-${Date.now()}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+}
+
+// Word-wrap text onto a canvas context; returns the new y position after the last line.
+function _drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+    if (!text) return y;
+    const words = text.split(/\s+/);
+    let line = '';
+    for (const word of words) {
+        const test = line ? line + ' ' + word : word;
+        if (ctx.measureText(test).width > maxWidth && line) {
+            ctx.fillText(line, x, y);
+            line = word;
+            y += lineHeight;
+        } else {
+            line = test;
+        }
+    }
+    if (line) { ctx.fillText(line, x, y); y += lineHeight; }
+    return y;
+}
+
+// Copy a shareable URL for the current alert to the clipboard (or use Web Share API).
+function shareAlert() {
+    const alert = _currentOpenAlert;
+    if (!alert) return;
+    const alertId = alert.id || '';
+    if (!alertId) { _showAlertToast('No shareable ID for this alert.'); return; }
+
+    const url = `${window.location.origin}${window.location.pathname}#current&alert=${encodeURIComponent(alertId)}`;
+    const title = alert.headline || alert.event || 'Weather Alert';
+    const text = `${title}\n${alert.areaDesc || ''}`.trim();
+
+    if (navigator.share) {
+        navigator.share({ title, text, url }).catch(() => {});
+    } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => _showAlertToast('Link copied!')).catch(() => {
+            prompt('Copy this link:', url);
+        });
+    } else {
+        prompt('Copy this link:', url);
+    }
+}
+
+// Show a brief toast notification.
+function _showAlertToast(msg) {
+    let toast = document.getElementById('alert-share-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'alert-share-toast';
+        toast.className = 'alert-share-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+}
+
+// Fetch an alert directly from the NWS API by its ID and open the detail modal.
+async function _fetchAndOpenAlertById(alertId) {
+    try {
+        const url = alertId.startsWith('http')
+            ? alertId
+            : `https://api.weather.gov/alerts/${encodeURIComponent(alertId)}`;
+        const resp = await fetch(url, { headers: { 'Accept': 'application/geo+json' } });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const p = data.properties || {};
+        const alert = {
+            id: data.id || alertId,
+            event: p.event || 'Weather Alert',
+            headline: p.headline || p.event || 'Weather Alert',
+            description: p.description || '',
+            instruction: p.instruction || '',
+            severity: (p.severity || '').toLowerCase(),
+            certainty: p.certainty || '',
+            urgency: p.urgency || '',
+            onset: p.onset || p.effective || null,
+            effective: p.effective || null,
+            expires: p.expires || p.ends || null,
+            areaDesc: p.areaDesc || '',
+            sender: p.senderName || '',
+            geometry: data.geometry || null,
+            parameters: p.parameters || {},
+            raw: data
+        };
+        openAlertDetail(alert);
+    } catch (e) {
+        console.warn('Failed to fetch shared alert:', e);
+    }
 }
