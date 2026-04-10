@@ -1860,6 +1860,11 @@
             <!-- Map (for SPC / WPC / Fire / Temperature / Wind / Satellite / Radar) -->
             <div class="map-wrapper glass-static" id="map-view-wrap" style="display:none;">
                 <div id="map"></div>
+                <!-- Screenshot / Share overlay buttons -->
+                <button class="map-screenshot-btn" id="map-screenshot-btn" onclick="takeMapScreenshot()" title="Save map as PNG image">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    Screenshot
+                </button>
                 <div class="spc-legend" id="spc-legend">
                     <div class="legend-title" id="legend-title">Categorical Risk</div>
                     <div id="legend-items"></div>
@@ -3578,7 +3583,18 @@
 
     function getViewFromHash() {
         const h = window.location.hash.replace('#', '').trim();
-        return VALID_VIEWS.includes(h) ? h : 'home';
+        // Support compound hashes like "#current&alert=xxx" for shared alert links
+        const view = h.split('&')[0];
+        return VALID_VIEWS.includes(view) ? view : 'home';
+    }
+
+    // Extract a query-style parameter from the hash (e.g. #current&alert=xxx).
+    function _getHashParam(key) {
+        const h = window.location.hash.replace('#', '').trim();
+        const parts = h.split('&');
+        if (parts.length < 2) return null;
+        const qs = parts.slice(1).join('&');
+        return new URLSearchParams(qs).get(key) || null;
     }
 
     function updateNavActive(viewId) {
@@ -3630,6 +3646,28 @@
                 // SPC banner was clicked — switch to SPC and select the day
                 if (currentLayer !== 'spc') switchLayer('spc');
                 selectDay(targetDay);
+            }
+
+            // Fly to alert area on radar when navigated via "View on Radar" button
+            if (window._alertRadarTarget) {
+                const target = window._alertRadarTarget;
+                window._alertRadarTarget = null;
+                const _flyToAlert = () => {
+                    const m = window._spaMap;
+                    if (!m) return;
+                    if (target.bounds) {
+                        m.fitBounds(target.bounds, { padding: 60, duration: 800, maxZoom: 10 });
+                    } else if (target.center) {
+                        m.flyTo({ center: target.center, zoom: target.zoom || 8, duration: 800 });
+                    }
+                };
+                // Wait for map to load and layer tiles to start rendering
+                const m = window._spaMap;
+                if (m && m.loaded()) {
+                    setTimeout(_flyToAlert, 400);
+                } else if (m) {
+                    m.once('load', () => setTimeout(_flyToAlert, 400));
+                }
             }
         }
     }
@@ -6206,11 +6244,13 @@
                 style: BASEMAP_STYLES[currentBasemap],
                 center: [loc.lng, loc.lat],
                 zoom: 5,
-                projection: 'mercator'
+                projection: 'mercator',
+                preserveDrawingBuffer: true
             });
             window._spaMap = map;
             map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-            map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+            // Use a custom container for FullscreenControl so modals inside it stay visible
+            map.addControl(new mapboxgl.FullscreenControl({ container: document.getElementById('map-view-wrap') }), 'top-right');
             map.on('load', () => {
                 const styleLayers = map.getStyle().layers;
                 firstSymbolLayerId = undefined;
@@ -6241,6 +6281,52 @@
     }
 
     // ============================================================
+    // MAP SCREENSHOT
+    // ============================================================
+    function takeMapScreenshot() {
+        const m = window._spaMap;
+        if (!m) return;
+        try {
+            const dataUrl = m.getCanvas().toDataURL('image/png');
+            const a = document.createElement('a');
+            a.download = `map-${Date.now()}.png`;
+            a.href = dataUrl;
+            a.click();
+        } catch (e) {
+            console.warn('Map screenshot failed:', e);
+        }
+    }
+
+    // ============================================================
+    // FULLSCREEN — keep the alert modal visible over the map
+    // ============================================================
+    // When the user enters fullscreen (via the Mapbox control), the fullscreen
+    // element creates its own stacking context so fixed-position elements
+    // outside it disappear.  We move the modal set inside the fullscreen
+    // element while it is active, then restore them on exit.
+    const _MODAL_IDS = ['alert-modal', 'discussion-modal', 'source-info-modal', 'outlook-info-modal'];
+
+    function _handleFullscreenChange() {
+        const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+        if (fsEl) {
+            // Entering fullscreen: move modals inside the fullscreen element
+            _MODAL_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.parentElement !== fsEl) fsEl.appendChild(el);
+            });
+        } else {
+            // Exiting fullscreen: move modals back to document body
+            _MODAL_IDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.parentElement !== document.body) document.body.appendChild(el);
+            });
+        }
+    }
+
+    document.addEventListener('fullscreenchange', _handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', _handleFullscreenChange);
+
+    // ============================================================
     // BOOTSTRAP
     // ============================================================
     (async function () {
@@ -6251,6 +6337,13 @@
         const loc = await LocationManager.init();
         const nameEl = document.getElementById('location-name');
         if (nameEl) nameEl.textContent = loc.name;
+
+        // If the URL contains a shared alert link, stash the ID so current.js can open it
+        // after alerts are loaded (e.g. #current&alert=urn:oid:...).
+        const _sharedAlertId = _getHashParam('alert');
+        if (_sharedAlertId) {
+            window._pendingSharedAlertId = decodeURIComponent(_sharedAlertId);
+        }
 
         // Show initial view based on hash (default: home)
         await showView(getViewFromHash());
