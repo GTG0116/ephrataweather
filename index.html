@@ -1623,6 +1623,7 @@
                 <div class="radar-controls" id="satellite-controls">
                     <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <select id="sat-source-select" class="ctrl-select" onchange="switchSatSource(this.value)">
+                            <option value="conus">GOES-East CONUS</option>
                             <option value="goes19">GOES-19 Full Disk</option>
                             <option value="himawari">Himawari Full Disk</option>
                             <option value="goes18">GOES-18 Full Disk</option>
@@ -4535,6 +4536,14 @@
     // SATELLITE VIEWER (interactive map, GitHub-hosted frames)
     // ============================================================
     const SAT_SOURCES = {
+        conus: {
+            label:  'GOES-East CONUS',
+            base:   'https://raw.githubusercontent.com/GTG0116/Satellite/main/site/data/',
+            // EXTENT in process_data.py: [W, E, S, N] = [-135, -60, 20, 55]
+            south: 20.0, north: 55.0,
+            // Mapbox image corners [lng, lat]: NW, NE, SE, SW
+            coords: [[-135.0, 55.0], [-60.0, 55.0], [-60.0, 20.0], [-135.0, 20.0]],
+        },
         goes19: {
             label:  'GOES-19 Full Disk',
             base:   'https://raw.githubusercontent.com/GTG0116/goes19fulldisk/main/site/data/',
