@@ -3592,32 +3592,51 @@
         const nameMatch = text.match(/(?:TROPICAL (?:DEPRESSION|STORM)|TYPHOON|SUPER TYPHOON|CYCLONE)\s+\w+\s*\(([^)]+)\)/i);
         const stormName = nameMatch?.[1]?.trim() || stormId.toUpperCase();
         const pointMap = new Map();
-        const lines = String(text || '').split('\n');
-        for (const rawLine of lines) {
+        // Track the current forecast-section lead time across consecutive lines.
+        let currentLead = null;
+        for (const rawLine of String(text || '').split('\n')) {
             const line = rawLine.toUpperCase();
-            let lead = null;
-            if (line.includes('WARNING POSITION')) lead = 0;
-            else {
-                const hr = line.match(/(\d{1,3})\s*HRS?/);
-                if (hr) lead = Number(hr[1]);
+            // Section header detection (must come before coordinate parsing)
+            if (line.includes('WARNING POSITION') || line.includes('PRESENT POSITION')) {
+                currentLead = 0;
+            } else {
+                const hr = line.match(/(\d{1,3})\s*HOURS?\s*(?:FORECAST)?|(\d{1,3})\s*HRS?\s*(?:FORECAST)?/);
+                if (hr) currentLead = Number(hr[1] ?? hr[2]);
             }
-            if (lead == null) continue;
+            if (currentLead == null) continue;
+
+            // Position — initialises the entry for this lead if not yet seen
             const coord = line.match(/(\d{1,4}(?:\.\d+)?)\s*([NS])\s+(\d{1,5}(?:\.\d+)?)\s*([EW])/);
-            if (!coord) continue;
-            const lat = _parseJTWCCoord(coord[1], coord[2]);
-            const lon = _parseJTWCCoord(coord[3], coord[4]);
-            const windMatch = line.match(/MAX SUSTAINED WINDS?\s*[-:]\s*(\d{2,3})\s*KT/);
-            const wind = Number(windMatch?.[1] || 0);
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-            if (!pointMap.has(lead)) {
-                pointMap.set(lead, { lat, lon, wind });
+            if (coord && !pointMap.has(currentLead)) {
+                const lat = _parseJTWCCoord(coord[1], coord[2]);
+                const lon = _parseJTWCCoord(coord[3], coord[4]);
+                if (Number.isFinite(lat) && Number.isFinite(lon)) {
+                    pointMap.set(currentLead, { lat, lon, wind: 0, mslp: null, gusts: null });
+                }
+            }
+            if (!pointMap.has(currentLead)) continue;
+            const pt = pointMap.get(currentLead);
+
+            // Max sustained wind
+            const windM = line.match(/MAX\s+(?:SUSTAINED\s+)?WIND(?:S|\s+SPEED)?\s*[-:]\s*(\d{2,3})\s*KT/);
+            if (windM && !pt.wind) pt.wind = Number(windM[1]);
+
+            // Gusts
+            const gustM = line.match(/GUSTS?\s+(?:TO\s+)?(\d{2,3})\s*KT/);
+            if (gustM && !pt.gusts) pt.gusts = Number(gustM[1]);
+
+            // Minimum central pressure
+            const mslpM = line.match(/(?:MIN(?:IMUM)?\s+)?(?:CENTRAL\s+)?PRESS(?:URE)?\s*[-:]\s*(\d{3,4})\s*(?:MB|HPA)/);
+            if (mslpM && !pt.mslp) {
+                const p = Number(mslpM[1]);
+                if (p > 850 && p < 1060) pt.mslp = p;
             }
         }
         const points = [...pointMap.entries()].sort((a, b) => a[0] - b[0]);
         if (!points.length) return [];
         const features = [];
         const coords = [];
-        points.forEach(([lead, pt]) => {
+        for (const [lead, pt] of points) {
             const cat = _tropicalCategoryFromWind(pt.wind);
             coords.push([pt.lon, pt.lat]);
             features.push({
@@ -3630,10 +3649,12 @@
                     _stormSource: 'JTWC',
                     _stormCategory: cat.label,
                     _stormColor: cat.color,
-                    _stormWindKts: pt.wind
+                    _stormWindKts: pt.wind || null,
+                    _stormPressureHPa: pt.mslp || null,
+                    _stormGustKts: pt.gusts || null
                 }
             });
-        });
+        }
         if (coords.length > 1) {
             features.push({
                 type: 'Feature',
@@ -3643,11 +3664,167 @@
                     _stormName: stormName,
                     _stormSource: 'JTWC',
                     _stormCategory: features[0]?.properties?._stormCategory || '',
-                    _stormColor: features[0]?.properties?._stormColor || '#44bbff'
+                    _stormColor: features[0]?.properties?._stormColor || '#44bbff',
+                    fcstpd: null
                 }
             });
         }
         return features;
+    }
+
+    // Convert a JMA TC ID (e.g. "TC2604") to JTWC/ATCF file identifiers.
+    // JMA TC{YY}{NN}: YY = 2-digit year, NN = 2-digit storm number within the year.
+    function _jmaIdToJtwcIds(tcId) {
+        const m = String(tcId || '').match(/^TC(\d{2})(\d{2})$/i);
+        if (!m) return null;
+        const year2 = m[1];   // "26" for 2026
+        const stormNum = m[2]; // "04"
+        const year4 = (Number(year2) < 50 ? '20' : '19') + year2; // "2026"
+        return {
+            atcfFile: `wp${stormNum}${year4}.dat`,  // NRL a-deck:  wp042026.dat
+            progFile: `wp${stormNum}${year2}.prog`  // JTWC text:   wp0426.prog
+        };
+    }
+
+    // Parse JTWC ATCF a-deck (comma-delimited) for official JTWC forecast rows.
+    // Returns Map of lead-time (hours) → { lat, lon, vmax, mslp, gusts, r34nm, r50nm, r64nm }.
+    function _parseATCFDeck(text) {
+        const RAD_KEY = { 34: 'r34nm', 50: 'r50nm', 64: 'r64nm' };
+        const pointMap = new Map();
+        for (const raw of String(text || '').split('\n')) {
+            const f = raw.split(',').map(s => s.trim());
+            if (f.length < 12) continue;
+            // Only use official JTWC forecast rows
+            if (!/^(JTWC|OFCL)$/i.test(f[4])) continue;
+            const tau = Number(f[5]);
+            if (!Number.isFinite(tau) || tau < 0) continue;
+
+            // Lat/lon: ATCF uses tenths of degrees with N/S/E/W suffix (e.g. "086N" = 8.6°N)
+            const latM = f[6].match(/^(\d+(?:\.\d+)?)([NS])$/i);
+            const lonM = f[7].match(/^(\d+(?:\.\d+)?)([EW])$/i);
+            if (!latM || !lonM) continue;
+            let lat = Number(latM[1]); if (!f[6].includes('.') && lat > 90)  lat /= 10;
+            let lon = Number(lonM[1]); if (!f[7].includes('.') && lon > 180) lon /= 10;
+            if (latM[2].toUpperCase() === 'S') lat = -lat;
+            if (lonM[2].toUpperCase() === 'W') lon = -lon;
+
+            const vmax  = Number(f[8])  || 0;
+            const mslp  = Number(f[9])  || 0;
+            const rad   = Number(f[11]) || 0;
+            const gusts = Number(f[20]) || 0;
+
+            // Max wind radius across the 4 quadrants (nautical miles)
+            const quadR = [f[13], f[14], f[15], f[16]].map(Number).filter(v => v > 0);
+            const maxRnm = quadR.length ? Math.max(...quadR) : 0;
+
+            if (!pointMap.has(tau)) {
+                pointMap.set(tau, { lat, lon, vmax,
+                    mslp: null, gusts: null, r34nm: 0, r50nm: 0, r64nm: 0 });
+            }
+            const pt = pointMap.get(tau);
+            if (mslp > 850 && mslp < 1060) pt.mslp = mslp;
+            if (gusts > pt.vmax) pt.gusts = gusts;
+            const rk = RAD_KEY[rad];
+            if (rk && maxRnm > 0) pt[rk] = Math.max(pt[rk], maxRnm);
+        }
+        return pointMap;
+    }
+
+    // Convert an ATCF point map to GeoJSON features.
+    // No uncertainty cone — ATCF a-decks carry wind radii but not probability circles.
+    function _atcfToFeatures(tcId, stormName, pointMap) {
+        const NM2M = 1852; // nautical miles → metres
+        const features = [];
+        const trackCoords = [];
+        const sortedLeads = [...pointMap.keys()].sort((a, b) => a - b);
+
+        for (const lead of sortedLeads) {
+            const { lat, lon, vmax, mslp, gusts, r34nm, r50nm, r64nm } = pointMap.get(lead);
+            const cat = _tropicalCategoryFromWind(vmax);
+            const stormProps = {
+                _stormId: tcId.toLowerCase(),
+                _stormName: stormName,
+                _stormSource: 'JTWC',
+                _stormCategory: cat.label,
+                _stormColor: cat.color,
+                _stormWindKts: vmax || null,
+                _stormPressureHPa: mslp || null,
+                _stormGustKts: gusts || null,
+                // Use 50 kt wind radius as "storm radius" display; fall back to 64 kt
+                _stormRadiusKm: r50nm > 0 ? Math.round(r50nm * NM2M / 1000)
+                               : r64nm > 0 ? Math.round(r64nm * NM2M / 1000) : null
+            };
+
+            trackCoords.push([lon, lat]);
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [lon, lat] },
+                properties: { ...stormProps, fcstpd: lead }
+            });
+
+            // Typhoon/storm warning circle — 50 kt wind radius (fall back to 64 kt)
+            const twRadM = (r50nm || r64nm) * NM2M;
+            if (twRadM > 0) features.push({
+                type: 'Feature',
+                geometry: { type: 'Polygon', coordinates: [_gcirclePolyCoords(lat, lon, twRadM, 36)] },
+                properties: { ...stormProps, _warningType: 'typhoon-warning', fcstpd: lead }
+            });
+
+            // Gale warning circle — 34 kt wind radius
+            if (r34nm > 0) features.push({
+                type: 'Feature',
+                geometry: { type: 'Polygon', coordinates: [_gcirclePolyCoords(lat, lon, r34nm * NM2M, 36)] },
+                properties: { ...stormProps, _warningType: 'gale-warning', fcstpd: lead }
+            });
+        }
+
+        if (trackCoords.length > 1) {
+            const firstPt = pointMap.get(sortedLeads[0]);
+            const baseCat = _tropicalCategoryFromWind(firstPt?.vmax || 0);
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: trackCoords },
+                properties: {
+                    _stormId: tcId.toLowerCase(), _stormName: stormName,
+                    _stormSource: 'JTWC',
+                    _stormCategory: baseCat.label, _stormColor: baseCat.color,
+                    _stormWindKts: firstPt?.vmax || null, fcstpd: null
+                }
+            });
+        }
+        return features;
+    }
+
+    // Try to load JTWC data for a Western Pacific storm via CORS proxies.
+    // Tries NRL ATCF a-deck first (full intensity + wind radii), then JTWC prog text.
+    // Returns [] on any failure so the caller can fall back to JMA.
+    async function _fetchJTWCStormFeatures(tcId, stormName) {
+        const ids = _jmaIdToJtwcIds(tcId);
+        if (!ids) return [];
+        const urls = [
+            `https://www.nrlmry.navy.mil/atcf_web/docs/current_storms/${ids.atcfFile}`,
+            `https://www.metoc.navy.mil/jtwc/products/${ids.progFile}`
+        ];
+        for (const url of urls) {
+            try {
+                const text = await _fetchTextWithCorsFallback(url);
+                if (!text || text.trim().length < 50) continue;
+                if (url.endsWith('.dat')) {
+                    const ptMap = _parseATCFDeck(text);
+                    if (ptMap.size > 0) {
+                        console.log(`JTWC ATCF loaded for ${tcId} (${ptMap.size} forecast steps)`);
+                        return _atcfToFeatures(tcId, stormName, ptMap);
+                    }
+                } else {
+                    const feats = _parseJTWCProg(tcId.toLowerCase(), text);
+                    if (feats.length > 0) {
+                        console.log(`JTWC prog loaded for ${tcId} (${feats.length} features)`);
+                        return feats;
+                    }
+                }
+            } catch (_) { /* try next URL */ }
+        }
+        return []; // both sources failed — caller falls back to JMA
     }
 
     // Parse JMA bosai/typhoon forecast.json into GeoJSON features.
@@ -3767,8 +3944,10 @@
         return features;
     }
 
-    // Fetch active Western Pacific typhoon data from JMA's public bosai API.
-    // Replaces the JTWC sector-file / prog-file approach which is blocked by military CORS policy.
+    // Fetch active Western Pacific typhoon data.
+    // For each storm, tries JTWC (NRL ATCF a-deck → JTWC prog text) via CORS proxy first,
+    // since JTWC provides per-step intensity, pressure, gusts, and wind radii.
+    // Falls back to JMA forecast.json when JTWC sources are unreachable.
     async function _fetchJMAStormFeatures() {
         const features = [];
         try {
@@ -3779,13 +3958,24 @@
                 const tcId = tc.tropicalCyclone;
                 if (!tcId || !_stormPassesBasin(tcId)) continue;
                 try {
+                    // Always fetch JMA forecast.json — needed for storm name and as JMA fallback data.
                     const r2 = await fetch(
                         `https://www.jma.go.jp/bosai/typhoon/data/${tcId}/forecast.json`,
                         { cache: 'no-store' }
                     );
                     if (!r2.ok) continue;
                     const forecastData = await r2.json();
-                    features.push(..._parseJMAForecast(tcId, tc.category, forecastData));
+                    const stormName = forecastData[0]?.name?.en || tcId.toUpperCase();
+
+                    // Try JTWC first (full per-step intensity, pressure, gusts, wind radii).
+                    const jtwcFeats = await _fetchJTWCStormFeatures(tcId, stormName);
+                    if (jtwcFeats.length > 0) {
+                        features.push(...jtwcFeats);
+                    } else {
+                        // JTWC unavailable — fall back to JMA (position + storm-size only).
+                        console.info(`JTWC unavailable for ${tcId}, using JMA fallback`);
+                        features.push(..._parseJMAForecast(tcId, tc.category, forecastData));
+                    }
                 } catch (_) {}
             }
         } catch (e) {
