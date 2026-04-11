@@ -3473,6 +3473,121 @@
         return (hemi === 'S' || hemi === 'W') ? -n : n;
     }
 
+    function _parseATCFCoord(coordStr) {
+        const raw = String(coordStr || '').trim().toUpperCase();
+        const m = raw.match(/^(\d{1,4}(?:\.\d+)?)([NSEW])$/);
+        if (!m) return null;
+        let val = Number(m[1]);
+        if (!Number.isFinite(val)) return null;
+        // ATCF compact format is usually tenths of degrees (e.g. 162N, 1436E).
+        if (!m[1].includes('.') && m[1].length >= 3) val /= 10;
+        return (m[2] === 'S' || m[2] === 'W') ? -val : val;
+    }
+
+    function _parseATCFDeck(stormId, deckText) {
+        const rows = String(deckText || '').split('\n').map(s => s.trim()).filter(Boolean);
+        const byTau = new Map();
+        const stormName = stormId.toUpperCase();
+        for (const row of rows) {
+            const parts = row.split(',').map(s => s.trim());
+            if (parts.length < 9) continue;
+            const tau = Number(parts[5]);
+            if (!Number.isFinite(tau) || tau < 0) continue;
+            const lat = _parseATCFCoord(parts[6]);
+            const lon = _parseATCFCoord(parts[7]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            const windKts = Number(parts[8]) || 0;
+            const pressureHPa = Number(parts[9]) || null;
+            const tech = String(parts[4] || '').toUpperCase();
+            const existing = byTau.get(tau);
+            // Prefer JTWC objective/final track entries over other guidance aids.
+            const rank = tech === 'JTWC' ? 2 : (tech === 'BEST' || tech === 'CARQ' ? 1 : 0);
+            if (!existing || rank > existing.rank) {
+                byTau.set(tau, { lat, lon, windKts, pressureHPa, rank });
+            }
+        }
+        const points = [...byTau.entries()].sort((a, b) => a[0] - b[0]);
+        if (!points.length) return [];
+
+        const features = [];
+        const coords = [];
+        for (const [tau, pt] of points) {
+            const cat = _tropicalCategoryFromWind(pt.windKts);
+            coords.push([pt.lon, pt.lat]);
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [pt.lon, pt.lat] },
+                properties: {
+                    fcstpd: tau,
+                    _stormId: stormId.toLowerCase(),
+                    _stormName: stormName,
+                    _stormSource: 'JTWC',
+                    _stormCategory: cat.label,
+                    _stormColor: cat.color,
+                    _stormWindKts: pt.windKts,
+                    _stormPressureHPa: pt.pressureHPa
+                }
+            });
+        }
+        if (coords.length > 1) {
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: coords },
+                properties: {
+                    _stormId: stormId.toLowerCase(),
+                    _stormName: stormName,
+                    _stormSource: 'JTWC',
+                    _stormCategory: features[0]?.properties?._stormCategory || '',
+                    _stormColor: features[0]?.properties?._stormColor || '#44bbff'
+                }
+            });
+        }
+        return features;
+    }
+
+    async function _fetchJTWCActiveStormIds() {
+        const base = 'https://ftpprd.nhc.noaa.gov/atcf';
+        const urls = [
+            `${base}/index/storm_list.txt`,
+            `${base}/index/storm_list_public.txt`
+        ];
+        for (const url of urls) {
+            try {
+                const txt = await _fetchTextWithCorsFallback(url);
+                const ids = new Set();
+                const rx = /\b((?:wp|cp|ep|al|io|sh)\d{2}\d{4})\b/ig;
+                let m;
+                while ((m = rx.exec(txt)) !== null) {
+                    ids.add(m[1].toLowerCase());
+                }
+                if (ids.size) return [...ids];
+            } catch (_) {}
+        }
+        return [];
+    }
+
+    async function _fetchJTWCStormFeatures() {
+        const ids = await _fetchJTWCActiveStormIds();
+        if (!ids.length) return [];
+        const features = [];
+        const base = 'https://ftpprd.nhc.noaa.gov/atcf';
+        for (const id of ids) {
+            if (!_stormPassesBasin(id)) continue;
+            if (!id.startsWith('wp') && !id.startsWith('io') && !id.startsWith('sh') && !id.startsWith('cp') && !id.startsWith('ep')) continue;
+            try {
+                // Try JTWC aid deck first (includes forecast taus). Fall back to best-track deck.
+                const adeck = await _fetchTextWithCorsFallback(`${base}/aid_public/a${id}.dat`);
+                let stormFeatures = _parseATCFDeck(id, adeck);
+                if (!stormFeatures.length) {
+                    const bdeck = await _fetchTextWithCorsFallback(`${base}/btk/b${id}.dat`);
+                    stormFeatures = _parseATCFDeck(id, bdeck);
+                }
+                features.push(...stormFeatures);
+            } catch (_) {}
+        }
+        return features;
+    }
+
     function _parseJTWCProg(stormId, text) {
         const nameMatch = text.match(/(?:TROPICAL (?:DEPRESSION|STORM)|TYPHOON|SUPER TYPHOON|CYCLONE)\s+\w+\s*\(([^)]+)\)/i);
         const stormName = nameMatch?.[1]?.trim() || stormId.toUpperCase();
@@ -3724,13 +3839,19 @@
     async function _loadTropicalOverlay() {
         if (!map || !_tropicalOverlayEnabled) return;
         try {
-            const [nhcFeatures, jmaFeatures] = await Promise.allSettled([
+            const [nhcFeatures, jtwcFeatures] = await Promise.allSettled([
                 _fetchNHCStormFeatures(),
-                _fetchJMAStormFeatures()
+                _fetchJTWCStormFeatures()
             ]);
+            const jtwcPacific = (jtwcFeatures.status === 'fulfilled' ? jtwcFeatures.value : []);
+            // JMA is used as a backup for WPAC typhoons when JTWC ATCF data is unavailable.
+            const jmaBackup = (!_tropicalBasin || _tropicalBasin === 'both' || _tropicalBasin === 'pacific') && jtwcPacific.length === 0
+                ? await _fetchJMAStormFeatures()
+                : [];
             const features = [
                 ...(nhcFeatures.status === 'fulfilled' ? nhcFeatures.value : []),
-                ...(jmaFeatures.status === 'fulfilled' ? jmaFeatures.value : [])
+                ...jtwcPacific,
+                ...jmaBackup
             ];
             _renderTropicalOverlay({ type: 'FeatureCollection', features });
         } catch (e) {
