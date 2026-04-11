@@ -4441,6 +4441,8 @@
                      'tropical-typhoon-warning', 'tropical-gale-warning']
         });
         if (!features.length) return;
+
+        const seq = _startMapClick(e);
         const p = features[0].properties || {};
         const wind = p._stormWindKts ? `${p._stormWindKts} kt` : '—';
         const fcstpd = p.fcstpd;
@@ -4462,9 +4464,7 @@
         const geom = features[0].geometry;
         const stormLon = geom?.type === 'Point' ? geom.coordinates[0] : e.lngLat.lng;
         const stormLat = geom?.type === 'Point' ? geom.coordinates[1] : e.lngLat.lat;
-        new mapboxgl.Popup({ closeButton: true, maxWidth: '360px' })
-            .setLngLat(e.lngLat)
-            .setHTML(`<div class="popup-title" style="color:${p._stormColor || '#66ccff'};">${p._stormName || 'Tropical Cyclone'}</div>
+        const bodyHtml = `<div class="popup-title" style="color:${p._stormColor || '#66ccff'};">${p._stormName || 'Tropical Cyclone'}</div>
                 <div class="popup-stat"><span class="popup-key">Source</span><span class="popup-val">${p._stormSource || '—'}</span></div>
                 <div class="popup-stat"><span class="popup-key">Forecast Point</span><span class="popup-val">${pointLead}</span></div>
                 <div class="popup-stat"><span class="popup-key">Valid</span><span class="popup-val">${validStr}</span></div>
@@ -4478,8 +4478,8 @@
                             style="width:100%;padding:5px 10px;background:rgba(68,187,255,0.12);border:1px solid rgba(68,187,255,0.35);border-radius:6px;color:#44bbff;cursor:pointer;font-size:12px;font-weight:500;">
                         View Satellite
                     </button>
-                </div>`)
-            .addTo(map);
+                </div>`;
+        _addMapPanel({ bodyHtml, type: 'tropical', label: p._stormName || 'Tropical Cyclone' }, seq);
     }
 
     // Switch to the satellite view using the satellite best-positioned for the given storm location.
