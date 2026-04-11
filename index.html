@@ -3725,6 +3725,28 @@
         const baseWindKts = catWindMap[String(category || '').toUpperCase()] ?? 40;
         const baseStormId = tcId.toLowerCase();
 
+        // Pre-pass: find the storm warning radius at lead=0 for per-step intensity scaling.
+        // The ≥50 kt wind radius grows as the storm intensifies, so the ratio R_step/R_0
+        // is used to estimate wind speed at each forecast position.
+        let r0 = 0;
+        for (const entry of data.slice(1)) {
+            if (Number(entry.advancedHours ?? -1) !== 0) continue;
+            const c0 = entry.center;
+            if (!Array.isArray(c0) || c0.length < 2) break;
+            const [lat0, lon0] = c0;
+            const arcs0 = entry.stormWarningArea?.arc;
+            if (Array.isArray(arcs0)) {
+                for (const arc of arcs0) {
+                    if (!Array.isArray(arc) || !Array.isArray(arc[0])) continue;
+                    if (Math.abs(arc[0][0] - lat0) < 0.1 && Math.abs(arc[0][1] - lon0) < 0.1) {
+                        r0 = Number(arc[1]) || 0;
+                        break;
+                    }
+                }
+            }
+            break;
+        }
+
         const features = [];
         const trackCoords = [];
         const coneCirclePts = [];
@@ -3762,9 +3784,27 @@
                 }
             }
 
-            // Per-step properties include storm warning radius and valid time for this forecast step.
+            // Estimate per-step intensity from storm-size growth (≥50 kt wind radius ratio).
+            // Formula: Vmax_est ≈ Vmax_0 × (R_step / R_0)^0.35 — empirically calibrated for WPac.
+            // Applied only for forecast steps where both radii are available.
+            let stepWindKts = baseWindKts;
+            let windEstimated = false;
+            if (lead > 0 && warningRadiusM > 0 && r0 > 0) {
+                const ratio = warningRadiusM / r0;
+                stepWindKts = Math.min(165, Math.round(baseWindKts * Math.pow(ratio, 0.35)));
+                windEstimated = true;
+            }
+            const stepCat = _tropicalCategoryFromWind(stepWindKts);
+
+            // Per-step properties include estimated intensity, storm warning radius and valid time.
             const stormProps = {
-                ...baseStormProps,
+                _stormId: baseStormId,
+                _stormName: stormName,
+                _stormSource: 'JMA',
+                _stormCategory: stepCat.label,
+                _stormColor: stepCat.color,
+                _stormWindKts: stepWindKts,
+                _stormWindEstimated: windEstimated,
                 _stormRadiusKm: warningRadiusM > 0 ? Math.round(warningRadiusM / 1000) : null,
                 _validtimeUTC: entry.validtime?.UTC || null
             };
@@ -4214,8 +4254,10 @@
                 validStr = d.toUTCString().replace(/:\d\d GMT/, ' UTC');
             } catch (_) {}
         }
-        const intensityNote = p._stormSource === 'JMA' && fcstpd > 0
-            ? '<div class="popup-stat" style="opacity:0.65;font-size:11px;"><span class="popup-key">Note</span><span class="popup-val">JMA does not forecast intensity; wind shown is current</span></div>'
+        const intensityNote = p._stormSource === 'JMA' && p._stormWindEstimated
+            ? '<div class="popup-stat" style="opacity:0.65;font-size:11px;"><span class="popup-key">Note</span><span class="popup-val">Intensity estimated from storm-size growth (JMA does not forecast intensity)</span></div>'
+            : p._stormSource === 'JMA' && Number(fcstpd) > 0
+            ? '<div class="popup-stat" style="opacity:0.65;font-size:11px;"><span class="popup-key">Note</span><span class="popup-val">JMA does not forecast intensity; storm-size data unavailable for estimation</span></div>'
             : '';
         new mapboxgl.Popup({ closeButton: true, maxWidth: '360px' })
             .setLngLat(e.lngLat)
