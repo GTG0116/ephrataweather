@@ -1417,7 +1417,6 @@ function _getMetricValue(hour, metric) {
         case 'humidity':  return hour.relativeHumidity != null ? Math.round(hour.relativeHumidity) : null;
         case 'wind':      return hour.wind?.speed != null ? Math.round(hour.wind.speed) : null;
         case 'precip':    return hour.precipitation?.probability != null ? Math.round(hour.precipitation.probability) : null;
-        case 'windgusts': return hour.wind?.gust != null ? Math.round(hour.wind.gust) : null;
         case 'fwi': {
             if (typeof FairWeatherIndex === 'undefined') return null;
             const fwiInput = {
@@ -1443,8 +1442,7 @@ function _metricUnit(metric) {
         case 'feelslike': return '\u00b0';
         case 'humidity':
         case 'precip':    return '%';
-        case 'wind':
-        case 'windgusts': return ' mph';
+        case 'wind':      return ' mph';
         case 'fwi':       return '';
         default:          return '';
     }
@@ -1456,7 +1454,6 @@ const _METRIC_COLORS = {
     humidity:  '#42A5F5',
     wind:      '#4DB6AC',
     precip:    '#26C6DA',
-    windgusts: '#AB47BC',
     fwi:       '#8BC34A'
 };
 
