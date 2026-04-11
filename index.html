@@ -4026,16 +4026,127 @@
         return features;
     }
 
+    // Parse the JTWC storms.json data into GeoJSON features.
+    // storms.json format: { storms: [{ id, name, basin, current: { tau, lat, lon, wind_kt, pressure_mb, wind_radii_nm }, forecast: [...] }] }
+    function _parseJTWCStormsJson(data) {
+        const NM2M = 1852; // nautical miles → metres
+        const features = [];
+        const storms = Array.isArray(data?.storms) ? data.storms : [];
+
+        for (const storm of storms) {
+            if (!storm.id) continue;
+            const stormId = storm.id.toLowerCase();
+            if (!_stormPassesBasin(stormId)) continue;
+
+            const stormName = storm.name || storm.id.toUpperCase();
+
+            // Combine current position (tau=0) with forecast steps, sorted by lead time.
+            const allPoints = [storm.current, ...(Array.isArray(storm.forecast) ? storm.forecast : [])]
+                .filter(pt => pt && Number.isFinite(pt.lat) && Number.isFinite(pt.lon))
+                .sort((a, b) => (a.tau || 0) - (b.tau || 0));
+
+            if (!allPoints.length) continue;
+
+            const firstPt = allPoints[0];
+            const firstCat = _tropicalCategoryFromWind(firstPt.wind_kt || 0);
+            const baseStormProps = {
+                _stormId: stormId,
+                _stormName: stormName,
+                _stormSource: 'JTWC',
+                _stormCategory: firstCat.label,
+                _stormColor: firstCat.color,
+                _stormWindKts: firstPt.wind_kt || null
+            };
+
+            const trackCoords = [];
+            for (const pt of allPoints) {
+                const tau = pt.tau || 0;
+                const { lat, lon } = pt;
+                const windKt = pt.wind_kt || 0;
+                const cat = _tropicalCategoryFromWind(windKt);
+                const pressureMb = (pt.pressure_mb > 0) ? pt.pressure_mb : null;
+
+                // Wind radii — take max across quadrants for each threshold.
+                const radii = pt.wind_radii_nm || {};
+                const maxQuad = obj => obj ? Math.max(0, ...Object.values(obj).map(Number).filter(v => v > 0)) : 0;
+                const r34nm = maxQuad(radii['034']);
+                const r50nm = maxQuad(radii['050']);
+                const r64nm = maxQuad(radii['064']);
+
+                const stormProps = {
+                    _stormId: stormId,
+                    _stormName: stormName,
+                    _stormSource: 'JTWC',
+                    _stormCategory: cat.label,
+                    _stormColor: cat.color,
+                    _stormWindKts: windKt || null,
+                    _stormPressureHPa: pressureMb,
+                    _stormRadiusKm: r50nm > 0 ? Math.round(r50nm * NM2M / 1000) : r64nm > 0 ? Math.round(r64nm * NM2M / 1000) : null,
+                    _validtimeUTC: pt.datetime || null
+                };
+
+                trackCoords.push([lon, lat]);
+                features.push({
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [lon, lat] },
+                    properties: { ...stormProps, fcstpd: tau }
+                });
+
+                // Typhoon/storm warning circle — 50 kt wind radius (fall back to 64 kt)
+                const twRadM = (r50nm || r64nm) * NM2M;
+                if (twRadM > 0) features.push({
+                    type: 'Feature',
+                    geometry: { type: 'Polygon', coordinates: [_gcirclePolyCoords(lat, lon, twRadM, 36)] },
+                    properties: { ...stormProps, _warningType: 'typhoon-warning', fcstpd: tau }
+                });
+
+                // Gale warning circle — 34 kt wind radius
+                if (r34nm > 0) features.push({
+                    type: 'Feature',
+                    geometry: { type: 'Polygon', coordinates: [_gcirclePolyCoords(lat, lon, r34nm * NM2M, 36)] },
+                    properties: { ...stormProps, _warningType: 'gale-warning', fcstpd: tau }
+                });
+            }
+
+            // Track line connecting all forecast positions.
+            if (trackCoords.length > 1) features.push({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: trackCoords },
+                properties: { ...baseStormProps, fcstpd: null }
+            });
+        }
+
+        return features;
+    }
+
+    // Fetch typhoon data from the JTWC storms.json repository.
+    // Returns GeoJSON features, or [] on failure so the caller can fall back to JMA.
+    async function _fetchJTWCStormsJsonFeatures() {
+        const url = 'https://raw.githubusercontent.com/GTG0116/JTWCTyphoonData/claude/jtwc-forecast-viewer-NQqQA/data/storms.json';
+        try {
+            const r = await fetch(url, { cache: 'no-store' });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const data = await r.json();
+            const features = _parseJTWCStormsJson(data);
+            console.log(`JTWC storms.json: ${data.storm_count ?? '?'} storms, ${features.length} features`);
+            return features;
+        } catch (e) {
+            console.warn('JTWC storms.json fetch failed:', e);
+            return [];
+        }
+    }
+
     async function _loadTropicalOverlay() {
         if (!map || !_tropicalOverlayEnabled) return;
         try {
-            const [nhcFeatures, jtwcFeatures] = await Promise.allSettled([
+            const showPacific = !_tropicalBasin || _tropicalBasin === 'both' || _tropicalBasin === 'pacific';
+            const [nhcFeatures, jtwcJsonFeatures] = await Promise.allSettled([
                 _fetchNHCStormFeatures(),
-                _fetchJTWCStormFeatures()
+                showPacific ? _fetchJTWCStormsJsonFeatures() : Promise.resolve([])
             ]);
-            const jtwcPacific = (jtwcFeatures.status === 'fulfilled' ? jtwcFeatures.value : []);
-            // JMA is used as a backup for WPAC typhoons when JTWC ATCF data is unavailable.
-            const jmaBackup = (!_tropicalBasin || _tropicalBasin === 'both' || _tropicalBasin === 'pacific') && jtwcPacific.length === 0
+            const jtwcPacific = (jtwcJsonFeatures.status === 'fulfilled' ? jtwcJsonFeatures.value : []);
+            // Fall back to JMA when the JTWC storms.json source returns no storms.
+            const jmaBackup = showPacific && jtwcPacific.length === 0
                 ? await _fetchJMAStormFeatures()
                 : [];
             const features = [
