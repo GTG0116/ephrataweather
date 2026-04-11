@@ -3398,8 +3398,53 @@
     function _stormPassesBasin(stormId) {
         if (_tropicalBasin === 'both') return true;
         const sid = String(stormId || '').toLowerCase();
+        // JMA storm IDs start with 'tc' (e.g. 'TC2604') and are always Western Pacific
+        if (sid.startsWith('tc')) return _tropicalBasin === 'pacific';
         const basin = sid.startsWith('al') ? 'atlantic' : 'pacific';
         return basin === _tropicalBasin;
+    }
+
+    // Generate a geodesic circle polygon as [lon, lat] coordinate array.
+    function _gcirclePolyCoords(lat, lon, radiusM, numPts = 36) {
+        const R = 6371000;
+        const d = radiusM / R;
+        const latR = lat * Math.PI / 180;
+        const lonR = lon * Math.PI / 180;
+        const pts = [];
+        for (let i = 0; i <= numPts; i++) {
+            const brng = (i / numPts) * 2 * Math.PI;
+            const lat2 = Math.asin(
+                Math.sin(latR) * Math.cos(d) +
+                Math.cos(latR) * Math.sin(d) * Math.cos(brng)
+            );
+            const lon2 = lonR + Math.atan2(
+                Math.sin(brng) * Math.sin(d) * Math.cos(latR),
+                Math.cos(d) - Math.sin(latR) * Math.sin(lat2)
+            );
+            pts.push([lon2 * 180 / Math.PI, lat2 * 180 / Math.PI]);
+        }
+        return pts;
+    }
+
+    // Andrew's monotone chain convex hull — returns closed [lon,lat] ring.
+    function _convexHull2D(points) {
+        if (points.length < 3) return points.concat([points[0]]);
+        const pts = points.slice().sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
+        const cross = (O, A, B) => (A[0] - O[0]) * (B[1] - O[1]) - (A[1] - O[1]) * (B[0] - O[0]);
+        const lower = [], upper = [];
+        for (const p of pts) {
+            while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+            lower.push(p);
+        }
+        for (let i = pts.length - 1; i >= 0; i--) {
+            const p = pts[i];
+            while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+            upper.push(p);
+        }
+        upper.pop(); lower.pop();
+        const hull = lower.concat(upper);
+        hull.push(hull[0]);
+        return hull;
     }
 
     async function _fetchTextWithCorsFallback(url) {
@@ -3490,49 +3535,126 @@
         return features;
     }
 
-    async function _fetchJTWCStormFeatures() {
+    // Parse JMA bosai/typhoon forecast.json into GeoJSON features.
+    // JMA API: https://www.jma.go.jp/bosai/typhoon/data/{tcId}/forecast.json
+    // data[0] = title entry; data[1..] = forecast entries at 0h, 24h, 48h, 72h, 96h, 120h.
+    function _parseJMAForecast(tcId, category, data) {
+        if (!Array.isArray(data) || data.length < 2) return [];
+        const titleEntry = data[0];
+        const stormName = titleEntry?.name?.en || tcId.toUpperCase();
+
+        // Map JMA category strings to representative knot values for color coding.
+        const catWindMap = { TD: 25, TS: 40, STS: 55, TY: 80, 'SUPER TYPHOON': 130 };
+        const windKts = catWindMap[String(category || '').toUpperCase()] ?? 40;
+        const cat = _tropicalCategoryFromWind(windKts);
+        const stormProps = {
+            _stormId: tcId.toLowerCase(),
+            _stormName: stormName,
+            _stormSource: 'JMA',
+            _stormCategory: cat.label,
+            _stormColor: cat.color,
+            _stormWindKts: windKts
+        };
+
         const features = [];
-        const indexUrls = [
-            'https://www.metoc.navy.mil/jtwc/products/atcf_sector_file',
-            'https://www.nrlmry.navy.mil/atcf_web/docs/database/new/atcf_sector_file'
-        ];
-        let sectorText = '';
-        for (const url of indexUrls) {
-            try {
-                sectorText = await _fetchTextWithCorsFallback(url);
-                if (sectorText && sectorText.length > 20) break;
-            } catch (_) {}
-        }
-        if (!sectorText) return features;
+        const trackCoords = [];
+        const coneCirclePts = [];
 
-        const ids = new Set();
-        const idRegex = /\b((?:WP|CP|EP|IO|SH)\d{4,6})\b/g;
-        let m;
-        while ((m = idRegex.exec(sectorText.toUpperCase())) !== null) {
-            ids.add(m[1]);
+        for (const entry of data.slice(1)) {
+            const lead = Number(entry.advancedHours ?? -1);
+            if (lead < 0) continue;
+            const center = entry.center; // JMA format: [lat, lon]
+            if (!Array.isArray(center) || center.length < 2) continue;
+            const [lat, lon] = center;
+
+            trackCoords.push([lon, lat]);
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [lon, lat] },
+                properties: { ...stormProps, fcstpd: lead }
+            });
+
+            // Collect probability circle points for uncertainty cone (forecast positions only).
+            if (lead > 0) {
+                const radiusM = entry.probabilityCircle?.radius;
+                if (radiusM > 0) coneCirclePts.push(..._gcirclePolyCoords(lat, lon, radiusM, 24));
+            }
+
+            // At current position (lead=0) generate storm and gale warning area polygons.
+            if (lead === 0) {
+                // stormWarningArea: dangerous-wind zone (≥25 m/s ≈ 50 kt) → Typhoon Warning
+                const swArcs = entry.stormWarningArea?.arc;
+                if (Array.isArray(swArcs) && swArcs.length > 0) {
+                    const firstArc = swArcs[0];
+                    const arcCenter = firstArc[0]; // [lat, lon]
+                    const arcRadius = Number(firstArc[1] || 0);
+                    if (arcRadius > 0) {
+                        features.push({
+                            type: 'Feature',
+                            geometry: { type: 'Polygon', coordinates: [_gcirclePolyCoords(arcCenter[0], arcCenter[1], arcRadius, 36)] },
+                            properties: { ...stormProps, _warningType: 'typhoon-warning', fcstpd: 0 }
+                        });
+                    }
+                }
+                // galeWarningArea: gale-force wind zone (≥15 m/s ≈ 30 kt) → Tropical Storm Warning
+                const gwa = entry.galeWarningArea;
+                if (gwa?.center && Number(gwa.radius) > 0) {
+                    features.push({
+                        type: 'Feature',
+                        geometry: { type: 'Polygon', coordinates: [_gcirclePolyCoords(gwa.center[0], gwa.center[1], gwa.radius, 36)] },
+                        properties: { ...stormProps, _warningType: 'gale-warning', fcstpd: 0 }
+                    });
+                }
+            }
         }
 
-        const storms = [...ids].filter(id => _stormPassesBasin(id));
-        for (const stormId of storms) {
-            const basin = stormId.slice(0, 2);
-            const digits = stormId.slice(2);
-            const shortId = digits.length >= 4 ? basin + digits.slice(0, 2) + digits.slice(-2) : stormId;
-            const longId = digits.length >= 6 ? basin + digits : stormId;
-            const progUrls = [
-                `https://www.metoc.navy.mil/jtwc/products/${stormId.toLowerCase()}prog.txt`,
-                `https://www.metoc.navy.mil/jtwc/products/${stormId.toUpperCase()}prog.txt`,
-                `https://www.metoc.navy.mil/jtwc/products/${shortId.toLowerCase()}prog.txt`,
-                `https://www.metoc.navy.mil/jtwc/products/${longId.toLowerCase()}prog.txt`
-            ];
-            let progText = '';
-            for (const pUrl of progUrls) {
+        // Track line
+        if (trackCoords.length > 1) {
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: trackCoords },
+                properties: { ...stormProps, fcstpd: null }
+            });
+        }
+
+        // Forecast uncertainty cone (convex hull of probability circles)
+        if (coneCirclePts.length >= 3) {
+            const hull = _convexHull2D(coneCirclePts);
+            if (hull.length >= 4) {
+                features.push({
+                    type: 'Feature',
+                    geometry: { type: 'Polygon', coordinates: [hull] },
+                    properties: { ...stormProps, fcstpd: null, _isCone: true }
+                });
+            }
+        }
+
+        return features;
+    }
+
+    // Fetch active Western Pacific typhoon data from JMA's public bosai API.
+    // Replaces the JTWC sector-file / prog-file approach which is blocked by military CORS policy.
+    async function _fetchJMAStormFeatures() {
+        const features = [];
+        try {
+            const r = await fetch('https://www.jma.go.jp/bosai/typhoon/data/targetTc.json', { cache: 'no-store' });
+            if (!r.ok) return features;
+            const tcList = await r.json();
+            for (const tc of (Array.isArray(tcList) ? tcList : [])) {
+                const tcId = tc.tropicalCyclone;
+                if (!tcId || !_stormPassesBasin(tcId)) continue;
                 try {
-                    progText = await _fetchTextWithCorsFallback(pUrl);
-                    if (progText && progText.includes('WARNING')) break;
+                    const r2 = await fetch(
+                        `https://www.jma.go.jp/bosai/typhoon/data/${tcId}/forecast.json`,
+                        { cache: 'no-store' }
+                    );
+                    if (!r2.ok) continue;
+                    const forecastData = await r2.json();
+                    features.push(..._parseJMAForecast(tcId, tc.category, forecastData));
                 } catch (_) {}
             }
-            if (!progText) continue;
-            features.push(..._parseJTWCProg(stormId, progText));
+        } catch (e) {
+            console.warn('JMA typhoon fetch error:', e);
         }
         return features;
     }
@@ -3576,13 +3698,13 @@
     async function _loadTropicalOverlay() {
         if (!map || !_tropicalOverlayEnabled) return;
         try {
-            const [nhcFeatures, jtwcFeatures] = await Promise.allSettled([
+            const [nhcFeatures, jmaFeatures] = await Promise.allSettled([
                 _fetchNHCStormFeatures(),
-                _fetchJTWCStormFeatures()
+                _fetchJMAStormFeatures()
             ]);
             const features = [
                 ...(nhcFeatures.status === 'fulfilled' ? nhcFeatures.value : []),
-                ...(jtwcFeatures.status === 'fulfilled' ? jtwcFeatures.value : [])
+                ...(jmaFeatures.status === 'fulfilled' ? jmaFeatures.value : [])
             ];
             _renderTropicalOverlay({ type: 'FeatureCollection', features });
         } catch (e) {
@@ -3597,9 +3719,33 @@
             return;
         }
         map.addSource('tropical-overlay-src', { type: 'geojson', data: geojson });
+
+        // Gale warning area (≥15 m/s / ~30 kt) — Tropical Storm Warning color (blue), drawn first (bottom)
+        map.addLayer({
+            id: 'tropical-gale-warning', type: 'fill', source: 'tropical-overlay-src',
+            filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['==', ['get', '_warningType'], 'gale-warning']],
+            paint: { 'fill-color': '#0099FF', 'fill-opacity': 0.22 }
+        });
+        // Typhoon warning area (≥25 m/s / ~50 kt) — Hurricane Warning color (red), above gale layer
+        map.addLayer({
+            id: 'tropical-typhoon-warning', type: 'fill', source: 'tropical-overlay-src',
+            filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['==', ['get', '_warningType'], 'typhoon-warning']],
+            paint: { 'fill-color': '#CC0000', 'fill-opacity': 0.32 }
+        });
+        // Outline both warning areas
+        map.addLayer({
+            id: 'tropical-warning-outline', type: 'line', source: 'tropical-overlay-src',
+            filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['has', '_warningType']],
+            paint: {
+                'line-color': ['case', ['==', ['get', '_warningType'], 'typhoon-warning'], '#CC0000', '#0099FF'],
+                'line-width': 1.6,
+                'line-opacity': 0.85
+            }
+        });
+        // Forecast uncertainty cone — exclude warning-type polygons
         map.addLayer({
             id: 'tropical-cone-fill', type: 'fill', source: 'tropical-overlay-src',
-            filter: ['==', ['geometry-type'], 'Polygon'],
+            filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['!', ['has', '_warningType']]],
             paint: { 'fill-color': ['coalesce', ['get', '_stormColor'], '#44bbff'], 'fill-opacity': 0.14 }
         });
         map.addLayer({
@@ -3632,7 +3778,8 @@
 
     function _clearTropicalOverlay() {
         if (!map) return;
-        ['tropical-name', 'tropical-points', 'tropical-track-line', 'tropical-cone-fill'].forEach(id => {
+        ['tropical-name', 'tropical-points', 'tropical-track-line', 'tropical-cone-fill',
+         'tropical-warning-outline', 'tropical-typhoon-warning', 'tropical-gale-warning'].forEach(id => {
             if (map.getLayer(id)) map.removeLayer(id);
         });
         if (map.getSource('tropical-overlay-src')) map.removeSource('tropical-overlay-src');
@@ -3829,7 +3976,10 @@
 
     function handleTropicalOverlayClick(e) {
         if (!_tropicalOverlayEnabled || !map || !map.getLayer('tropical-points')) return;
-        const features = map.queryRenderedFeatures(e.point, { layers: ['tropical-points', 'tropical-track-line', 'tropical-cone-fill'] });
+        const features = map.queryRenderedFeatures(e.point, {
+            layers: ['tropical-points', 'tropical-track-line', 'tropical-cone-fill',
+                     'tropical-typhoon-warning', 'tropical-gale-warning']
+        });
         if (!features.length) return;
         const p = features[0].properties || {};
         const wind = p._stormWindKts ? `${p._stormWindKts} kt` : '—';
@@ -4929,18 +5079,22 @@
             base:   'https://raw.githubusercontent.com/GTG0116/Himawari_Satellite/main/site/data/',
             // EXTENT in process_data.py: [W, E, S, N] = [80, 200, -60, 60]
             // East bound 200° = 160°W; Mapbox accepts longitudes >180 for antimeridian-crossing overlays
+            // process_data.py renders to Web Mercator (ccrs.Mercator) — no client-side reprojection needed
             south: -60.0, north: 60.0,
             coords: [[80.0, 60.0], [200.0, 60.0], [200.0, -60.0], [80.0, -60.0]],
             fulldisk: true,
+            alreadyMercator: true,
         },
         goes18: {
             label:  'GOES-18 Full Disk',
             base:   'https://raw.githubusercontent.com/GTG0116/Goes18satellite/main/site/data/',
             // EXTENT in process_data.py: [W, E, S, N] = [-220, -55, -80, 80]
             // West -220° = 140°E in extended western notation; crosses antimeridian
+            // process_data.py renders to Web Mercator (ccrs.Mercator) — no client-side reprojection needed
             south: -80.0, north: 80.0,
             coords: [[-220.0, 80.0], [-55.0, 80.0], [-55.0, -80.0], [-220.0, -80.0]],
             fulldisk: true,
+            alreadyMercator: true,
         },
     };
     const SAT_MAX_FRAMES = 10;
@@ -5076,7 +5230,10 @@
         const src    = SAT_SOURCES[_currentSatSource];
         const frameIdx = _satFrames[pos];
         const rawUrl = _satFrameUrl(frameIdx);
-        const url = await _toMercator(rawUrl, src.south, src.north);
+        // Images already rendered in Web Mercator by process_data.py need no client-side reprojection.
+        // Applying _toMercator to an already-Mercator image causes double-projection, shifting
+        // features southward in tropical latitudes.
+        const url = src.alreadyMercator ? rawUrl : await _toMercator(rawUrl, src.south, src.north);
         if (_satLoaded && map.getSource('sat-overlay')) {
             map.getSource('sat-overlay').updateImage({ url });
         } else {
@@ -5129,7 +5286,7 @@
             let delay = 0;
             for (const frameIdx of preloadFrames) {
                 setTimeout(() => {
-                    _toMercator(_satFrameUrl(frameIdx), src.south, src.north).catch(() => {});
+                    if (!src.alreadyMercator) _toMercator(_satFrameUrl(frameIdx), src.south, src.north).catch(() => {});
                 }, delay);
                 delay += src.fulldisk ? 1500 : 0;
             }
