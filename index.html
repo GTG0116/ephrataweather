@@ -1857,10 +1857,48 @@
                                 onclick="toggleAlertFilter('Snow Squall Warning')" title="Snow Squall Warning">
                             <span class="af-swatch" style="background:#882299;"></span>Snow Squall Warning
                         </button>
+                        <button class="af-chip active" id="af-storm-surge-warning"
+                                onclick="toggleAlertFilter('Storm Surge Warning')" title="Storm Surge Warning">
+                            <span class="af-swatch" style="background:#B524F7;"></span>Storm Surge Warning
+                        </button>
+                        <button class="af-chip active" id="af-storm-surge-watch"
+                                onclick="toggleAlertFilter('Storm Surge Watch')" title="Storm Surge Watch">
+                            <span class="af-swatch" style="background:#DB7FF7;"></span>Storm Surge Watch
+                        </button>
+                        <button class="af-chip active" id="af-tropical-storm-warning"
+                                onclick="toggleAlertFilter('Tropical Storm Warning')" title="Tropical Storm Warning">
+                            <span class="af-swatch" style="background:#B22222;"></span>Tropical Storm Warning
+                        </button>
+                        <button class="af-chip active" id="af-tropical-storm-watch"
+                                onclick="toggleAlertFilter('Tropical Storm Watch')" title="Tropical Storm Watch">
+                            <span class="af-swatch" style="background:#F08080;"></span>Tropical Storm Watch
+                        </button>
+                        <button class="af-chip active" id="af-hurricane-warning"
+                                onclick="toggleAlertFilter('Hurricane Warning')" title="Hurricane Warning">
+                            <span class="af-swatch" style="background:#DC143C;"></span>Hurricane Warning
+                        </button>
+                        <button class="af-chip active" id="af-hurricane-watch"
+                                onclick="toggleAlertFilter('Hurricane Watch')" title="Hurricane Watch">
+                            <span class="af-swatch" style="background:#FF00FF;"></span>Hurricane Watch
+                        </button>
                         <button class="af-chip active" id="af-special-weather-statement"
                                 onclick="toggleAlertFilter('Special Weather Statement')" title="Special Weather Statement">
                             <span class="af-swatch" style="background:#00BBCC;"></span>Special Weather Statement
                         </button>
+                    </div>
+                    <div class="ctrl-row" style="gap:10px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span class="ctrl-label">Tropical Cyclones</span>
+                        <label class="alert-master-toggle" title="Show active tropical cyclones with track and cone">
+                            <input type="checkbox" id="tropical-overlay-toggle-chk" onchange="toggleTropicalOverlay()">
+                            <span class="amt-track"><span class="amt-knob"></span></span>
+                        </label>
+                        <span class="ctrl-label" id="tropical-overlay-status" style="font-size:0.7rem;opacity:0.55;transition:opacity 0.2s;">OFF</span>
+                        <select id="tropical-basin-select" class="ctrl-select" onchange="setTropicalBasin(this.value)" style="max-width:170px;display:none;">
+                            <option value="both">Atlantic + Pacific</option>
+                            <option value="atlantic">Atlantic</option>
+                            <option value="pacific">Pacific</option>
+                        </select>
+                        <button class="icon-action-btn" id="tropical-refresh-btn" onclick="refreshTropicalOverlay()" title="Refresh tropical cyclones" style="display:none;">&#8635;</button>
                     </div>
                 </div>
             </div>
@@ -3015,6 +3053,12 @@
         'Winter Storm Warning':        '#EE66AA',
         'Blizzard Warning':            '#FF4400',
         'Snow Squall Warning':         '#882299',
+        'Storm Surge Warning':         '#B524F7',
+        'Storm Surge Watch':           '#DB7FF7',
+        'Tropical Storm Warning':      '#B22222',
+        'Tropical Storm Watch':        '#F08080',
+        'Hurricane Warning':           '#DC143C',
+        'Hurricane Watch':             '#FF00FF',
         'Special Weather Statement':   '#00BBCC',
     };
     const ALERT_OVERLAY_KEYS = Object.keys(ALERT_OVERLAY_COLORS);
@@ -3028,6 +3072,9 @@
     let _alertFilters = {};          // eventType → true/false
     let _activeAlerts  = [];         // original NWS GeoJSON features (for click lookup)
     let _alertRefreshTimer = null;
+    let _tropicalOverlayEnabled = false;
+    let _tropicalBasin = 'both';
+    let _tropicalRefreshTimer = null;
 
     // --- Persistence ---
     function _loadAlertPrefs() {
@@ -3038,15 +3085,22 @@
             ALERT_OVERLAY_KEYS.forEach(k => {
                 _alertFilters[k] = saved.filters?.[k] !== false;  // default all ON
             });
+            _tropicalOverlayEnabled = saved.tropicalEnabled === true;
+            _tropicalBasin = (saved.tropicalBasin === 'atlantic' || saved.tropicalBasin === 'pacific' || saved.tropicalBasin === 'both')
+                ? saved.tropicalBasin : 'both';
         } catch (_) {
             _alertOverlayEnabled = false;
             ALERT_OVERLAY_KEYS.forEach(k => { _alertFilters[k] = true; });
+            _tropicalOverlayEnabled = false;
+            _tropicalBasin = 'both';
         }
     }
     function _saveAlertPrefs() {
         localStorage.setItem('ephrata_alert_overlay_prefs', JSON.stringify({
             enabled: _alertOverlayEnabled,
             filters: _alertFilters,
+            tropicalEnabled: _tropicalOverlayEnabled,
+            tropicalBasin: _tropicalBasin,
         }));
     }
 
@@ -3075,6 +3129,34 @@
         _saveAlertPrefs();
         _syncAlertOverlayUI();
         if (_alertOverlayEnabled) _applyAlertFilters();
+    }
+
+    function toggleTropicalOverlay() {
+        _tropicalOverlayEnabled = !_tropicalOverlayEnabled;
+        _saveAlertPrefs();
+        _syncAlertOverlayUI();
+        if (_tropicalOverlayEnabled) {
+            _ensureMapReady().then(() => _loadTropicalOverlay());
+            if (!_tropicalRefreshTimer) {
+                _tropicalRefreshTimer = setInterval(() => {
+                    if (_tropicalOverlayEnabled && map) _loadTropicalOverlay();
+                }, 300000);
+            }
+        } else {
+            _clearTropicalOverlay();
+            clearInterval(_tropicalRefreshTimer);
+            _tropicalRefreshTimer = null;
+        }
+    }
+
+    function setTropicalBasin(basin) {
+        _tropicalBasin = basin;
+        _saveAlertPrefs();
+        if (_tropicalOverlayEnabled) _loadTropicalOverlay();
+    }
+
+    function refreshTropicalOverlay() {
+        if (_tropicalOverlayEnabled) _loadTropicalOverlay();
     }
 
     let _filterMenuOpen = false;
@@ -3115,6 +3197,20 @@
         const filterBtn = document.getElementById('af-filter-menu-btn');
         if (filterBtn) filterBtn.style.display = _alertOverlayEnabled ? 'flex' : 'none';
         if (!_alertOverlayEnabled) closeAlertFilterMenu();
+        const tChk = document.getElementById('tropical-overlay-toggle-chk');
+        if (tChk) tChk.checked = _tropicalOverlayEnabled;
+        const tStatus = document.getElementById('tropical-overlay-status');
+        if (tStatus) {
+            tStatus.textContent = _tropicalOverlayEnabled ? 'ON' : 'OFF';
+            tStatus.style.opacity = _tropicalOverlayEnabled ? '1' : '0.55';
+        }
+        const tBasin = document.getElementById('tropical-basin-select');
+        if (tBasin) {
+            tBasin.value = _tropicalBasin;
+            tBasin.style.display = _tropicalOverlayEnabled ? '' : 'none';
+        }
+        const tRefresh = document.getElementById('tropical-refresh-btn');
+        if (tRefresh) tRefresh.style.display = _tropicalOverlayEnabled ? '' : 'none';
 
         ALERT_OVERLAY_KEYS.forEach(k => {
             const btn = document.getElementById(_afBtnId(k));
@@ -3288,10 +3384,268 @@
         if (map.getSource('alert-overlay-src')) map.removeSource('alert-overlay-src');
     }
 
+    function _tropicalCategoryFromWind(windKts) {
+        const w = Number(windKts) || 0;
+        if (w >= 137) return { label: 'Category 5', color: '#ff1744' };
+        if (w >= 113) return { label: 'Category 4', color: '#ff5252' };
+        if (w >= 96)  return { label: 'Category 3', color: '#ff7043' };
+        if (w >= 83)  return { label: 'Category 2', color: '#ff9800' };
+        if (w >= 64)  return { label: 'Category 1', color: '#ffc107' };
+        if (w >= 34)  return { label: 'Tropical Storm', color: '#00bcd4' };
+        return { label: 'Tropical Depression', color: '#4fc3f7' };
+    }
+
+    function _stormPassesBasin(stormId) {
+        if (_tropicalBasin === 'both') return true;
+        const sid = String(stormId || '').toLowerCase();
+        const basin = sid.startsWith('al') ? 'atlantic' : 'pacific';
+        return basin === _tropicalBasin;
+    }
+
+    async function _fetchTextWithCorsFallback(url) {
+        try {
+            const r = await fetch(url, { cache: 'no-store' });
+            if (r.ok) return r.text();
+        } catch (_) {}
+        try {
+            const p1 = 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(url);
+            const r1 = await fetch(p1, { cache: 'no-store' });
+            if (r1.ok) return r1.text();
+        } catch (_) {}
+        const p2 = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        const r2 = await fetch(p2, { cache: 'no-store' });
+        if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
+        return r2.text();
+    }
+
+    function _parseJTWCCoord(numStr, hemi) {
+        const raw = String(numStr || '').trim();
+        if (!raw) return null;
+        // JTWC can use decimal degrees (e.g. 16.2N) or tenths without decimal (e.g. 162N).
+        let n = Number(raw);
+        if (!Number.isFinite(n)) return null;
+        if (!raw.includes('.') && raw.length >= 3) n = n / 10;
+        return (hemi === 'S' || hemi === 'W') ? -n : n;
+    }
+
+    function _parseJTWCProg(stormId, text) {
+        const nameMatch = text.match(/(?:TROPICAL (?:DEPRESSION|STORM)|TYPHOON|SUPER TYPHOON|CYCLONE)\s+\w+\s*\(([^)]+)\)/i);
+        const stormName = nameMatch?.[1]?.trim() || stormId.toUpperCase();
+        const pointMap = new Map();
+        const lines = String(text || '').split('\n');
+        for (const rawLine of lines) {
+            const line = rawLine.toUpperCase();
+            let lead = null;
+            if (line.includes('WARNING POSITION')) lead = 0;
+            else {
+                const hr = line.match(/(\d{1,3})\s*HRS?/);
+                if (hr) lead = Number(hr[1]);
+            }
+            if (lead == null) continue;
+            const coord = line.match(/(\d{1,4}(?:\.\d+)?)\s*([NS])\s+(\d{1,5}(?:\.\d+)?)\s*([EW])/);
+            if (!coord) continue;
+            const lat = _parseJTWCCoord(coord[1], coord[2]);
+            const lon = _parseJTWCCoord(coord[3], coord[4]);
+            const windMatch = line.match(/MAX SUSTAINED WINDS?\s*[-:]\s*(\d{2,3})\s*KT/);
+            const wind = Number(windMatch?.[1] || 0);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            if (!pointMap.has(lead)) {
+                pointMap.set(lead, { lat, lon, wind });
+            }
+        }
+        const points = [...pointMap.entries()].sort((a, b) => a[0] - b[0]);
+        if (!points.length) return [];
+        const features = [];
+        const coords = [];
+        points.forEach(([lead, pt]) => {
+            const cat = _tropicalCategoryFromWind(pt.wind);
+            coords.push([pt.lon, pt.lat]);
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [pt.lon, pt.lat] },
+                properties: {
+                    fcstpd: lead,
+                    _stormId: stormId.toLowerCase(),
+                    _stormName: stormName,
+                    _stormSource: 'JTWC',
+                    _stormCategory: cat.label,
+                    _stormColor: cat.color,
+                    _stormWindKts: pt.wind
+                }
+            });
+        });
+        if (coords.length > 1) {
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: coords },
+                properties: {
+                    _stormId: stormId.toLowerCase(),
+                    _stormName: stormName,
+                    _stormSource: 'JTWC',
+                    _stormCategory: features[0]?.properties?._stormCategory || '',
+                    _stormColor: features[0]?.properties?._stormColor || '#44bbff'
+                }
+            });
+        }
+        return features;
+    }
+
+    async function _fetchJTWCStormFeatures() {
+        const features = [];
+        const indexUrls = [
+            'https://www.metoc.navy.mil/jtwc/products/atcf_sector_file',
+            'https://www.nrlmry.navy.mil/atcf_web/docs/database/new/atcf_sector_file'
+        ];
+        let sectorText = '';
+        for (const url of indexUrls) {
+            try {
+                sectorText = await _fetchTextWithCorsFallback(url);
+                if (sectorText && sectorText.length > 20) break;
+            } catch (_) {}
+        }
+        if (!sectorText) return features;
+
+        const ids = new Set();
+        const idRegex = /\b((?:WP|CP|EP|IO|SH)\d{4,6})\b/g;
+        let m;
+        while ((m = idRegex.exec(sectorText.toUpperCase())) !== null) {
+            ids.add(m[1]);
+        }
+
+        const storms = [...ids].filter(id => _stormPassesBasin(id));
+        for (const stormId of storms) {
+            const basin = stormId.slice(0, 2);
+            const digits = stormId.slice(2);
+            const shortId = digits.length >= 4 ? basin + digits.slice(0, 2) + digits.slice(-2) : stormId;
+            const longId = digits.length >= 6 ? basin + digits : stormId;
+            const progUrls = [
+                `https://www.metoc.navy.mil/jtwc/products/${stormId.toLowerCase()}prog.txt`,
+                `https://www.metoc.navy.mil/jtwc/products/${stormId.toUpperCase()}prog.txt`,
+                `https://www.metoc.navy.mil/jtwc/products/${shortId.toLowerCase()}prog.txt`,
+                `https://www.metoc.navy.mil/jtwc/products/${longId.toLowerCase()}prog.txt`
+            ];
+            let progText = '';
+            for (const pUrl of progUrls) {
+                try {
+                    progText = await _fetchTextWithCorsFallback(pUrl);
+                    if (progText && progText.includes('WARNING')) break;
+                } catch (_) {}
+            }
+            if (!progText) continue;
+            features.push(..._parseJTWCProg(stormId, progText));
+        }
+        return features;
+    }
+
+    async function _fetchNHCStormFeatures() {
+        const features = [];
+        const resp = await fetch('https://www.nhc.noaa.gov/CurrentStorms.json', { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`CurrentStorms HTTP ${resp.status}`);
+        const data = await resp.json();
+        const storms = Array.isArray(data?.activeStorms) ? data.activeStorms : [];
+        for (const storm of storms) {
+            const sid = String(storm?.id || '').toLowerCase();
+            if (!sid || !_stormPassesBasin(sid)) continue;
+            const advisoryNum = String(storm?.advisoryNumber || '').padStart(3, '0');
+            const geojsonUrl = `https://www.nhc.noaa.gov/gis/forecast/${sid}_5day_${advisoryNum}.geojson`;
+            try {
+                const sResp = await fetch(geojsonUrl, { cache: 'no-store' });
+                if (!sResp.ok) continue;
+                const sData = await sResp.json();
+                (sData?.features || []).forEach(f => {
+                    const windKts = Number(f?.properties?.maxwind || storm?.vmax || 0);
+                    const cat = _tropicalCategoryFromWind(windKts);
+                    features.push({
+                        ...f,
+                        properties: {
+                            ...(f.properties || {}),
+                            _stormId: sid,
+                            _stormName: storm?.name || sid.toUpperCase(),
+                            _stormSource: 'NHC',
+                            _stormCategory: cat.label,
+                            _stormColor: cat.color,
+                            _stormWindKts: windKts
+                        }
+                    });
+                });
+            } catch (_) {}
+        }
+        return features;
+    }
+
+    async function _loadTropicalOverlay() {
+        if (!map || !_tropicalOverlayEnabled) return;
+        try {
+            const [nhcFeatures, jtwcFeatures] = await Promise.allSettled([
+                _fetchNHCStormFeatures(),
+                _fetchJTWCStormFeatures()
+            ]);
+            const features = [
+                ...(nhcFeatures.status === 'fulfilled' ? nhcFeatures.value : []),
+                ...(jtwcFeatures.status === 'fulfilled' ? jtwcFeatures.value : [])
+            ];
+            _renderTropicalOverlay({ type: 'FeatureCollection', features });
+        } catch (e) {
+            console.warn('Tropical overlay load error:', e);
+        }
+    }
+
+    function _renderTropicalOverlay(geojson) {
+        if (!map) return;
+        if (map.getSource('tropical-overlay-src')) {
+            map.getSource('tropical-overlay-src').setData(geojson);
+            return;
+        }
+        map.addSource('tropical-overlay-src', { type: 'geojson', data: geojson });
+        map.addLayer({
+            id: 'tropical-cone-fill', type: 'fill', source: 'tropical-overlay-src',
+            filter: ['==', ['geometry-type'], 'Polygon'],
+            paint: { 'fill-color': ['coalesce', ['get', '_stormColor'], '#44bbff'], 'fill-opacity': 0.14 }
+        });
+        map.addLayer({
+            id: 'tropical-track-line', type: 'line', source: 'tropical-overlay-src',
+            filter: ['==', ['geometry-type'], 'LineString'],
+            paint: { 'line-color': ['coalesce', ['get', '_stormColor'], '#44bbff'], 'line-width': 2.4, 'line-opacity': 0.95 }
+        });
+        map.addLayer({
+            id: 'tropical-points', type: 'circle', source: 'tropical-overlay-src',
+            filter: ['==', ['geometry-type'], 'Point'],
+            paint: {
+                'circle-radius': ['case', ['==', ['get', 'fcstpd'], 0], 7, 4.6],
+                'circle-color': ['coalesce', ['get', '_stormColor'], '#44bbff'],
+                'circle-stroke-color': '#fff',
+                'circle-stroke-width': 1.1
+            }
+        });
+        map.addLayer({
+            id: 'tropical-name', type: 'symbol', source: 'tropical-overlay-src',
+            filter: ['all', ['==', ['geometry-type'], 'Point'], ['==', ['get', 'fcstpd'], 0]],
+            layout: {
+                'text-field': ['concat', ['coalesce', ['get', '_stormName'], 'Cyclone'], ' (', ['coalesce', ['get', '_stormCategory'], ''], ', ', ['coalesce', ['get', '_stormSource'], ''], ')'],
+                'text-size': 12,
+                'text-offset': [0, 1.2],
+                'text-anchor': 'top'
+            },
+            paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,0.75)', 'text-halo-width': 1.2 }
+        });
+    }
+
+    function _clearTropicalOverlay() {
+        if (!map) return;
+        ['tropical-name', 'tropical-points', 'tropical-track-line', 'tropical-cone-fill'].forEach(id => {
+            if (map.getLayer(id)) map.removeLayer(id);
+        });
+        if (map.getSource('tropical-overlay-src')) map.removeSource('tropical-overlay-src');
+    }
+
     // Reload alert overlay after a basemap style change clears all layers
     function _reloadAlertOverlayAfterStyleChange() {
         if (!_alertOverlayEnabled || !_activeAlerts.length) return;
         _applyAlertFilters();
+    }
+
+    function _reloadTropicalOverlayAfterStyleChange() {
+        if (_tropicalOverlayEnabled) _loadTropicalOverlay();
     }
 
     // ============================================================
@@ -3471,6 +3825,23 @@
             };
             _addMapPanel({ bodyHtml: _buildAlertPanelHtml(alertObj), type: 'alert', label: 'Alert', alertObj }, seq);
         }
+    }
+
+    function handleTropicalOverlayClick(e) {
+        if (!_tropicalOverlayEnabled || !map || !map.getLayer('tropical-points')) return;
+        const features = map.queryRenderedFeatures(e.point, { layers: ['tropical-points', 'tropical-track-line', 'tropical-cone-fill'] });
+        if (!features.length) return;
+        const p = features[0].properties || {};
+        const wind = p._stormWindKts ? `${p._stormWindKts} kt` : '—';
+        const pointLead = p.fcstpd != null ? `+${p.fcstpd}h` : 'Current';
+        new mapboxgl.Popup({ closeButton: true, maxWidth: '330px' })
+            .setLngLat(e.lngLat)
+            .setHTML(`<div class="popup-title" style="color:${p._stormColor || '#66ccff'};">${p._stormName || 'Tropical Cyclone'}</div>
+                <div class="popup-stat"><span class="popup-key">Source</span><span class="popup-val">${p._stormSource || '—'}</span></div>
+                <div class="popup-stat"><span class="popup-key">Strength</span><span class="popup-val">${p._stormCategory || '—'} (${wind})</span></div>
+                <div class="popup-stat"><span class="popup-key">Forecast Point</span><span class="popup-val">${pointLead}</span></div>
+                <div class="popup-stat"><span class="popup-key">Feature</span><span class="popup-val">${p.featuretyp || features[0].geometry?.type || '—'}</span></div>`)
+            .addTo(map);
     }
 
     // ============================================================
@@ -4619,11 +4990,11 @@
             const latRange = north - south;
             for (let y = 0; y < H; y++) {
                 // Mercator Y for this output row (top = north)
-                const my  = mN - (y / H) * mRng;
+                const my  = mN - ((H > 1 ? y / (H - 1) : 0)) * mRng;
                 // Corresponding geographic latitude
                 const lat = (2 * Math.atan(Math.exp(my)) - Math.PI / 2) * 180 / Math.PI;
                 // Source row in the PlateCarree image (top = north)
-                const sy  = Math.round((north - lat) / latRange * H);
+                const sy  = Math.round(((north - lat) / latRange) * (H - 1));
                 if (sy >= 0 && sy < H) {
                     const so = sy * W * 4, oo = y * W * 4;
                     oda.set(sd.subarray(so, so + W * 4), oo);
@@ -5122,6 +5493,8 @@
             map.on('click', handleRtmaClick);
             map.off('click', handleAlertOverlayClick);
             map.on('click', handleAlertOverlayClick);
+            map.off('click', handleTropicalOverlayClick);
+            map.on('click', handleTropicalOverlayClick);
             if (currentLayer === 'spc' && currentDay > 0) loadSPCLayer(currentDay, currentType);
             else if (currentLayer === 'temperature' || currentLayer === 'wind' || currentLayer === 'clouds') loadOWMLayer(currentLayer);
             else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
@@ -5132,6 +5505,7 @@
             else if (currentLayer === 'surface-analysis') { _surfaceAnalysisLoaded = false; loadSurfaceAnalysisLayer(); }
             // Re-apply alert overlay after style change clears all layers
             _reloadAlertOverlayAfterStyleChange();
+            _reloadTropicalOverlayAfterStyleChange();
             // Re-apply my-location marker if enabled
             if (_myLocationEnabled) _addMyLocationLayer();
         });
@@ -6343,6 +6717,7 @@
                 map.on('click', handleMrmsClick);
                 map.on('click', handleRtmaClick);
                 map.on('click', handleAlertOverlayClick);
+                map.on('click', handleTropicalOverlayClick);
                 // switchLayer() called before map existed, so the initial layer load
                 // was a no-op. Force it now that the map is ready.
                 if (currentLayer === 'radar') {
@@ -6352,6 +6727,7 @@
                 }
                 // Restore alert overlay if it was enabled
                 if (_alertOverlayEnabled) _loadAlertOverlay();
+                if (_tropicalOverlayEnabled) _loadTropicalOverlay();
                 // Restore my-location marker if it was enabled
                 if (_myLocationEnabled) _addMyLocationLayer();
             });
