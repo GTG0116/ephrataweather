@@ -1880,6 +1880,14 @@
                                 onclick="toggleAlertFilter('Hurricane Watch')" title="Hurricane Watch">
                             <span class="af-swatch" style="background:#FF00FF;"></span>Hurricane Watch
                         </button>
+                        <button class="af-chip active" id="af-typhoon-warning"
+                                onclick="toggleAlertFilter('Typhoon Warning')" title="Typhoon Warning">
+                            <span class="af-swatch" style="background:#DC143C;"></span>Typhoon Warning
+                        </button>
+                        <button class="af-chip active" id="af-typhoon-watch"
+                                onclick="toggleAlertFilter('Typhoon Watch')" title="Typhoon Watch">
+                            <span class="af-swatch" style="background:#FF00FF;"></span>Typhoon Watch
+                        </button>
                         <button class="af-chip active" id="af-special-weather-statement"
                                 onclick="toggleAlertFilter('Special Weather Statement')" title="Special Weather Statement">
                             <span class="af-swatch" style="background:#00BBCC;"></span>Special Weather Statement
@@ -4450,6 +4458,10 @@
         const intensityNote = p._stormSource === 'JMA' && fcstpd > 0
             ? '<div class="popup-stat" style="opacity:0.65;font-size:11px;"><span class="popup-key">Note</span><span class="popup-val">JMA does not forecast intensity; wind shown is current</span></div>'
             : '';
+        // Use the clicked feature's coordinates for satellite selection; fall back to click position.
+        const geom = features[0].geometry;
+        const stormLon = geom?.type === 'Point' ? geom.coordinates[0] : e.lngLat.lng;
+        const stormLat = geom?.type === 'Point' ? geom.coordinates[1] : e.lngLat.lat;
         new mapboxgl.Popup({ closeButton: true, maxWidth: '360px' })
             .setLngLat(e.lngLat)
             .setHTML(`<div class="popup-title" style="color:${p._stormColor || '#66ccff'};">${p._stormName || 'Tropical Cyclone'}</div>
@@ -4460,8 +4472,20 @@
                 <div class="popup-stat"><span class="popup-key">Pressure</span><span class="popup-val">${pressure}</span></div>
                 <div class="popup-stat"><span class="popup-key">Wind Gusts</span><span class="popup-val">${gust}</span></div>
                 <div class="popup-stat"><span class="popup-key">Storm Radius</span><span class="popup-val">${radius}</span></div>
-                ${intensityNote}`)
+                ${intensityNote}
+                <div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
+                    <button onclick="viewSatelliteForStorm(${stormLon}, ${stormLat})"
+                            style="width:100%;padding:5px 10px;background:rgba(68,187,255,0.12);border:1px solid rgba(68,187,255,0.35);border-radius:6px;color:#44bbff;cursor:pointer;font-size:12px;font-weight:500;">
+                        View Satellite
+                    </button>
+                </div>`)
             .addTo(map);
+    }
+
+    // Switch to the satellite view using the satellite best-positioned for the given storm location.
+    function viewSatelliteForStorm(lon, lat) {
+        _satSourceOverride = _bestSatSourceForCoord(lat, lon);
+        switchLayer('satellite');
     }
 
     // ============================================================
@@ -5655,6 +5679,40 @@
     let _satAnimTimer      = null;
     let _satLoaded         = false;
     let _satFrames         = [];     // ordered list of available frame indices (newest first)
+    // When set, _autoSelectSatSource uses this value instead of computing from location.
+    // Consumed once (cleared after use) so storm-popup "View Satellite" can override auto-pick.
+    let _satSourceOverride = null;
+
+    // Return the key of the geostationary satellite best positioned for (lat, lon).
+    // Within CONUS bounds the higher-resolution CONUS sector is preferred over full-disk.
+    function _bestSatSourceForCoord(lat, lon) {
+        const normLon = ((lon % 360) + 540) % 360 - 180;
+        if (lat >= 20 && lat <= 55 && normLon >= -135 && normLon <= -60) return 'conus';
+        // Sub-satellite longitudes for each full-disk feed
+        const SUB = { goes19: -75.2, goes18: -137.2, himawari: 140.7 };
+        let best = 'goes19', bestDist = Infinity;
+        for (const [key, satLon] of Object.entries(SUB)) {
+            const d = Math.min(Math.abs(normLon - satLon), 360 - Math.abs(normLon - satLon));
+            if (d < bestDist) { bestDist = d; best = key; }
+        }
+        return best;
+    }
+
+    // Set _currentSatSource to the satellite nearest to the selected location (or
+    // to _satSourceOverride if it has been pre-set by viewSatelliteForStorm).
+    function _autoSelectSatSource() {
+        let src;
+        if (_satSourceOverride !== null) {
+            src = _satSourceOverride;
+            _satSourceOverride = null;
+        } else {
+            const loc = LocationManager.getCurrent();
+            src = _bestSatSourceForCoord(loc.lat, loc.lng);
+        }
+        _currentSatSource = src;
+        const el = document.getElementById('sat-source-select');
+        if (el) el.value = src;
+    }
 
     function _satFrameUrl(idx, product) {
         const src  = SAT_SOURCES[_currentSatSource];
@@ -7166,7 +7224,7 @@
         } else if (layer === 'satellite') {
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showSatelliteView();
-            _ensureMapReady().then(() => loadSatLayer());
+            _ensureMapReady().then(() => { _autoSelectSatSource(); loadSatLayer(); });
         } else if (layer === 'radar') {
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
             _showRadarView();
