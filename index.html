@@ -3545,20 +3545,23 @@
 
         // Map JMA category strings to representative knot values for color coding.
         const catWindMap = { TD: 25, TS: 40, STS: 55, TY: 80, 'SUPER TYPHOON': 130 };
-        const windKts = catWindMap[String(category || '').toUpperCase()] ?? 40;
-        const cat = _tropicalCategoryFromWind(windKts);
-        const stormProps = {
-            _stormId: tcId.toLowerCase(),
-            _stormName: stormName,
-            _stormSource: 'JMA',
-            _stormCategory: cat.label,
-            _stormColor: cat.color,
-            _stormWindKts: windKts
-        };
+        const baseWindKts = catWindMap[String(category || '').toUpperCase()] ?? 40;
+        const baseStormId = tcId.toLowerCase();
 
         const features = [];
         const trackCoords = [];
         const coneCirclePts = [];
+
+        // Base storm props shared by the track line and cone polygon (no per-step fields).
+        const baseCat = _tropicalCategoryFromWind(baseWindKts);
+        const baseStormProps = {
+            _stormId: baseStormId,
+            _stormName: stormName,
+            _stormSource: 'JMA',
+            _stormCategory: baseCat.label,
+            _stormColor: baseCat.color,
+            _stormWindKts: baseWindKts
+        };
 
         for (const entry of data.slice(1)) {
             const lead = Number(entry.advancedHours ?? -1);
@@ -3566,6 +3569,28 @@
             const center = entry.center; // JMA format: [lat, lon]
             if (!Array.isArray(center) || center.length < 2) continue;
             const [lat, lon] = center;
+
+            // Find the storm warning arc centered at this forecast position to get its radius.
+            // JMA stormWarningArea.arc is cumulative (includes all prior positions),
+            // so we look for the arc whose center matches this forecast position.
+            const swArcs = entry.stormWarningArea?.arc;
+            let warningRadiusM = 0;
+            if (Array.isArray(swArcs)) {
+                for (const arc of swArcs) {
+                    if (!Array.isArray(arc) || !Array.isArray(arc[0])) continue;
+                    if (Math.abs(arc[0][0] - lat) < 0.1 && Math.abs(arc[0][1] - lon) < 0.1) {
+                        warningRadiusM = Number(arc[1]) || 0;
+                        break;
+                    }
+                }
+            }
+
+            // Per-step properties include storm warning radius and valid time for this forecast step.
+            const stormProps = {
+                ...baseStormProps,
+                _stormRadiusKm: warningRadiusM > 0 ? Math.round(warningRadiusM / 1000) : null,
+                _validtimeUTC: entry.validtime?.UTC || null
+            };
 
             trackCoords.push([lon, lat]);
             features.push({
@@ -3580,23 +3605,18 @@
                 if (radiusM > 0) coneCirclePts.push(..._gcirclePolyCoords(lat, lon, radiusM, 24));
             }
 
-            // At current position (lead=0) generate storm and gale warning area polygons.
+            // Generate storm warning area circle at every forecast position where data is available.
+            // For lead=0 this is the current dangerous-wind zone; for lead>0 it shows expected storm size.
+            if (warningRadiusM > 0) {
+                features.push({
+                    type: 'Feature',
+                    geometry: { type: 'Polygon', coordinates: [_gcirclePolyCoords(lat, lon, warningRadiusM, 36)] },
+                    properties: { ...stormProps, _warningType: 'typhoon-warning', fcstpd: lead }
+                });
+            }
+
+            // Gale warning area (≥15 m/s ≈ 30 kt) — only available for current position.
             if (lead === 0) {
-                // stormWarningArea: dangerous-wind zone (≥25 m/s ≈ 50 kt) → Typhoon Warning
-                const swArcs = entry.stormWarningArea?.arc;
-                if (Array.isArray(swArcs) && swArcs.length > 0) {
-                    const firstArc = swArcs[0];
-                    const arcCenter = firstArc[0]; // [lat, lon]
-                    const arcRadius = Number(firstArc[1] || 0);
-                    if (arcRadius > 0) {
-                        features.push({
-                            type: 'Feature',
-                            geometry: { type: 'Polygon', coordinates: [_gcirclePolyCoords(arcCenter[0], arcCenter[1], arcRadius, 36)] },
-                            properties: { ...stormProps, _warningType: 'typhoon-warning', fcstpd: 0 }
-                        });
-                    }
-                }
-                // galeWarningArea: gale-force wind zone (≥15 m/s ≈ 30 kt) → Tropical Storm Warning
                 const gwa = entry.galeWarningArea;
                 if (gwa?.center && Number(gwa.radius) > 0) {
                     features.push({
@@ -3613,7 +3633,7 @@
             features.push({
                 type: 'Feature',
                 geometry: { type: 'LineString', coordinates: trackCoords },
-                properties: { ...stormProps, fcstpd: null }
+                properties: { ...baseStormProps, fcstpd: null }
             });
         }
 
@@ -3624,7 +3644,7 @@
                 features.push({
                     type: 'Feature',
                     geometry: { type: 'Polygon', coordinates: [hull] },
-                    properties: { ...stormProps, fcstpd: null, _isCone: true }
+                    properties: { ...baseStormProps, fcstpd: null, _isCone: true }
                 });
             }
         }
@@ -3675,18 +3695,24 @@
                 if (!sResp.ok) continue;
                 const sData = await sResp.json();
                 (sData?.features || []).forEach(f => {
-                    const windKts = Number(f?.properties?.maxwind || storm?.vmax || 0);
+                    const props = f?.properties || {};
+                    const windKts = Number(props.maxwind || storm?.vmax || 0);
                     const cat = _tropicalCategoryFromWind(windKts);
+                    const pressureHPa = Number(props.mslp || props.minmslp || 0) || null;
+                    const gustKts = Number(props.maxgust || props.gust || 0) || null;
                     features.push({
                         ...f,
                         properties: {
-                            ...(f.properties || {}),
+                            ...props,
                             _stormId: sid,
                             _stormName: storm?.name || sid.toUpperCase(),
                             _stormSource: 'NHC',
                             _stormCategory: cat.label,
                             _stormColor: cat.color,
-                            _stormWindKts: windKts
+                            _stormWindKts: windKts,
+                            _stormPressureHPa: pressureHPa,
+                            _stormGustKts: gustKts,
+                            _validtimeUTC: props.validtime || props.dtg || null
                         }
                     });
                 });
@@ -3720,17 +3746,26 @@
         }
         map.addSource('tropical-overlay-src', { type: 'geojson', data: geojson });
 
-        // Gale warning area (≥15 m/s / ~30 kt) — Tropical Storm Warning color (blue), drawn first (bottom)
+        // Forecast uncertainty cone drawn first (bottom) so warning areas render on top of it.
+        map.addLayer({
+            id: 'tropical-cone-fill', type: 'fill', source: 'tropical-overlay-src',
+            filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['!', ['has', '_warningType']]],
+            paint: { 'fill-color': ['coalesce', ['get', '_stormColor'], '#44bbff'], 'fill-opacity': 0.14 }
+        });
+        // Gale warning area (≥15 m/s / ~30 kt) — Tropical Storm Warning color (blue)
         map.addLayer({
             id: 'tropical-gale-warning', type: 'fill', source: 'tropical-overlay-src',
             filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['==', ['get', '_warningType'], 'gale-warning']],
-            paint: { 'fill-color': '#0099FF', 'fill-opacity': 0.22 }
+            paint: { 'fill-color': '#0099FF', 'fill-opacity': 0.28 }
         });
-        // Typhoon warning area (≥25 m/s / ~50 kt) — Hurricane Warning color (red), above gale layer
+        // Typhoon/storm warning area (≥25 m/s / ~50 kt) — red, above gale and cone layers
         map.addLayer({
             id: 'tropical-typhoon-warning', type: 'fill', source: 'tropical-overlay-src',
             filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['==', ['get', '_warningType'], 'typhoon-warning']],
-            paint: { 'fill-color': '#CC0000', 'fill-opacity': 0.32 }
+            paint: {
+                'fill-color': '#CC0000',
+                'fill-opacity': ['case', ['==', ['get', 'fcstpd'], 0], 0.38, 0.18]
+            }
         });
         // Outline both warning areas
         map.addLayer({
@@ -3738,15 +3773,9 @@
             filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['has', '_warningType']],
             paint: {
                 'line-color': ['case', ['==', ['get', '_warningType'], 'typhoon-warning'], '#CC0000', '#0099FF'],
-                'line-width': 1.6,
-                'line-opacity': 0.85
+                'line-width': ['case', ['==', ['get', 'fcstpd'], 0], 1.8, 0.8],
+                'line-opacity': ['case', ['==', ['get', 'fcstpd'], 0], 0.9, 0.45]
             }
-        });
-        // Forecast uncertainty cone — exclude warning-type polygons
-        map.addLayer({
-            id: 'tropical-cone-fill', type: 'fill', source: 'tropical-overlay-src',
-            filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['!', ['has', '_warningType']]],
-            paint: { 'fill-color': ['coalesce', ['get', '_stormColor'], '#44bbff'], 'fill-opacity': 0.14 }
         });
         map.addLayer({
             id: 'tropical-track-line', type: 'line', source: 'tropical-overlay-src',
@@ -3983,14 +4012,32 @@
         if (!features.length) return;
         const p = features[0].properties || {};
         const wind = p._stormWindKts ? `${p._stormWindKts} kt` : '—';
-        const pointLead = p.fcstpd != null ? `+${p.fcstpd}h` : 'Current';
-        new mapboxgl.Popup({ closeButton: true, maxWidth: '330px' })
+        const fcstpd = p.fcstpd;
+        const pointLead = fcstpd == null ? 'Track/Cone' : fcstpd === 0 ? 'Current' : `+${fcstpd}h`;
+        const pressure = p._stormPressureHPa ? `${p._stormPressureHPa} hPa` : '—';
+        const gust = p._stormGustKts ? `${p._stormGustKts} kt` : '—';
+        const radius = p._stormRadiusKm ? `${p._stormRadiusKm} km (≥50 kt zone)` : '—';
+        let validStr = '—';
+        if (p._validtimeUTC) {
+            try {
+                const d = new Date(p._validtimeUTC);
+                validStr = d.toUTCString().replace(/:\d\d GMT/, ' UTC');
+            } catch (_) {}
+        }
+        const intensityNote = p._stormSource === 'JMA' && fcstpd > 0
+            ? '<div class="popup-stat" style="opacity:0.65;font-size:11px;"><span class="popup-key">Note</span><span class="popup-val">JMA does not forecast intensity; wind shown is current</span></div>'
+            : '';
+        new mapboxgl.Popup({ closeButton: true, maxWidth: '360px' })
             .setLngLat(e.lngLat)
             .setHTML(`<div class="popup-title" style="color:${p._stormColor || '#66ccff'};">${p._stormName || 'Tropical Cyclone'}</div>
                 <div class="popup-stat"><span class="popup-key">Source</span><span class="popup-val">${p._stormSource || '—'}</span></div>
-                <div class="popup-stat"><span class="popup-key">Strength</span><span class="popup-val">${p._stormCategory || '—'} (${wind})</span></div>
                 <div class="popup-stat"><span class="popup-key">Forecast Point</span><span class="popup-val">${pointLead}</span></div>
-                <div class="popup-stat"><span class="popup-key">Feature</span><span class="popup-val">${p.featuretyp || features[0].geometry?.type || '—'}</span></div>`)
+                <div class="popup-stat"><span class="popup-key">Valid</span><span class="popup-val">${validStr}</span></div>
+                <div class="popup-stat"><span class="popup-key">Strength</span><span class="popup-val">${p._stormCategory || '—'} (${wind})</span></div>
+                <div class="popup-stat"><span class="popup-key">Pressure</span><span class="popup-val">${pressure}</span></div>
+                <div class="popup-stat"><span class="popup-key">Wind Gusts</span><span class="popup-val">${gust}</span></div>
+                <div class="popup-stat"><span class="popup-key">Storm Radius</span><span class="popup-val">${radius}</span></div>
+                ${intensityNote}`)
             .addTo(map);
     }
 
