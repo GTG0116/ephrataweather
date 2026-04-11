@@ -3402,40 +3402,169 @@
         return basin === _tropicalBasin;
     }
 
+    async function _fetchTextWithCorsFallback(url) {
+        try {
+            const r = await fetch(url, { cache: 'no-store' });
+            if (r.ok) return r.text();
+        } catch (_) {}
+        try {
+            const p1 = 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(url);
+            const r1 = await fetch(p1, { cache: 'no-store' });
+            if (r1.ok) return r1.text();
+        } catch (_) {}
+        const p2 = 'https://corsproxy.io/?' + encodeURIComponent(url);
+        const r2 = await fetch(p2, { cache: 'no-store' });
+        if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
+        return r2.text();
+    }
+
+    function _toSignedCoord(val, hemi) {
+        const n = Number(val);
+        if (!Number.isFinite(n)) return null;
+        return (hemi === 'S' || hemi === 'W') ? -n : n;
+    }
+
+    function _parseJTWCProg(stormId, text) {
+        const nameMatch = text.match(/(?:TROPICAL (?:DEPRESSION|STORM)|TYPHOON|SUPER TYPHOON|CYCLONE)\s+\w+\s*\(([^)]+)\)/i);
+        const stormName = nameMatch?.[1]?.trim() || stormId.toUpperCase();
+        const pointMap = new Map();
+        const lineRegex = /(?:^|\n)\s*(WARNING POSITION|(\d{1,3})\s*HRS)[^\n]*?(\d{1,2}\.?\d*)\s*([NS])\s+(\d{1,3}\.?\d*)\s*([EW])[^\n]*?(?:MAX SUSTAINED WINDS?\s*[-:]\s*(\d{2,3})\s*KT)?/gi;
+        let m;
+        while ((m = lineRegex.exec(text)) !== null) {
+            const lead = m[1] && m[1].toUpperCase().includes('WARNING') ? 0 : Number(m[2] || 0);
+            const lat = _toSignedCoord(m[3], m[4]);
+            const lon = _toSignedCoord(m[5], m[6]);
+            const wind = Number(m[7] || 0);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+            if (!pointMap.has(lead)) {
+                pointMap.set(lead, { lat, lon, wind });
+            }
+        }
+        const points = [...pointMap.entries()].sort((a, b) => a[0] - b[0]);
+        if (!points.length) return [];
+        const features = [];
+        const coords = [];
+        points.forEach(([lead, pt]) => {
+            const cat = _tropicalCategoryFromWind(pt.wind);
+            coords.push([pt.lon, pt.lat]);
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [pt.lon, pt.lat] },
+                properties: {
+                    fcstpd: lead,
+                    _stormId: stormId.toLowerCase(),
+                    _stormName: stormName,
+                    _stormSource: 'JTWC',
+                    _stormCategory: cat.label,
+                    _stormColor: cat.color,
+                    _stormWindKts: pt.wind
+                }
+            });
+        });
+        if (coords.length > 1) {
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: coords },
+                properties: {
+                    _stormId: stormId.toLowerCase(),
+                    _stormName: stormName,
+                    _stormSource: 'JTWC',
+                    _stormCategory: features[0]?.properties?._stormCategory || '',
+                    _stormColor: features[0]?.properties?._stormColor || '#44bbff'
+                }
+            });
+        }
+        return features;
+    }
+
+    async function _fetchJTWCStormFeatures() {
+        const features = [];
+        const indexUrls = [
+            'https://www.metoc.navy.mil/jtwc/products/atcf_sector_file',
+            'https://www.nrlmry.navy.mil/atcf_web/docs/database/new/atcf_sector_file'
+        ];
+        let sectorText = '';
+        for (const url of indexUrls) {
+            try {
+                sectorText = await _fetchTextWithCorsFallback(url);
+                if (sectorText && sectorText.length > 20) break;
+            } catch (_) {}
+        }
+        if (!sectorText) return features;
+
+        const ids = new Set();
+        const idRegex = /\b((?:WP|CP|EP|IO|SH)\d{2}\d{2})\b/g;
+        let m;
+        while ((m = idRegex.exec(sectorText.toUpperCase())) !== null) {
+            ids.add(m[1]);
+        }
+
+        const storms = [...ids].filter(id => _stormPassesBasin(id));
+        for (const stormId of storms) {
+            const progUrls = [
+                `https://www.metoc.navy.mil/jtwc/products/${stormId.toLowerCase()}prog.txt`,
+                `https://www.metoc.navy.mil/jtwc/products/${stormId.toUpperCase()}prog.txt`
+            ];
+            let progText = '';
+            for (const pUrl of progUrls) {
+                try {
+                    progText = await _fetchTextWithCorsFallback(pUrl);
+                    if (progText && progText.includes('WARNING')) break;
+                } catch (_) {}
+            }
+            if (!progText) continue;
+            features.push(..._parseJTWCProg(stormId, progText));
+        }
+        return features;
+    }
+
+    async function _fetchNHCStormFeatures() {
+        const features = [];
+        const resp = await fetch('https://www.nhc.noaa.gov/CurrentStorms.json', { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`CurrentStorms HTTP ${resp.status}`);
+        const data = await resp.json();
+        const storms = Array.isArray(data?.activeStorms) ? data.activeStorms : [];
+        for (const storm of storms) {
+            const sid = String(storm?.id || '').toLowerCase();
+            if (!sid || !_stormPassesBasin(sid)) continue;
+            const advisoryNum = String(storm?.advisoryNumber || '').padStart(3, '0');
+            const geojsonUrl = `https://www.nhc.noaa.gov/gis/forecast/${sid}_5day_${advisoryNum}.geojson`;
+            try {
+                const sResp = await fetch(geojsonUrl, { cache: 'no-store' });
+                if (!sResp.ok) continue;
+                const sData = await sResp.json();
+                (sData?.features || []).forEach(f => {
+                    const windKts = Number(f?.properties?.maxwind || storm?.vmax || 0);
+                    const cat = _tropicalCategoryFromWind(windKts);
+                    features.push({
+                        ...f,
+                        properties: {
+                            ...(f.properties || {}),
+                            _stormId: sid,
+                            _stormName: storm?.name || sid.toUpperCase(),
+                            _stormSource: 'NHC',
+                            _stormCategory: cat.label,
+                            _stormColor: cat.color,
+                            _stormWindKts: windKts
+                        }
+                    });
+                });
+            } catch (_) {}
+        }
+        return features;
+    }
+
     async function _loadTropicalOverlay() {
         if (!map || !_tropicalOverlayEnabled) return;
         try {
-            const resp = await fetch('https://www.nhc.noaa.gov/CurrentStorms.json', { cache: 'no-store' });
-            if (!resp.ok) throw new Error(`CurrentStorms HTTP ${resp.status}`);
-            const data = await resp.json();
-            const storms = Array.isArray(data?.activeStorms) ? data.activeStorms : [];
-            const features = [];
-
-            for (const storm of storms) {
-                const sid = String(storm?.id || '').toLowerCase();
-                if (!sid || !_stormPassesBasin(sid)) continue;
-                const advisoryNum = String(storm?.advisoryNumber || '').padStart(3, '0');
-                const geojsonUrl = `https://www.nhc.noaa.gov/gis/forecast/${sid}_5day_${advisoryNum}.geojson`;
-                try {
-                    const sResp = await fetch(geojsonUrl, { cache: 'no-store' });
-                    if (!sResp.ok) continue;
-                    const sData = await sResp.json();
-                    (sData?.features || []).forEach(f => {
-                        const windKts = Number(f?.properties?.maxwind || storm?.vmax || 0);
-                        const cat = _tropicalCategoryFromWind(windKts);
-                        features.push({
-                            ...f,
-                            properties: {
-                                ...(f.properties || {}),
-                                _stormName: storm?.name || sid.toUpperCase(),
-                                _stormCategory: cat.label,
-                                _stormColor: cat.color,
-                                _stormWindKts: windKts
-                            }
-                        });
-                    });
-                } catch (_) {}
-            }
+            const [nhcFeatures, jtwcFeatures] = await Promise.allSettled([
+                _fetchNHCStormFeatures(),
+                _fetchJTWCStormFeatures()
+            ]);
+            const features = [
+                ...(nhcFeatures.status === 'fulfilled' ? nhcFeatures.value : []),
+                ...(jtwcFeatures.status === 'fulfilled' ? jtwcFeatures.value : [])
+            ];
             _renderTropicalOverlay({ type: 'FeatureCollection', features });
         } catch (e) {
             console.warn('Tropical overlay load error:', e);
@@ -3473,7 +3602,7 @@
             id: 'tropical-name', type: 'symbol', source: 'tropical-overlay-src',
             filter: ['all', ['==', ['geometry-type'], 'Point'], ['==', ['get', 'fcstpd'], 0]],
             layout: {
-                'text-field': ['concat', ['coalesce', ['get', '_stormName'], 'Cyclone'], ' (', ['coalesce', ['get', '_stormCategory'], ''], ')'],
+                'text-field': ['concat', ['coalesce', ['get', '_stormName'], 'Cyclone'], ' (', ['coalesce', ['get', '_stormCategory'], ''], ', ', ['coalesce', ['get', '_stormSource'], ''], ')'],
                 'text-size': 12,
                 'text-offset': [0, 1.2],
                 'text-anchor': 'top'
@@ -3689,6 +3818,7 @@
         new mapboxgl.Popup({ closeButton: true, maxWidth: '330px' })
             .setLngLat(e.lngLat)
             .setHTML(`<div class="popup-title" style="color:${p._stormColor || '#66ccff'};">${p._stormName || 'Tropical Cyclone'}</div>
+                <div class="popup-stat"><span class="popup-key">Source</span><span class="popup-val">${p._stormSource || '—'}</span></div>
                 <div class="popup-stat"><span class="popup-key">Strength</span><span class="popup-val">${p._stormCategory || '—'} (${wind})</span></div>
                 <div class="popup-stat"><span class="popup-key">Forecast Point</span><span class="popup-val">${pointLead}</span></div>
                 <div class="popup-stat"><span class="popup-key">Feature</span><span class="popup-val">${p.featuretyp || features[0].geometry?.type || '—'}</span></div>`)
