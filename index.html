@@ -3398,13 +3398,13 @@
 
     function _tropicalCategoryFromWind(windKts) {
         const w = Number(windKts) || 0;
-        if (w >= 137) return { label: 'Category 5', color: '#ff1744' };
-        if (w >= 113) return { label: 'Category 4', color: '#ff5252' };
-        if (w >= 96)  return { label: 'Category 3', color: '#ff7043' };
+        if (w >= 137) return { label: 'Category 5', color: '#8e24aa' };
+        if (w >= 113) return { label: 'Category 4', color: '#d81b60' };
+        if (w >= 96)  return { label: 'Category 3', color: '#f44336' };
         if (w >= 83)  return { label: 'Category 2', color: '#ff9800' };
-        if (w >= 64)  return { label: 'Category 1', color: '#ffc107' };
-        if (w >= 34)  return { label: 'Tropical Storm', color: '#00bcd4' };
-        return { label: 'Tropical Depression', color: '#4fc3f7' };
+        if (w >= 64)  return { label: 'Category 1', color: '#ffeb3b' };
+        if (w >= 34)  return { label: 'Tropical Storm', color: '#00e5ff' };
+        return { label: 'Tropical Depression', color: '#1e88e5' };
     }
 
     function _stormPassesBasin(stormId) {
