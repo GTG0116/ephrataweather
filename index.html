@@ -5600,9 +5600,8 @@
                 i.src = rawUrl;
             });
             // Cap working canvas to MAX_DIM on the longest side.
-            // Full-disk images can be 2500×2500+; without capping, two such canvases
-            // plus the pixel array (~100 MB) crash Safari on iPhone.
-            const MAX_DIM = 1024;
+            // Keep this high to avoid visible softening from aggressive downsampling.
+            const MAX_DIM = 2048;
             const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
             const W = Math.round(img.width  * scale);
             const H = Math.round(img.height * scale);
@@ -5614,12 +5613,14 @@
             const sc = document.createElement('canvas');
             sc.width = W; sc.height = H;
             const sctx = sc.getContext('2d');
+            sctx.imageSmoothingEnabled = false;
             sctx.drawImage(img, 0, 0, W, H);
             const sd = sctx.getImageData(0, 0, W, H).data;
             // Build Mercator-projected output
             const oc = document.createElement('canvas');
             oc.width = W; oc.height = H;
             const octx = oc.getContext('2d');
+            octx.imageSmoothingEnabled = false;
             const od = octx.createImageData(W, H);
             const oda = od.data;
             const latRange = north - south;
