@@ -5795,15 +5795,6 @@
         }
     }
 
-    function _applySatAutoSmoothing() {
-        if (!map || !map.getLayer('sat-overlay-layer')) return;
-        const zoom = map.getZoom ? map.getZoom() : 0;
-        // Use nearest at wider zooms for crisp native pixels; switch to linear when
-        // zoomed in so imagery is automatically smoothed instead of blocky.
-        const mode = zoom >= 4 ? 'linear' : 'nearest';
-        map.setPaintProperty('sat-overlay-layer', 'raster-resampling', mode);
-    }
-
     async function showSatFrame(pos) {
         if (!map) return;
         _satFrameIdx = pos;
@@ -5825,12 +5816,11 @@
                 paint: {
                     'raster-opacity': 0.9,
                     'raster-fade-duration': 0,
-                    'raster-resampling': 'linear'
+                    'raster-resampling': 'nearest'
                 }
             }, _overlayBefore());
             _satLoaded = true;
         }
-        _applySatAutoSmoothing();
         _updateSatUI(pos);
     }
 
@@ -7470,9 +7460,6 @@
                 map.on('click', handleRtmaClick);
                 map.on('click', handleAlertOverlayClick);
                 map.on('click', handleTropicalOverlayClick);
-                map.on('zoom', () => {
-                    if (currentLayer === 'satellite') _applySatAutoSmoothing();
-                });
                 // switchLayer() called before map existed, so the initial layer load
                 // was a no-op. Force it now that the map is ready.
                 if (currentLayer === 'radar') {
