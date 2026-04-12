@@ -1627,6 +1627,9 @@
                             <option value="himawari">Himawari Full Disk</option>
                             <option value="goes18">GOES-18 Full Disk</option>
                         </select>
+                        <select id="himawari-sector-select" class="ctrl-select" onchange="switchHimawariSector(this.value)" style="display:none;max-width:280px;">
+                            <option value="">Himawari TC Sectors: Full Disk</option>
+                        </select>
                     </div>
                     <div class="ctrl-row" style="gap:8px;align-items:center;">
                         <select id="sat-band-select" class="ctrl-select" onchange="selectSatBand(this.value)">
@@ -3994,45 +3997,29 @@
     }
 
     async function _fetchNHCStormFeatures() {
-        const features = [];
-        const resp = await fetch('https://www.nhc.noaa.gov/CurrentStorms.json', { cache: 'no-store' });
-        if (!resp.ok) throw new Error(`CurrentStorms HTTP ${resp.status}`);
-        const data = await resp.json();
-        const storms = Array.isArray(data?.activeStorms) ? data.activeStorms : [];
-        for (const storm of storms) {
-            const sid = String(storm?.id || '').toLowerCase();
-            if (!sid || !_stormPassesBasin(sid)) continue;
-            const advisoryNum = String(storm?.advisoryNumber || '').padStart(3, '0');
-            const geojsonUrl = `https://www.nhc.noaa.gov/gis/forecast/${sid}_5day_${advisoryNum}.geojson`;
+        const base = 'https://raw.githubusercontent.com/GTG0116/JTWCTyphoonData/claude/jtwc-forecast-viewer-NQqQA/data';
+        const urls = [];
+        if (_tropicalBasin === 'both' || _tropicalBasin === 'atlantic') urls.push(`${base}/nhc_atlantic.json`);
+        if (_tropicalBasin === 'both' || _tropicalBasin === 'pacific') urls.push(`${base}/nhc_pacific.json`);
+        const settled = await Promise.allSettled(urls.map(url => fetch(url, { cache: 'no-store' })));
+        const allFeatures = [];
+        for (const item of settled) {
+            if (item.status !== 'fulfilled') continue;
+            const r = item.value;
+            if (!r.ok) continue;
             try {
-                const sResp = await fetch(geojsonUrl, { cache: 'no-store' });
-                if (!sResp.ok) continue;
-                const sData = await sResp.json();
-                (sData?.features || []).forEach(f => {
-                    const props = f?.properties || {};
-                    const windKts = Number(props.maxwind || storm?.vmax || 0);
-                    const cat = _tropicalCategoryFromWind(windKts);
-                    const pressureHPa = Number(props.mslp || props.minmslp || 0) || null;
-                    const gustKts = Number(props.maxgust || props.gust || 0) || null;
-                    features.push({
-                        ...f,
-                        properties: {
-                            ...props,
-                            _stormId: sid,
-                            _stormName: storm?.name || sid.toUpperCase(),
-                            _stormSource: 'NHC',
-                            _stormCategory: cat.label,
-                            _stormColor: cat.color,
-                            _stormWindKts: windKts,
-                            _stormPressureHPa: pressureHPa,
-                            _stormGustKts: gustKts,
-                            _validtimeUTC: props.validtime || props.dtg || null
-                        }
-                    });
-                });
+                const data = await r.json();
+                const converted = _parseJTWCStormsJson(data).map(f => ({
+                    ...f,
+                    properties: {
+                        ...(f.properties || {}),
+                        _stormSource: 'NHC'
+                    }
+                }));
+                allFeatures.push(...converted);
             } catch (_) {}
         }
-        return features;
+        return allFeatures;
     }
 
     // Parse the JTWC storms.json data into GeoJSON features.
@@ -5613,9 +5600,8 @@
                 i.src = rawUrl;
             });
             // Cap working canvas to MAX_DIM on the longest side.
-            // Full-disk images can be 2500×2500+; without capping, two such canvases
-            // plus the pixel array (~100 MB) crash Safari on iPhone.
-            const MAX_DIM = 1024;
+            // Keep this high to avoid visible softening from aggressive downsampling.
+            const MAX_DIM = 2048;
             const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
             const W = Math.round(img.width  * scale);
             const H = Math.round(img.height * scale);
@@ -5627,12 +5613,14 @@
             const sc = document.createElement('canvas');
             sc.width = W; sc.height = H;
             const sctx = sc.getContext('2d');
+            sctx.imageSmoothingEnabled = false;
             sctx.drawImage(img, 0, 0, W, H);
             const sd = sctx.getImageData(0, 0, W, H).data;
             // Build Mercator-projected output
             const oc = document.createElement('canvas');
             oc.width = W; oc.height = H;
             const octx = oc.getContext('2d');
+            octx.imageSmoothingEnabled = false;
             const od = octx.createImageData(W, H);
             const oda = od.data;
             const latRange = north - south;
@@ -5682,6 +5670,60 @@
     // When set, _autoSelectSatSource uses this value instead of computing from location.
     // Consumed once (cleared after use) so storm-popup "View Satellite" can override auto-pick.
     let _satSourceOverride = null;
+    let _himawariSectors = [];
+    let _currentHimawariSectorId = '';
+
+    function _getActiveSatSpec() {
+        const src = SAT_SOURCES[_currentSatSource];
+        if (_currentSatSource !== 'himawari' || !_currentHimawariSectorId) return src;
+        const sector = _himawariSectors.find(s => s.safe_id === _currentHimawariSectorId);
+        if (!sector || !Array.isArray(sector.bounds) || sector.bounds.length < 4) return src;
+        const [w, e, s, n] = sector.bounds.map(Number);
+        return {
+            ...src,
+            south: s, north: n,
+            coords: [[w, n], [e, n], [e, s], [w, s]],
+            framePrefixSuffix: `_sector_${sector.safe_id}`,
+            displayLabel: `${sector.name || sector.id} (${sector.classification_label || 'TC'})`
+        };
+    }
+
+    async function _loadHimawariSectorsMeta() {
+        if (_currentSatSource !== 'himawari') return;
+        const sel = document.getElementById('himawari-sector-select');
+        if (!sel) return;
+        sel.style.display = '';
+        sel.innerHTML = '<option value="">Himawari TC Sectors: Full Disk</option>';
+        try {
+            const base = SAT_SOURCES.himawari.base;
+            const cb = Math.floor(Date.now() / 60000);
+            const resp = await fetch(`${base}sectors_meta.json?cb=${cb}`, { cache: 'no-store' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            const sectors = Array.isArray(data?.sectors) ? data.sectors : [];
+            _himawariSectors = sectors.filter(s =>
+                s && s.safe_id && Array.isArray(s.bounds) && s.bounds.length >= 4
+            );
+            for (const sec of _himawariSectors) {
+                const opt = document.createElement('option');
+                opt.value = sec.safe_id;
+                const wind = Number(sec.wind_kt);
+                const windTxt = Number.isFinite(wind) && wind > 0 ? `${wind} kt` : '— kt';
+                const basin = sec.basin_name || sec.basin || '';
+                opt.textContent = `${sec.name || sec.id} (${sec.safe_id}) • ${sec.classification_label || 'TC'} • ${windTxt}${basin ? ` • ${basin}` : ''}`;
+                sel.appendChild(opt);
+            }
+            if (_currentHimawariSectorId && !_himawariSectors.some(s => s.safe_id === _currentHimawariSectorId)) {
+                _currentHimawariSectorId = '';
+            }
+            sel.value = _currentHimawariSectorId || '';
+        } catch (e) {
+            _himawariSectors = [];
+            _currentHimawariSectorId = '';
+            sel.value = '';
+            console.warn('Himawari sector metadata fetch failed:', e);
+        }
+    }
 
     // Return the key of the geostationary satellite best positioned for (lat, lon).
     // Within CONUS bounds the higher-resolution CONUS sector is preferred over full-disk.
@@ -5712,23 +5754,28 @@
         _currentSatSource = src;
         const el = document.getElementById('sat-source-select');
         if (el) el.value = src;
+        const sectorSel = document.getElementById('himawari-sector-select');
+        if (sectorSel) sectorSel.style.display = src === 'himawari' ? '' : 'none';
+        if (src !== 'himawari') _currentHimawariSectorId = '';
     }
 
     function _satFrameUrl(idx, product) {
-        const src  = SAT_SOURCES[_currentSatSource];
+        const src  = _getActiveSatSpec();
         const prod = SAT_PRODUCTS[product || _currentSatProduct];
         const frame = String(idx).padStart(2, '0');
         const cb = Math.floor(Date.now() / 60000);
-        return src.base + prod.prefix + '_' + frame + '.png?cb=' + cb;
+        const suffix = src.framePrefixSuffix || '';
+        return src.base + prod.prefix + suffix + '_' + frame + '.png?cb=' + cb;
     }
 
     async function _probeSatFrames(product) {
-        const src  = SAT_SOURCES[_currentSatSource];
+        const src  = _getActiveSatSpec();
         const cb   = Math.floor(Date.now() / 60000);
         const prod = SAT_PRODUCTS[product || _currentSatProduct];
+        const suffix = src.framePrefixSuffix || '';
         const checks = Array.from({ length: SAT_MAX_FRAMES }, (_, i) => {
             const frame = String(i).padStart(2, '0');
-            const url = src.base + prod.prefix + '_' + frame + '.png?cb=' + cb;
+            const url = src.base + prod.prefix + suffix + '_' + frame + '.png?cb=' + cb;
             return fetch(url, { method: 'HEAD', cache: 'no-store' })
                 .then(r => r.ok ? i : null).catch(() => null);
         });
@@ -5755,7 +5802,7 @@
     async function showSatFrame(pos) {
         if (!map) return;
         _satFrameIdx = pos;
-        const src    = SAT_SOURCES[_currentSatSource];
+        const src    = _getActiveSatSpec();
         const frameIdx = _satFrames[pos];
         const rawUrl = _satFrameUrl(frameIdx);
         // Images already rendered in Web Mercator by process_data.py need no client-side reprojection.
@@ -5793,7 +5840,8 @@
     async function loadSatLayer() {
         showLoading('Loading satellite\u2026');
         try {
-            const src = SAT_SOURCES[_currentSatSource];
+            if (_currentSatSource === 'himawari') await _loadHimawariSectorsMeta();
+            const src = _getActiveSatSpec();
             _satLoaded = false;
             if (map) {
                 if (map.getLayer('sat-overlay-layer')) map.removeLayer('sat-overlay-layer');
@@ -5867,6 +5915,19 @@
         _currentSatSource = sourceKey;
         const srcSel = document.getElementById('sat-source-select');
         if (srcSel) srcSel.value = sourceKey;
+        const sectorSel = document.getElementById('himawari-sector-select');
+        if (sectorSel) sectorSel.style.display = sourceKey === 'himawari' ? '' : 'none';
+        if (sourceKey !== 'himawari') _currentHimawariSectorId = '';
+        if (currentLayer === 'satellite') {
+            stopSatAnimation();
+            clearSatLayer();
+            _ensureMapReady().then(() => loadSatLayer());
+        }
+    }
+
+    function switchHimawariSector(sectorId) {
+        if (_currentSatSource !== 'himawari') return;
+        _currentHimawariSectorId = sectorId || '';
         if (currentLayer === 'satellite') {
             stopSatAnimation();
             clearSatLayer();
