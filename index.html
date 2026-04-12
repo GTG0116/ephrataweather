@@ -5587,8 +5587,7 @@
     // correctly on Mapbox's Mercator basemap. Returns a blob URL on success,
     // or the original rawUrl as a fallback if cross-origin pixel access fails.
     // south/north are the latitude extents of the source image in degrees.
-    // Images are downsampled to MAX_DIM on the longest side before processing
-    // to prevent out-of-memory crashes on mobile with large full-disk imagery.
+    // Processing keeps native image resolution (no downsampling/smoothing).
     async function _toMercator(rawUrl, south, north) {
         if (_satMercCache.has(rawUrl)) return _satMercCache.get(rawUrl);
         try {
@@ -5599,12 +5598,9 @@
                 i.onerror = rej;
                 i.src = rawUrl;
             });
-            // Cap working canvas to MAX_DIM on the longest side.
-            // Keep this high to avoid visible softening from aggressive downsampling.
-            const MAX_DIM = 2048;
-            const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
-            const W = Math.round(img.width  * scale);
-            const H = Math.round(img.height * scale);
+            // Keep native source resolution to avoid any downsampling blur.
+            const W = img.width;
+            const H = img.height;
             // Mercator Y values for the latitude bounds
             const mY  = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
             const mN  = mY(north), mS = mY(south);
