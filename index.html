@@ -215,6 +215,31 @@
         .map-wrapper { position: relative; height: calc(100vh - 320px); min-height: 440px; border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 16px; }
         #map { width: 100%; height: 100%; }
 
+        /* Fullscreen layout: controls scrollable at top, map fills remaining space */
+        #maps-fullscreen-root:-webkit-full-screen,
+        #maps-fullscreen-root:fullscreen {
+            background: #0f1729;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        #maps-fullscreen-root:-webkit-full-screen .map-controls-panel,
+        #maps-fullscreen-root:fullscreen .map-controls-panel {
+            flex-shrink: 0;
+            max-height: 44vh;
+            overflow-y: auto;
+            margin-bottom: 8px !important;
+        }
+        #maps-fullscreen-root:-webkit-full-screen #map-view-wrap,
+        #maps-fullscreen-root:fullscreen #map-view-wrap {
+            flex: 1 1 0;
+            min-height: 0;
+            height: auto !important;
+            margin-bottom: 0;
+        }
+
         .spc-legend { position: absolute; bottom: 16px; right: 16px; z-index: 10; padding: 10px 13px; background: rgba(12,18,38,0.88); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,0.13); border-radius: var(--radius-sm); font-size: 0.72rem; display: none; }
         .spc-legend.visible { display: block; }
         .legend-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 7px; }
@@ -1576,6 +1601,7 @@
              VIEW: MAPS
              =================================================== -->
         <section id="view-maps" class="view">
+            <div id="maps-fullscreen-root">
             <!-- Map Controls Panel -->
             <!-- Layer selector -->
             <div class="map-controls-panel glass-static" style="margin-bottom:14px;">
@@ -1909,6 +1935,10 @@
                             <option value="pacific">Pacific</option>
                         </select>
                         <button class="icon-action-btn" id="tropical-refresh-btn" onclick="refreshTropicalOverlay()" title="Refresh tropical cyclones" style="display:none;">&#8635;</button>
+                        <label id="tropical-radius-row" style="display:none;align-items:center;gap:6px;cursor:pointer;font-size:0.72rem;color:var(--text-muted);margin-left:4px;">
+                            <input type="checkbox" id="tropical-radius-chk" onchange="toggleTropicalRadiusCircles()" style="accent-color:var(--accent-blue);">
+                            Radius Circles
+                        </label>
                     </div>
                 </div>
             </div>
@@ -1938,6 +1968,7 @@
                     <p id="loading-msg" style="font-size:0.85rem;color:var(--text-secondary);">Loading outlook…</p>
                 </div>
             </div>
+            </div><!-- end maps-fullscreen-root -->
 
             <!-- SPC Outlook Image Gallery -->
             <div id="spc-image-view" class="glass-static" style="padding:16px;">
@@ -3087,6 +3118,7 @@
     let _tropicalOverlayEnabled = false;
     let _tropicalBasin = 'both';
     let _tropicalRefreshTimer = null;
+    let _tropicalShowRadiusCircles = true;
 
     // --- Persistence ---
     function _loadAlertPrefs() {
@@ -3100,6 +3132,7 @@
             _tropicalOverlayEnabled = saved.tropicalEnabled === true;
             _tropicalBasin = (saved.tropicalBasin === 'atlantic' || saved.tropicalBasin === 'pacific' || saved.tropicalBasin === 'both')
                 ? saved.tropicalBasin : 'both';
+            _tropicalShowRadiusCircles = saved.tropicalRadius !== false; // default ON
         } catch (_) {
             _alertOverlayEnabled = false;
             ALERT_OVERLAY_KEYS.forEach(k => { _alertFilters[k] = true; });
@@ -3113,6 +3146,7 @@
             filters: _alertFilters,
             tropicalEnabled: _tropicalOverlayEnabled,
             tropicalBasin: _tropicalBasin,
+            tropicalRadius: _tropicalShowRadiusCircles,
         }));
     }
 
@@ -3171,6 +3205,19 @@
         if (_tropicalOverlayEnabled) _loadTropicalOverlay();
     }
 
+    function toggleTropicalRadiusCircles() {
+        _tropicalShowRadiusCircles = !_tropicalShowRadiusCircles;
+        _saveAlertPrefs();
+        const chk = document.getElementById('tropical-radius-chk');
+        if (chk) chk.checked = _tropicalShowRadiusCircles;
+        if (map) {
+            const vis = _tropicalShowRadiusCircles ? 'visible' : 'none';
+            ['tropical-gale-warning', 'tropical-typhoon-warning', 'tropical-warning-outline'].forEach(id => {
+                if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
+            });
+        }
+    }
+
     let _filterMenuOpen = false;
     function toggleAlertFilterMenu(e) {
         e.stopPropagation();
@@ -3223,6 +3270,10 @@
         }
         const tRefresh = document.getElementById('tropical-refresh-btn');
         if (tRefresh) tRefresh.style.display = _tropicalOverlayEnabled ? '' : 'none';
+        const tRadiusRow = document.getElementById('tropical-radius-row');
+        if (tRadiusRow) tRadiusRow.style.display = _tropicalOverlayEnabled ? 'flex' : 'none';
+        const tRadiusChk = document.getElementById('tropical-radius-chk');
+        if (tRadiusChk) tRadiusChk.checked = _tropicalShowRadiusCircles;
 
         ALERT_OVERLAY_KEYS.forEach(k => {
             const btn = document.getElementById(_afBtnId(k));
@@ -4174,7 +4225,8 @@
         map.addLayer({
             id: 'tropical-gale-warning', type: 'fill', source: 'tropical-overlay-src',
             filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['==', ['get', '_warningType'], 'gale-warning']],
-            paint: { 'fill-color': '#0099FF', 'fill-opacity': 0.28 }
+            paint: { 'fill-color': '#0099FF', 'fill-opacity': 0.28 },
+            layout: { visibility: _tropicalShowRadiusCircles ? 'visible' : 'none' }
         });
         // Typhoon/storm warning area (≥25 m/s / ~50 kt) — red, above gale and cone layers
         map.addLayer({
@@ -4183,7 +4235,8 @@
             paint: {
                 'fill-color': '#CC0000',
                 'fill-opacity': ['case', ['==', ['get', 'fcstpd'], 0], 0.38, 0.18]
-            }
+            },
+            layout: { visibility: _tropicalShowRadiusCircles ? 'visible' : 'none' }
         });
         // Outline both warning areas
         map.addLayer({
@@ -4193,7 +4246,8 @@
                 'line-color': ['case', ['==', ['get', '_warningType'], 'typhoon-warning'], '#CC0000', '#0099FF'],
                 'line-width': ['case', ['==', ['get', 'fcstpd'], 0], 1.8, 0.8],
                 'line-opacity': ['case', ['==', ['get', 'fcstpd'], 0], 0.9, 0.45]
-            }
+            },
+            layout: { visibility: _tropicalShowRadiusCircles ? 'visible' : 'none' }
         });
         map.addLayer({
             id: 'tropical-track-line', type: 'line', source: 'tropical-overlay-src',
@@ -4461,7 +4515,7 @@
                 <div class="popup-stat"><span class="popup-key">Storm Radius</span><span class="popup-val">${radius}</span></div>
                 ${intensityNote}
                 <div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
-                    <button onclick="viewSatelliteForStorm(${stormLon}, ${stormLat})"
+                    <button onclick="viewSatelliteForStorm(${stormLon}, ${stormLat}, ${JSON.stringify(p._stormName || '')})"
                             style="width:100%;padding:5px 10px;background:rgba(68,187,255,0.12);border:1px solid rgba(68,187,255,0.35);border-radius:6px;color:#44bbff;cursor:pointer;font-size:12px;font-weight:500;">
                         View Satellite
                     </button>
@@ -4470,8 +4524,13 @@
     }
 
     // Switch to the satellite view using the satellite best-positioned for the given storm location.
-    function viewSatelliteForStorm(lon, lat) {
-        _satSourceOverride = _bestSatSourceForCoord(lat, lon);
+    // If stormName is provided and the best source is Himawari, try to auto-select a TC sector.
+    function viewSatelliteForStorm(lon, lat, stormName) {
+        const bestSrc = _bestSatSourceForCoord(lat, lon);
+        _satSourceOverride = bestSrc;
+        if (bestSrc === 'himawari' && stormName) {
+            _tropicalSectorOverride = stormName.toString().trim();
+        }
         switchLayer('satellite');
     }
 
@@ -5666,6 +5725,7 @@
     // When set, _autoSelectSatSource uses this value instead of computing from location.
     // Consumed once (cleared after use) so storm-popup "View Satellite" can override auto-pick.
     let _satSourceOverride = null;
+    let _tropicalSectorOverride = null; // storm name to match against Himawari TC sectors
     let _himawariSectors = [];
     let _currentHimawariSectorId = '';
 
@@ -5708,6 +5768,17 @@
                 const basin = sec.basin_name || sec.basin || '';
                 opt.textContent = `${sec.name || sec.id} (${sec.safe_id}) • ${sec.classification_label || 'TC'} • ${windTxt}${basin ? ` • ${basin}` : ''}`;
                 sel.appendChild(opt);
+            }
+            // If a storm name override was requested (from viewSatelliteForStorm), try to
+            // find a matching sector by name or safe_id and auto-select it.
+            if (_tropicalSectorOverride) {
+                const needle = _tropicalSectorOverride.toUpperCase();
+                const match = _himawariSectors.find(s =>
+                    (s.name || '').toUpperCase().includes(needle) ||
+                    (s.safe_id || '').toUpperCase().includes(needle)
+                );
+                if (match) _currentHimawariSectorId = match.safe_id;
+                _tropicalSectorOverride = null;
             }
             if (_currentHimawariSectorId && !_himawariSectors.some(s => s.safe_id === _currentHimawariSectorId)) {
                 _currentHimawariSectorId = '';
@@ -7246,6 +7317,11 @@
 
 
     function switchLayer(layer) {
+        // Temperature / Wind / Clouds are shortcuts into RTMA with the matching product pre-selected.
+        if (layer === 'temperature') { _currentRtmaProduct = 'temp';  const s = document.getElementById('rtma-product-select'); if (s) s.value = 'temp';  layer = 'rtma'; }
+        else if (layer === 'wind')   { _currentRtmaProduct = 'wind';  const s = document.getElementById('rtma-product-select'); if (s) s.value = 'wind';  layer = 'rtma'; }
+        else if (layer === 'clouds') { _currentRtmaProduct = 'cloud'; const s = document.getElementById('rtma-product-select'); if (s) s.value = 'cloud'; layer = 'rtma'; }
+
         if (layer !== 'radar')            clearRadarLayer();          // clean up when leaving
         if (layer !== 'satellite')        clearSatLayer();
         if (layer !== 'rtma')             clearRtmaLayer();
@@ -7444,7 +7520,7 @@
             window._spaMap = map;
             map.addControl(new mapboxgl.NavigationControl(), 'top-right');
             // Use a custom container for FullscreenControl so modals inside it stay visible
-            map.addControl(new mapboxgl.FullscreenControl({ container: document.getElementById('map-view-wrap') }), 'top-right');
+            map.addControl(new mapboxgl.FullscreenControl({ container: document.getElementById('maps-fullscreen-root') }), 'top-right');
             map.on('load', () => {
                 const styleLayers = map.getStyle().layers;
                 firstSymbolLayerId = undefined;
@@ -7504,18 +7580,23 @@
 
     function _handleFullscreenChange() {
         const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+        const fsRoot = document.getElementById('maps-fullscreen-root');
         if (fsEl) {
-            // Entering fullscreen: move modals inside the fullscreen element
+            // Entering fullscreen: move modals inside the fullscreen root so they stay visible
+            const target = (fsRoot && fsEl.contains(fsRoot)) ? fsRoot : fsEl;
             _MODAL_IDS.forEach(id => {
                 const el = document.getElementById(id);
-                if (el && el.parentElement !== fsEl) fsEl.appendChild(el);
+                if (el && el.parentElement !== target) target.appendChild(el);
             });
+            // Let the map fill its new container dimensions
+            if (map) setTimeout(() => map.resize(), 100);
         } else {
             // Exiting fullscreen: move modals back to document body
             _MODAL_IDS.forEach(id => {
                 const el = document.getElementById(id);
                 if (el && el.parentElement !== document.body) document.body.appendChild(el);
             });
+            if (map) setTimeout(() => map.resize(), 100);
         }
     }
 
