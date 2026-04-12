@@ -831,6 +831,13 @@ async function _fetchSPCCatData(url) {
         const r = await fetch(url, { cache: 'no-store' });
         if (r.ok) return r.json();
     } catch (_) { /* fall through */ }
+    // Proxy 1: codetabs — works for WPC gov endpoints that block CORS
+    try {
+        const p1 = 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(url);
+        const r1 = await fetch(p1, { cache: 'no-store' });
+        if (r1.ok) return r1.json();
+    } catch (_) { /* fall through */ }
+    // Proxy 2: corsproxy.io as last resort
     const proxy = 'https://corsproxy.io/?' + encodeURIComponent(url);
     const r2 = await fetch(proxy, { cache: 'no-store' });
     if (!r2.ok) throw new Error('SPC fetch failed (' + r2.status + ')');
