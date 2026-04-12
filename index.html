@@ -4515,7 +4515,7 @@
                 <div class="popup-stat"><span class="popup-key">Storm Radius</span><span class="popup-val">${radius}</span></div>
                 ${intensityNote}
                 <div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
-                    <button onclick="viewSatelliteForStorm(${stormLon}, ${stormLat}, ${JSON.stringify(p._stormName || '')})"
+                    <button onclick="viewSatelliteForStorm(${stormLon}, ${stormLat}, '${(p._stormName || '').replace(/'/g, '')}')"
                             style="width:100%;padding:5px 10px;background:rgba(68,187,255,0.12);border:1px solid rgba(68,187,255,0.35);border-radius:6px;color:#44bbff;cursor:pointer;font-size:12px;font-weight:500;">
                         View Satellite
                     </button>
