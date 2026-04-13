@@ -43,7 +43,7 @@ const FairWeatherIndex = (() => {
 
     // ── Component scorers ─────────────────────────────────────────────────────
 
-    // Feels-like temperature, seasonally adjusted (max 25 pts)
+    // Feels-like temperature, seasonally adjusted (max 35 pts)
     //
     // Scoring is asymmetric by season:
     //   Cool months (Oct–Apr): being warmer than the seasonal center is a
@@ -51,9 +51,14 @@ const FairWeatherIndex = (() => {
     //     before the penalty curve kicks in.
     //   Warm months (May–Sep): being hotter than center is still penalized
     //     normally; being slightly cooler (up to 5°F) gets a free pass.
-    function _scoreTemperature(feelsLike, month) {
+    //
+    // targetOverride — when provided (from ClimateNormals), replaces the
+    // hardcoded SEASONAL_CENTER value for this month so the target reflects
+    // the actual historical average for the location rather than a PA-centric
+    // default.
+    function _scoreTemperature(feelsLike, month, targetOverride) {
         if (feelsLike == null) return { pts: null, max: 35, available: false };
-        const center = SEASONAL_CENTER[month];
+        const center = (targetOverride != null) ? targetOverride : SEASONAL_CENTER[month];
         const delta = feelsLike - center; // positive = warmer than seasonal center
 
         // Months 0–3 (Jan–Apr) and 9–11 (Oct–Dec) are cool season
@@ -161,21 +166,36 @@ const FairWeatherIndex = (() => {
     /**
      * Calculate the fair weather index for a forecast day (or hour).
      *
+     * When ClimateNormals has been loaded for the current location, the
+     * temperature target is the historical average apparent-max temperature
+     * for that calendar day at that location, rather than a hardcoded
+     * PA-centric monthly value.
+     *
      * @param {Object} day  - A daily or hourly forecast object
      * @returns {{ score, label, short, color, bg, score100, details }}
      */
     function calculate(day) {
-        // Determine the month from the day's date string
+        // Determine the month (and full date key) from the day's date string
         const dateStr = day.displayDate || day.interval?.startTime;
         let month = new Date().getMonth(); // fallback to current month
+        let dateKey = null; // 'YYYY-MM-DD' for climate normals lookup
         if (dateStr) {
             if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-                month = parseInt(dateStr.split('-')[1], 10) - 1;
+                month   = parseInt(dateStr.split('-')[1], 10) - 1;
+                dateKey = dateStr;
             } else {
                 const d = new Date(dateStr);
-                if (!isNaN(d)) month = d.getMonth();
+                if (!isNaN(d)) {
+                    month   = d.getMonth();
+                    dateKey = d.toISOString().slice(0, 10);
+                }
             }
         }
+
+        // Look up location-specific historical target temperature if available
+        const climateTarget = (typeof ClimateNormals !== 'undefined')
+            ? ClimateNormals.getTargetTemp(dateKey)
+            : null;
 
         // Pull values — support both daily and hourly field shapes
         const feelsLike     = day.feelsLikeMax?.degrees
@@ -190,7 +210,7 @@ const FairWeatherIndex = (() => {
         const conditionType = day.weatherCondition?.type ?? '';
 
         // Score each factor
-        const tempResult   = _scoreTemperature(feelsLike, month);
+        const tempResult   = _scoreTemperature(feelsLike, month, climateTarget);
         const humidResult  = _scoreHumidity(humidity);
         const windResult   = _scoreWind(windSpeed, windGust);
         const cloudResult  = _scoreCloudCover(cloudCover);
@@ -220,14 +240,15 @@ const FairWeatherIndex = (() => {
             bg:       rating.bg,
             score100: Math.round(score100),
             details: {
-                temperature:   tempResult,
-                humidity:      humidResult,
-                wind:          windResult,
-                cloudCover:    cloudResult,
-                precipitation: precipResult,
+                temperature:        tempResult,
+                humidity:           humidResult,
+                wind:               windResult,
+                cloudCover:         cloudResult,
+                precipitation:      precipResult,
                 feelsLike,
                 month,
-                seasonalCenter: SEASONAL_CENTER[month],
+                seasonalCenter:     climateTarget ?? SEASONAL_CENTER[month],
+                climateNormalUsed:  climateTarget != null,
             },
         };
     }
