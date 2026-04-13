@@ -46,6 +46,12 @@ async function initCurrentView(lat, lng) {
     // so it doesn't need to block the main weather data rendering.
     const _alertsTask = loadAndRenderAlerts(lat, lng).catch(err => console.warn('Alerts error:', err));
 
+    // Load climate normals in parallel so FairWeatherIndex can use
+    // location-specific historical temperature targets for FWI scoring.
+    const _normalsTask = (typeof ClimateNormals !== 'undefined')
+        ? ClimateNormals.loadForLocation(lat, lng).catch(e => console.warn('Climate normals unavailable:', e))
+        : Promise.resolve();
+
     // Fetch weather data in parallel
     const [currentResult, hourlyResult, dailyResult, aqiResult, pollenResult] = await Promise.allSettled([
         _getCurrentFn(),
@@ -56,6 +62,9 @@ async function initCurrentView(lat, lng) {
         WeatherAPI.getAirQuality(lat, lng),
         WeatherAPI.getPollen(lat, lng)
     ]);
+
+    // Ensure normals are ready before rendering FWI badges
+    await _normalsTask;
 
     // --- Current Conditions ---
     if (currentResult.status === 'fulfilled') {

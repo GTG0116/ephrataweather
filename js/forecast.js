@@ -42,6 +42,12 @@ async function initForecastView(lat, lng) {
     _spcFireCache = {};
     _openDayDetailIndex = -1;
 
+    // Load climate normals in parallel with weather data so FairWeatherIndex
+    // can use location-specific historical temperature targets.
+    const _normalsTask = (typeof ClimateNormals !== 'undefined')
+        ? ClimateNormals.loadForLocation(lat, lng).catch(e => console.warn('Climate normals unavailable:', e))
+        : Promise.resolve();
+
     const _src = WeatherAPI.getDataSource();
     try {
         let data;
@@ -49,6 +55,8 @@ async function initForecastView(lat, lng) {
         else if (_src === 'open-meteo') data = await WeatherAPI.getOpenMeteoDailyForecast(lat, lng, 10);
         else if (_src === 'owm') data = await WeatherAPI.getOWMDailyForecast(lat, lng, 7);
         else data = await WeatherAPI.getDailyForecast(lat, lng, 10);
+        // Ensure normals are ready before rendering so FWI targets are accurate
+        await _normalsTask;
         renderForecast(data);
         // Fetch SPC, WPC, and fire weather risk data in the background (non-blocking)
         _loadSPCForecastData(lat, lng);
@@ -842,7 +850,7 @@ function _renderDayDetailFWI(day) {
             <div class="fwi-detail-label" style="color:${fwi.color};">${fwi.label}</div>
             <div class="fwi-detail-sub">Fair Weather Index &bull; ${fwi.score100}/100</div>
             <div class="fwi-detail-sub" style="margin-top:3px;">
-                Seasonal comfort target: ~${fwi.details.seasonalCenter}\u00B0F feels like
+                ${fwi.details.climateNormalUsed ? 'Historical avg target' : 'Seasonal comfort target'}: ~${Math.round(fwi.details.seasonalCenter)}\u00B0F feels like
                 ${fwi.details.feelsLike != null ? `&bull; actual ${Math.round(fwi.details.feelsLike)}\u00B0F` : ''}
             </div>
         </div>
