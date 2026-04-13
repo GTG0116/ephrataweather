@@ -1943,6 +1943,93 @@ body {
     }
 }
 
+/* --- Alert Modal Summary Card (WHAT / WHEN / WHERE / IMPACTS) --- */
+.alert-modal-summary {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.alert-summary-row {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+}
+
+.alert-summary-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    min-width: 58px;
+    flex-shrink: 0;
+}
+
+.alert-summary-text {
+    font-size: 0.84rem;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+/* --- Alert Modal Safety Advice --- */
+.alert-modal-advice {
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    margin-bottom: 12px;
+    border-left: 3px solid;
+}
+
+.alert-advice-critical {
+    background: rgba(220, 50, 50, 0.1);
+    border-color: #e53935;
+}
+
+.alert-advice-warning {
+    background: rgba(255, 152, 0, 0.1);
+    border-color: #fb8c00;
+}
+
+.alert-advice-advisory {
+    background: rgba(66, 165, 245, 0.1);
+    border-color: #42a5f5;
+}
+
+.alert-advice-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    margin-bottom: 7px;
+    color: var(--text-primary);
+}
+
+.alert-advice-steps {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.alert-advice-steps li {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+@media (max-width: 920px) {
+    .alert-modal-summary { padding: 10px 12px; }
+    .alert-summary-label { min-width: 52px; font-size: 0.68rem; }
+    .alert-summary-text  { font-size: 0.8rem; }
+    .alert-modal-advice  { padding: 10px 12px; }
+    .alert-advice-title  { font-size: 0.8rem; }
+    .alert-advice-steps li { font-size: 0.78rem; }
+}
+
 /* --- Alert Modal Action Buttons (screenshot / share / view on radar) --- */
 .alert-modal-actions {
     display: flex;
