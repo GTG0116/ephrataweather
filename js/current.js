@@ -280,15 +280,51 @@ function _extractSevereThunderstormDetails(alert) {
 }
 
 // ---- Parse structured NWS sections (WHAT / WHERE / WHEN / IMPACTS) ----
-// NWS uses "* WHAT..." "* WHERE..." etc. as section headers in alert text.
+// Handles both modern format ("* WHAT...") and older format ("HAZARD...").
+// Always returns at least a 'WHAT' entry from the first meaningful paragraph.
 function _parseAlertSections(description) {
+    if (!description) return {};
     const sections = {};
-    const re = /\*\s*(WHAT|WHERE|WHEN|IMPACTS|ADDITIONAL DETAILS)\.\.\.([\s\S]*?)(?=\n\s*\*\s*[A-Z]|PRECAUTIONARY\/PREPAREDNESS ACTIONS|&&|\s*$)/gi;
+
+    // 1. Try modern NWS CAP format: "* WHAT...", "* WHERE...", "* WHEN...", "* IMPACTS..."
+    const modernRe = /\*\s*(WHAT|WHERE|WHEN|IMPACTS|ADDITIONAL DETAILS)\.\.\.([\s\S]*?)(?=\n\s*\*\s*[A-Z]|PRECAUTIONARY\/PREPAREDNESS ACTIONS|&&|\s*$)/gi;
     let match;
-    while ((match = re.exec(description)) !== null) {
+    while ((match = modernRe.exec(description)) !== null) {
         const text = match[2].trim().replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ');
         if (text) sections[match[1].toUpperCase()] = text;
     }
+
+    // 2. Try older NWS format: "HAZARD...", "SOURCE...", "IMPACT..."
+    if (!sections['WHAT']) {
+        const hazardM = /\bHAZARD\.\.\.([\s\S]*?)(?=\n\s*[A-Z]+\.\.\.|&&|\s*$)/i.exec(description);
+        if (hazardM) {
+            const t = hazardM[1].trim().replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ');
+            if (t) sections['WHAT'] = t;
+        }
+    }
+    if (!sections['IMPACTS']) {
+        const impactM = /\bIMPACT\.\.\.([\s\S]*?)(?=\n\s*[A-Z]+\.\.\.|Locations impacted|&&|\s*$)/i.exec(description);
+        if (impactM) {
+            const t = impactM[1].trim().replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ');
+            if (t) sections['IMPACTS'] = t;
+        }
+    }
+
+    // 3. Fallback: extract the first substantive paragraph (skip preamble lines like "...WARNING...")
+    if (!sections['WHAT']) {
+        const lines = description.split('\n');
+        const meaningful = [];
+        for (const line of lines) {
+            const t = line.trim();
+            if (!t || /^\.\.\.[A-Z]/.test(t)) continue; // skip "...WARNING IN EFFECT..." lines
+            meaningful.push(t);
+            if (meaningful.length >= 3) break;
+        }
+        if (meaningful.length) {
+            sections['WHAT'] = meaningful.join(' ').replace(/\s{2,}/g, ' ').slice(0, 300);
+        }
+    }
+
     return sections;
 }
 
@@ -523,6 +559,127 @@ function _getAlertAdvice(alert) {
                 'All mariners should avoid going out on affected waters',
                 'Secure all loose gear and equipment',
                 'Monitor VHF marine radio for updated conditions',
+            ]
+        };
+    }
+    if (event.includes('freeze warning') || event.includes('hard freeze warning')) {
+        return {
+            level: 'warning',
+            title: 'Protect Sensitive Plants and Pipes',
+            steps: [
+                'Cover or bring in tender plants, flowers, and vegetables',
+                'Wrap or insulate exposed outdoor pipes to prevent freezing and bursting',
+                'Bring pets and outdoor animals inside',
+                'Disconnect and drain garden hoses',
+            ]
+        };
+    }
+    if (event.includes('freeze watch') || event.includes('frost advisory')) {
+        return {
+            level: 'advisory',
+            title: 'Protect Plants and Pipes Tonight',
+            steps: [
+                'Cover sensitive plants, flowers, and garden beds before nightfall',
+                'Bring potted plants and hanging baskets indoors',
+                'Protect exposed water pipes in unheated areas',
+                'Bring pets indoors overnight',
+            ]
+        };
+    }
+    if (event.includes('winter weather advisory')) {
+        return {
+            level: 'advisory',
+            title: 'Slippery Travel Conditions Expected',
+            steps: [
+                'Allow extra time for travel — roads may be slick or snow-covered',
+                'Reduce speed and increase following distance',
+                'Carry an emergency kit in your vehicle',
+                'Check road conditions before departing',
+            ]
+        };
+    }
+    if (event.includes('wind chill warning') || event.includes('wind chill advisory')) {
+        return {
+            level: event.includes('warning') ? 'warning' : 'advisory',
+            title: 'Dangerous Wind Chills',
+            steps: [
+                'Limit time outdoors — exposed skin can suffer frostbite rapidly',
+                'Dress in multiple warm layers, covering all exposed skin',
+                'Keep children and pets indoors when wind chills are dangerous',
+                'Watch for signs of frostbite (numbness, white/pale skin) and hypothermia',
+            ]
+        };
+    }
+    if (event.includes('coastal flood') || event.includes('lakeshore flood')) {
+        return {
+            level: event.includes('warning') ? 'warning' : 'advisory',
+            title: 'Coastal Flooding Expected',
+            steps: [
+                'Stay away from low-lying coastal and waterfront areas',
+                'Do not attempt to walk or drive through flooded streets',
+                'Move vehicles and valuables away from flood-prone areas',
+                'Monitor updates from local emergency management',
+            ]
+        };
+    }
+    if (event.includes('rip current') || event.includes('high surf') || event.includes('beach hazards')) {
+        return {
+            level: 'warning',
+            title: 'Dangerous Beach and Water Conditions',
+            steps: [
+                'Stay out of the water — dangerous currents can overpower even strong swimmers',
+                'If caught in a rip current, swim parallel to shore, then angle back to the beach',
+                'Never swim alone or beyond designated swimming areas',
+                'Obey all beach closure signs and flags',
+            ]
+        };
+    }
+    if (event.includes('air quality') || event.includes('smoke')) {
+        return {
+            level: 'advisory',
+            title: 'Unhealthy Air Quality',
+            steps: [
+                'Limit strenuous outdoor activities, especially for children and the elderly',
+                'Keep windows and doors closed and run air conditioning if available',
+                'Wear an N95 or higher-rated mask if you must be outdoors for extended periods',
+                'Those with asthma, heart disease, or lung conditions should stay indoors',
+            ]
+        };
+    }
+    if (event.includes('special weather statement') || event.includes('hazardous weather outlook')) {
+        return {
+            level: 'advisory',
+            title: 'Weather Awareness',
+            steps: [
+                'Read the full statement for specific hazards and timing in your area',
+                'Monitor weather conditions and stay updated on forecasts',
+                'Be prepared to act quickly if conditions deteriorate',
+                'Follow guidance from local emergency management officials',
+            ]
+        };
+    }
+    // Generic fallback for any unrecognized alert type
+    const severity = (alert.severity || '').toLowerCase();
+    if (severity === 'extreme' || severity === 'severe' || event.includes('warning')) {
+        return {
+            level: severity === 'extreme' ? 'critical' : 'warning',
+            title: 'Follow Official Guidance',
+            steps: [
+                'Read the full alert text for specific hazards and timing',
+                'Monitor weather updates and be ready to take action',
+                'Follow all guidance from local emergency management officials',
+                'Have an emergency plan and kit prepared',
+            ]
+        };
+    }
+    if (event.includes('watch') || event.includes('advisory') || event.includes('statement')) {
+        return {
+            level: 'advisory',
+            title: 'Stay Informed',
+            steps: [
+                'Read the full alert text for specific hazards and timing in your area',
+                'Monitor weather conditions and stay updated on forecasts',
+                'Be prepared to act quickly if conditions deteriorate',
             ]
         };
     }
