@@ -279,6 +279,256 @@ function _extractSevereThunderstormDetails(alert) {
     return (wind || hail) ? { wind, hail } : null;
 }
 
+// ---- Parse structured NWS sections (WHAT / WHERE / WHEN / IMPACTS) ----
+// NWS uses "* WHAT..." "* WHERE..." etc. as section headers in alert text.
+function _parseAlertSections(description) {
+    const sections = {};
+    const re = /\*\s*(WHAT|WHERE|WHEN|IMPACTS|ADDITIONAL DETAILS)\.\.\.([\s\S]*?)(?=\n\s*\*\s*[A-Z]|PRECAUTIONARY\/PREPAREDNESS ACTIONS|&&|\s*$)/gi;
+    let match;
+    while ((match = re.exec(description)) !== null) {
+        const text = match[2].trim().replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ');
+        if (text) sections[match[1].toUpperCase()] = text;
+    }
+    return sections;
+}
+
+// ---- Safety advice lookup by alert type ----
+// Returns { level: 'critical'|'warning'|'advisory', title, steps[] } or null.
+function _getAlertAdvice(alert) {
+    const event = (alert.event || '').toLowerCase();
+    const subtype = _alertSubtype(alert);
+
+    if (subtype?.type === 'tornado_emergency') {
+        return {
+            level: 'critical',
+            title: 'Tornado Emergency — Extreme Danger',
+            steps: [
+                'Take cover in the lowest interior room of a sturdy building NOW',
+                'Avoid all windows — this is a confirmed life-threatening tornado',
+                'Cover your body with a mattress, cushions, or heavy blankets',
+                'Mobile homes, vehicles, and bridges provide NO protection',
+            ]
+        };
+    }
+    if (event.includes('tornado warning')) {
+        return {
+            level: 'critical',
+            title: 'Take Shelter Immediately',
+            steps: [
+                'Go to an interior room on the lowest floor of a sturdy building',
+                'Stay away from all windows',
+                'If caught outdoors, get to the nearest building; if no shelter, lie flat in a low-lying area and cover your head',
+                'Do not shelter under bridges or overpasses',
+            ]
+        };
+    }
+    if (event.includes('tornado watch')) {
+        return {
+            level: 'warning',
+            title: 'Be Ready to Take Shelter',
+            steps: [
+                'Know your shelter location before a warning is issued',
+                'Monitor weather updates closely — conditions can change rapidly',
+                'Prepare an emergency kit and be ready to act quickly',
+                'Keep a NOAA Weather Radio or weather app nearby',
+            ]
+        };
+    }
+    if (event.includes('severe thunderstorm warning')) {
+        return {
+            level: 'warning',
+            title: 'Seek Sturdy Shelter Indoors',
+            steps: [
+                'Move indoors to a sturdy building immediately',
+                'Stay away from windows and doors',
+                'Unplug sensitive electronics to protect from power surges',
+                'Avoid trees, open areas, tall structures, and bodies of water',
+            ]
+        };
+    }
+    if (event.includes('severe thunderstorm watch')) {
+        return {
+            level: 'advisory',
+            title: 'Severe Thunderstorms Possible',
+            steps: [
+                'Know where you will shelter if a warning is issued',
+                'Avoid outdoor activities in open areas',
+                'Monitor weather updates closely',
+                'Be ready to move indoors quickly',
+            ]
+        };
+    }
+    if (event.includes('flash flood warning') || event.includes('flash flood emergency')) {
+        return {
+            level: 'critical',
+            title: 'Move to Higher Ground Now',
+            steps: [
+                'Move away from streams, rivers, and low-lying areas immediately',
+                'Never walk, swim, or drive through flood waters — Turn Around, Don\'t Drown',
+                'Just 6 inches of fast-moving water can knock you down; 12 inches can carry a vehicle',
+                'Evacuate immediately if directed by local officials',
+            ]
+        };
+    }
+    if (event.includes('flash flood watch') || event.includes('flood watch')) {
+        return {
+            level: 'advisory',
+            title: 'Prepare for Potential Flooding',
+            steps: [
+                'Stay informed and monitor local emergency alerts',
+                'Move valuables and important documents to higher floors',
+                'Know your evacuation routes before flooding begins',
+                'Avoid areas that are prone to rapid flooding',
+            ]
+        };
+    }
+    if (event.includes('flood warning')) {
+        return {
+            level: 'warning',
+            title: 'Avoid Flooded Areas',
+            steps: [
+                'Stay away from rivers, streams, and flooded roads',
+                'Do not drive through water of unknown depth',
+                'Turn around if roads are flooded — Turn Around, Don\'t Drown',
+                'Evacuate if directed by local officials',
+            ]
+        };
+    }
+    if (event.includes('blizzard warning')) {
+        return {
+            level: 'warning',
+            title: 'Stay Indoors — Do Not Travel',
+            steps: [
+                'Avoid all travel — whiteout conditions will be life-threatening',
+                'If you must go out, dress in waterproof layers and carry an emergency kit',
+                'Have flashlights, batteries, extra food, and water on hand',
+                'Check on neighbors and anyone without adequate shelter or heat',
+            ]
+        };
+    }
+    if (event.includes('ice storm warning')) {
+        return {
+            level: 'warning',
+            title: 'Dangerous Icing Conditions',
+            steps: [
+                'Avoid driving — ice will make roads extremely hazardous',
+                'Expect widespread power outages; have flashlights and backup heat ready',
+                'If you must walk outside, wear footwear with good traction',
+                'Stay away from downed power lines and damaged trees',
+            ]
+        };
+    }
+    if (event.includes('winter storm warning') || event.includes('winter storm watch')) {
+        return {
+            level: 'warning',
+            title: 'Prepare for Winter Storm Conditions',
+            steps: [
+                'Avoid unnecessary travel, especially when roads are icy or snow-covered',
+                'Stock up on supplies, food, and medications in case you lose power',
+                'Have flashlights, batteries, and a backup heat source ready',
+                'Bring pets indoors and check on elderly neighbors',
+            ]
+        };
+    }
+    if (event.includes('snow squall warning')) {
+        return {
+            level: 'warning',
+            title: 'Dangerous Driving Conditions Imminent',
+            steps: [
+                'Visibility can drop to near zero within seconds — reduce speed now',
+                'Exit at the nearest ramp if possible before the squall hits',
+                'Turn on hazard lights but do not stop on the highway shoulder',
+                'Allow extra following distance and avoid sudden braking on slick roads',
+            ]
+        };
+    }
+    if (event.includes('high wind warning')) {
+        return {
+            level: 'warning',
+            title: 'Dangerous Wind Conditions',
+            steps: [
+                'Secure or bring in all outdoor furniture, decorations, and loose objects',
+                'Avoid driving high-profile vehicles (RVs, box trucks) or towing trailers',
+                'Stay away from trees and power lines that could fall',
+                'Prepare for possible extended power outages',
+            ]
+        };
+    }
+    if (event.includes('red flag warning')) {
+        return {
+            level: 'critical',
+            title: 'Critical Fire Weather — Extreme Danger',
+            steps: [
+                'Do not start any outdoor fires — burning bans are likely in effect',
+                'Report any smoke or fire immediately by calling 911',
+                'If in a fire-prone area, review your defensible space and evacuation plan',
+                'Be ready to evacuate quickly if a wildfire starts nearby',
+            ]
+        };
+    }
+    if (event.includes('fire weather watch')) {
+        return {
+            level: 'warning',
+            title: 'Critical Fire Weather Possible',
+            steps: [
+                'Avoid any outdoor burning or activities that could spark a fire',
+                'Report smoke or fire immediately to local authorities',
+                'Review your home\'s defensible space around structures',
+                'Know your evacuation plan and be ready to leave quickly',
+            ]
+        };
+    }
+    if (event.includes('excessive heat warning') || event.includes('heat advisory') || event.includes('excessive heat watch')) {
+        return {
+            level: 'advisory',
+            title: 'Protect Yourself from Dangerous Heat',
+            steps: [
+                'Stay hydrated — drink water regularly, even if you don\'t feel thirsty',
+                'Avoid strenuous outdoor activity during peak heat hours (10 AM – 4 PM)',
+                'Never leave children, elderly, or pets in a parked vehicle',
+                'Check on neighbors, the elderly, and those without air conditioning',
+            ]
+        };
+    }
+    if (event.includes('dense fog advisory')) {
+        return {
+            level: 'advisory',
+            title: 'Reduced Visibility — Drive With Caution',
+            steps: [
+                'Slow down and allow extra following distance',
+                'Use low-beam headlights — high beams reflect off fog and reduce visibility',
+                'Do not stop on roads or highway shoulders in dense fog',
+                'Delay travel if visibility is severely limited',
+            ]
+        };
+    }
+    if (event.includes('wind advisory') || event.includes('high wind watch')) {
+        return {
+            level: 'advisory',
+            title: 'Gusty Wind Conditions Expected',
+            steps: [
+                'Secure lightweight outdoor items that could be blown away',
+                'Use caution when driving, especially in high-profile vehicles',
+                'Expect possible tree limb damage and isolated power outages',
+                'Stay away from damaged trees or downed power lines',
+            ]
+        };
+    }
+    if (event.includes('special marine warning')) {
+        return {
+            level: 'warning',
+            title: 'Dangerous Marine Conditions',
+            steps: [
+                'Return to port or seek safe harbor immediately',
+                'All mariners should avoid going out on affected waters',
+                'Secure all loose gear and equipment',
+                'Monitor VHF marine radio for updated conditions',
+            ]
+        };
+    }
+    return null;
+}
+
 function _alertClass(alert) {
     const event = (alert.event || '').toLowerCase();
     const severity = (alert.severity || '').toLowerCase();
@@ -589,11 +839,16 @@ function openAlertDetail(indexOrAlert, skipMap) {
     titleEl.textContent = alert.headline || alert.event || 'Weather Alert';
     metaEl.textContent = `Effective: ${_formatAlertTime(alert.onset || alert.effective)} • Expires: ${_formatAlertTime(alert.expires)} • Areas: ${alert.areaDesc || 'N/A'}`;
 
+    // Remove any previously injected dynamic elements
+    ['alert-modal-extra', 'alert-modal-summary', 'alert-modal-advice'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    });
+
     // Inject subtype badge and thunderstorm details below the meta line
-    const existingExtra = document.getElementById('alert-modal-extra');
-    if (existingExtra) existingExtra.remove();
     const subtype = _alertSubtype(alert);
     const tstmDetails = _extractSevereThunderstormDetails(alert);
+    let lastInserted = metaEl;
     if (subtype || tstmDetails) {
         const extraEl = document.createElement('div');
         extraEl.id = 'alert-modal-extra';
@@ -615,7 +870,38 @@ function openAlertDetail(indexOrAlert, skipMap) {
                 extraEl.appendChild(detailSpan);
             }
         }
-        metaEl.insertAdjacentElement('afterend', extraEl);
+        lastInserted.insertAdjacentElement('afterend', extraEl);
+        lastInserted = extraEl;
+    }
+
+    // ---- Summary card: WHAT / WHEN / WHERE / IMPACTS extracted from NWS text ----
+    const sections = _parseAlertSections(alert.description || '');
+    if (Object.keys(sections).length) {
+        const summaryEl = document.createElement('div');
+        summaryEl.id = 'alert-modal-summary';
+        summaryEl.className = 'alert-modal-summary';
+        const ORDER = ['WHAT', 'WHEN', 'WHERE', 'IMPACTS', 'ADDITIONAL DETAILS'];
+        const LABELS = { WHAT: 'What', WHEN: 'When', WHERE: 'Where', IMPACTS: 'Impacts', 'ADDITIONAL DETAILS': 'Details' };
+        summaryEl.innerHTML = ORDER.filter(k => sections[k]).map(k =>
+            `<div class="alert-summary-row">
+                <span class="alert-summary-label">${LABELS[k]}</span>
+                <span class="alert-summary-text">${_escapeHtml(sections[k])}</span>
+            </div>`
+        ).join('');
+        lastInserted.insertAdjacentElement('afterend', summaryEl);
+        lastInserted = summaryEl;
+    }
+
+    // ---- Safety advice based on alert type ----
+    const advice = _getAlertAdvice(alert);
+    if (advice) {
+        const adviceEl = document.createElement('div');
+        adviceEl.id = 'alert-modal-advice';
+        adviceEl.className = `alert-modal-advice alert-advice-${advice.level}`;
+        adviceEl.innerHTML =
+            `<div class="alert-advice-title">${_escapeHtml(advice.title)}</div>` +
+            `<ul class="alert-advice-steps">${advice.steps.map(s => `<li>${_escapeHtml(s)}</li>`).join('')}</ul>`;
+        lastInserted.insertAdjacentElement('afterend', adviceEl);
     }
 
     const parts = [alert.description, alert.instruction].filter(Boolean);

@@ -2696,7 +2696,7 @@
             sections: [{
                 label: 'HAIL DIAMETER (IN)',
                 gradient: 'linear-gradient(to right, #AAFF00 0%, #FFFF00 28%, #FF8800 55%, #FF2200 78%, #AA0000 100%)',
-                ticks: ['0.25"\nPea', '0.75"', '1.75"\nGolf', '3.0"\nBaseball']
+                ticks: ['0.25"\nPea', '0.75"', '1.75"\nGolf', '3.0"+\nBaseball+']
             }]
         },
         qpe6h: {
@@ -2802,9 +2802,10 @@
 
     // Decode exact value from a value PNG pixel (R=high byte, G=low byte of uint16).
     // Encoding: val = (R*256 + G) / 65535 * maxVal
+    // MESH max_val matches the pipeline in EphrataWeather/MRMS scripts/process_mrms.py
     function _decodeMrmsValue(product, r, g) {
         const MAX_VALS = {
-            mesh:      3.00,
+            mesh:      8.0,   // MESH encoded up to 8.0" in the pipeline
             qpe6h:     8.00,
             qpe24h:   16.00,
             lightning: 90,
