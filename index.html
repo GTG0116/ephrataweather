@@ -800,7 +800,7 @@
         #img-zoom-overlay.open { display: flex !important; }
 
         @media (max-width: 640px) {
-            .map-wrapper { height: calc(100vh - 370px); min-height: 360px; }
+            .map-wrapper { height: calc(100vh - 370px); height: calc(100svh - 370px); min-height: 360px; }
             .hero-section { padding: 32px 16px 36px; }
             .hero-section h2 { font-size: 1.8rem; }
             .nav-cards { grid-template-columns: 1fr; gap: 12px; }
@@ -7522,6 +7522,32 @@
             map.addControl(new mapboxgl.NavigationControl(), 'top-right');
             // Use a custom container for FullscreenControl so modals inside it stay visible
             map.addControl(new mapboxgl.FullscreenControl({ container: document.getElementById('maps-fullscreen-root') }), 'top-right');
+
+            // On mobile the browser URL bar can hide/show when the user interacts with
+            // the map.  This changes window.innerHeight (100vh), which makes the map
+            // container taller.  Mapbox GL's internal ResizeObserver then resizes the
+            // canvas — keeping the same zoom level but showing more area, which looks
+            // like an unwanted "PC-style" zoom-out.  The primary fix is the CSS change
+            // to 100svh (Small Viewport Height), which stays constant regardless of
+            // URL-bar state.  As a belt-and-suspenders guard for browsers that don't
+            // support svh, we watch for container growth that the user didn't trigger
+            // and snap the zoom back to the mobile-appropriate level.
+            if (window.innerWidth <= 640) {
+                const _mobileInitialZoom = 5;
+                let _lastMapContainerH = document.getElementById('map').offsetHeight;
+                let _userZoomed = false;
+                map.on('zoomstart', (e) => { if (e.originalEvent) _userZoomed = true; });
+                map.on('resize', () => {
+                    const newH = document.getElementById('map').offsetHeight;
+                    // Only snap back when the container grows unexpectedly (URL-bar
+                    // collapse adds ~60–80 px) and the user hasn't intentionally zoomed.
+                    if (!_userZoomed && newH > _lastMapContainerH + 20) {
+                        map.jumpTo({ zoom: _mobileInitialZoom });
+                    }
+                    _lastMapContainerH = newH;
+                });
+            }
+
             map.on('load', () => {
                 const styleLayers = map.getStyle().layers;
                 firstSymbolLayerId = undefined;
