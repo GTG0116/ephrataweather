@@ -702,19 +702,19 @@ function _getWarningTierExplainer(alert) {
                     type: null,
                     label: 'Warning',
                     colorClass: null,
-                    desc: 'Tornado indicated by radar or reported by a spotter. Take shelter immediately in a sturdy building.'
+                    desc: 'Tornado indicated by radar or rotation is reported by a storm spotter. Take shelter immediately in a sturdy building. Do NOT shelter under an overpass, as winds only get accelerated and increases odds of a crash.'
                 },
                 {
                     type: 'tornado_observed',
                     label: 'Observed',
                     colorClass: 'subtype-observed',
-                    desc: 'A tornado has been confirmed on the ground by a trained spotter or law enforcement. Extremely dangerous.'
+                    desc: 'A tornado has been confirmed on the ground by a trained spotter or law enforcement. Extremely dangerous. Do NOT shelter under an overpass, as winds only get accelerated and increases odds of a crash.'
                 },
                 {
                     type: 'pds_tornado',
                     label: 'PDS',
                     colorClass: 'subtype-pds',
-                    desc: 'Particularly Dangerous Situation — rare, multiple strong and long-track tornadoes expected. Significant threat to life and property.'
+                    desc: 'Particularly Dangerous Situation — Rare, likely strong, damaging tornado is ongoing. Seek shelter IMMEDIATELY.'
                 },
                 {
                     type: 'tornado_emergency',
@@ -735,25 +735,25 @@ function _getWarningTierExplainer(alert) {
                     type: null,
                     label: 'Warning',
                     colorClass: null,
-                    desc: '60+ mph winds or 1"+ hail (quarter-sized). Significant damage to trees and property possible.'
+                    desc: '60+ mph winds or 1"+ hail (quarter-sized). Some damage to trees and property possible. Do NOT shelter under an overpass, as winds only get accelerated and increases odds of a crash.'
                 },
                 {
                     type: 'considerable_tstm',
                     label: 'Considerable',
                     colorClass: 'subtype-considerable',
-                    desc: '70–79 mph winds or 1.75"+ hail (golf ball). Substantial structural damage likely.'
+                    desc: '70–79 mph winds or 1.75"+ hail (golf ball). Substantial structural damage likely. Do NOT shelter under an overpass, as winds only get accelerated and increases odds of a crash.'
                 },
                 {
                     type: 'destructive_tstm',
                     label: 'Destructive',
                     colorClass: 'subtype-emergency',
-                    desc: '80+ mph winds or 2.5"+ hail (baseball). A Wireless Emergency Alert is issued. Life-threatening damage expected. Rare.'
+                    desc: '80+ mph winds or 2.5"+ hail (baseball). A Wireless Emergency Alert is issued. Life-threatening damage expected. Rare. Do NOT shelter under an overpass, as winds only get accelerated and increases odds of a crash.'
                 },
                 {
                     type: 'eds_tstm',
                     label: 'EDS',
                     colorClass: 'subtype-pds',
-                    desc: 'Extremely Dangerous Situation — catastrophic wind and/or hail threat beyond the destructive threshold. Extremely rare.'
+                    desc: 'Extremely Dangerous Situation — catastrophic wind and/or hail threat beyond the destructive threshold. Extremely rare. Do NOT shelter under an overpass, as winds only get accelerated and increases odds of a crash.'
                 },
             ]
         };
