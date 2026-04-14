@@ -993,6 +993,11 @@ body {
 .alert-air-quality::before { background: #808080; }
 .alert-air-quality .alert-title { color: #AAAAAA; }
 
+/* Extreme Wind Warning — orange */
+.alert-extreme-wind-warning { background: rgba(255,136,0,0.18); border: 1px solid rgba(255,136,0,0.42); }
+.alert-extreme-wind-warning::before { background: #FF8800; }
+.alert-extreme-wind-warning .alert-title { color: #FFAA44; }
+
 /* High Wind Warning — goldenrod */
 .alert-high-wind-warning { background: rgba(218,165,32,0.16); border: 1px solid rgba(218,165,32,0.38); }
 .alert-high-wind-warning::before { background: #DAA520; }

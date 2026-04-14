@@ -478,6 +478,19 @@ function _getAlertAdvice(alert) {
             ]
         };
     }
+    if (event.includes('extreme wind warning')) {
+        return {
+            level: 'emergency',
+            title: 'Extreme Wind Event — Life-Threatening Danger',
+            steps: [
+                'Seek shelter immediately in a sturdy interior room away from windows',
+                'Do NOT go outside — winds can be instantly fatal and will down trees and power lines',
+                'Treat this as similar to a major hurricane landfall for wind danger',
+                'Prepare for widespread, long-duration power outages lasting days',
+                'Stay indoors until official all-clear is issued — do not venture out early',
+            ]
+        };
+    }
     if (event.includes('high wind warning')) {
         return {
             level: 'warning',
@@ -817,6 +830,9 @@ function _alertClass(alert) {
     if (event.includes('flood watch'))                   return 'alert-flood-watch';
     if (event.includes('flood advisory'))                return 'alert-flood-advisory';
 
+    // Extreme wind (more specific than high wind)
+    if (event.includes('extreme wind warning'))          return 'alert-extreme-wind-warning';
+
     // High wind (more specific before wind advisory)
     if (event.includes('high wind warning'))             return 'alert-high-wind-warning';
     if (event.includes('high wind watch'))               return 'alert-high-wind-watch';
@@ -994,6 +1010,7 @@ function _alertPriority(alert) {
     if (event.includes('blizzard warning'))             return 490;
     if (event.includes('ice storm warning'))            return 480;
     if (event.includes('winter storm warning'))         return 470;
+    if (event.includes('extreme wind warning'))         return 465;
     if (event.includes('high wind warning'))            return 460;
     if (event.includes('hurricane warning') ||
         event.includes('typhoon warning'))              return 450;
