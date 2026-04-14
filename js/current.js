@@ -686,6 +686,109 @@ function _getAlertAdvice(alert) {
     return null;
 }
 
+// ---- Warning tier explainer: explains the scale of subtypes for tornado / SVR / flash flood warnings ----
+// Returns an object with title, current subtype type, and ordered tier list — or null for other alert types.
+function _getWarningTierExplainer(alert) {
+    const event = (alert.event || '').toLowerCase();
+    const subtype = _alertSubtype(alert);
+    const currentType = subtype?.type || null;
+
+    if (event.includes('tornado warning')) {
+        return {
+            title: 'Tornado Warning Levels',
+            current: currentType,
+            tiers: [
+                {
+                    type: null,
+                    label: 'Warning',
+                    colorClass: null,
+                    desc: 'Tornado indicated by radar or reported by a spotter. Take shelter immediately in a sturdy building.'
+                },
+                {
+                    type: 'tornado_observed',
+                    label: 'Observed',
+                    colorClass: 'subtype-observed',
+                    desc: 'A tornado has been confirmed on the ground by a trained spotter or law enforcement. Extremely dangerous.'
+                },
+                {
+                    type: 'pds_tornado',
+                    label: 'PDS',
+                    colorClass: 'subtype-pds',
+                    desc: 'Particularly Dangerous Situation — rare, multiple strong and long-track tornadoes expected. Significant threat to life and property.'
+                },
+                {
+                    type: 'tornado_emergency',
+                    label: 'Emergency',
+                    colorClass: 'subtype-emergency',
+                    desc: 'Tornado Emergency — a large, destructive tornado is bearing down on a populated area. Seek shelter NOW. Extremely rare.'
+                },
+            ]
+        };
+    }
+
+    if (event.includes('severe thunderstorm warning')) {
+        return {
+            title: 'Severe Thunderstorm Warning Levels',
+            current: currentType,
+            tiers: [
+                {
+                    type: null,
+                    label: 'Warning',
+                    colorClass: null,
+                    desc: '60+ mph winds or 1"+ hail (quarter-sized). Significant damage to trees and property possible.'
+                },
+                {
+                    type: 'considerable_tstm',
+                    label: 'Considerable',
+                    colorClass: 'subtype-considerable',
+                    desc: '70–79 mph winds or 1.75"+ hail (golf ball). Substantial structural damage likely.'
+                },
+                {
+                    type: 'destructive_tstm',
+                    label: 'Destructive',
+                    colorClass: 'subtype-emergency',
+                    desc: '80+ mph winds or 2.5"+ hail (baseball). A Wireless Emergency Alert is issued. Life-threatening damage expected. Rare.'
+                },
+                {
+                    type: 'eds_tstm',
+                    label: 'EDS',
+                    colorClass: 'subtype-pds',
+                    desc: 'Extremely Dangerous Situation — catastrophic wind and/or hail threat beyond the destructive threshold. Extremely rare.'
+                },
+            ]
+        };
+    }
+
+    if (event.includes('flash flood warning')) {
+        return {
+            title: 'Flash Flood Warning Levels',
+            current: currentType,
+            tiers: [
+                {
+                    type: null,
+                    label: 'Warning',
+                    colorClass: null,
+                    desc: 'Flash flooding is occurring or imminent. Move to higher ground immediately. Never drive through flooded roads.'
+                },
+                {
+                    type: 'flash_flood_observed',
+                    label: 'Observed',
+                    colorClass: 'subtype-observed',
+                    desc: 'Flash flooding confirmed by a trained spotter or emergency manager. Life-threatening conditions are ongoing.'
+                },
+                {
+                    type: 'flash_flood_emergency',
+                    label: 'Emergency',
+                    colorClass: 'subtype-emergency',
+                    desc: 'Flash Flood Emergency — catastrophic, life-threatening flooding is in progress. Move to safety immediately. Extremely rare.'
+                },
+            ]
+        };
+    }
+
+    return null;
+}
+
 function _alertClass(alert) {
     const event = (alert.event || '').toLowerCase();
     const severity = (alert.severity || '').toLowerCase();
@@ -997,7 +1100,7 @@ function openAlertDetail(indexOrAlert, skipMap) {
     metaEl.textContent = `Effective: ${_formatAlertTime(alert.onset || alert.effective)} • Expires: ${_formatAlertTime(alert.expires)} • Areas: ${alert.areaDesc || 'N/A'}`;
 
     // Remove any previously injected dynamic elements
-    ['alert-modal-extra', 'alert-modal-summary', 'alert-modal-advice'].forEach(id => {
+    ['alert-modal-extra', 'alert-modal-summary', 'alert-modal-tiers', 'alert-modal-advice'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.remove();
     });
@@ -1047,6 +1150,27 @@ function openAlertDetail(indexOrAlert, skipMap) {
         ).join('');
         lastInserted.insertAdjacentElement('afterend', summaryEl);
         lastInserted = summaryEl;
+    }
+
+    // ---- Warning tier explainer: scale of subtypes for tornado / SVR / flash flood ----
+    const tierInfo = _getWarningTierExplainer(alert);
+    if (tierInfo) {
+        const tierEl = document.createElement('div');
+        tierEl.id = 'alert-modal-tiers';
+        tierEl.className = 'alert-modal-tiers';
+        const tiersHtml = tierInfo.tiers.map(tier => {
+            const isCurrent = tier.type === tierInfo.current;
+            const labelClass = 'alert-tier-label' + (tier.colorClass ? ' ' + tier.colorClass : '');
+            return `<div class="alert-tier-item${isCurrent ? ' alert-tier-current' : ''}">` +
+                `<span class="${labelClass}">${_escapeHtml(tier.label)}</span>` +
+                `<span class="alert-tier-desc">${_escapeHtml(tier.desc)}</span>` +
+                `</div>`;
+        }).join('');
+        tierEl.innerHTML =
+            `<div class="alert-tiers-title">${_escapeHtml(tierInfo.title)}</div>` +
+            `<div class="alert-tiers-list">${tiersHtml}</div>`;
+        lastInserted.insertAdjacentElement('afterend', tierEl);
+        lastInserted = tierEl;
     }
 
     // ---- Safety advice based on alert type ----
