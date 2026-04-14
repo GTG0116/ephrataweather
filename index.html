@@ -1917,6 +1917,10 @@
                                 onclick="toggleAlertFilter('Typhoon Watch')" title="Typhoon Watch">
                             <span class="af-swatch" style="background:#FF00FF;"></span>Typhoon Watch
                         </button>
+                        <button class="af-chip active" id="af-extreme-wind-warning"
+                                onclick="toggleAlertFilter('Extreme Wind Warning')" title="Extreme Wind Warning">
+                            <span class="af-swatch" style="background:#FF8800;"></span>Extreme Wind Warning
+                        </button>
                         <button class="af-chip active" id="af-special-weather-statement"
                                 onclick="toggleAlertFilter('Special Weather Statement')" title="Special Weather Statement">
                             <span class="af-swatch" style="background:#00BBCC;"></span>Special Weather Statement
@@ -3104,6 +3108,7 @@
         'Hurricane Watch':             '#FF00FF',
         'Typhoon Warning':             '#DC143C',
         'Typhoon Watch':               '#FF00FF',
+        'Extreme Wind Warning':        '#FF8800',
         'Special Weather Statement':   '#00BBCC',
     };
     const ALERT_OVERLAY_KEYS = Object.keys(ALERT_OVERLAY_COLORS);
@@ -5730,6 +5735,7 @@
     let _tropicalSectorOverride = null; // storm name to match against Himawari TC sectors
     let _himawariSectors = [];
     let _currentHimawariSectorId = '';
+    let _pendingSectorFly = false; // fly to sector bounds on next loadSatLayer
 
     function _getActiveSatSpec() {
         const src = SAT_SOURCES[_currentSatSource];
@@ -5779,7 +5785,7 @@
                     (s.name || '').toUpperCase().includes(needle) ||
                     (s.safe_id || '').toUpperCase().includes(needle)
                 );
-                if (match) _currentHimawariSectorId = match.safe_id;
+                if (match) { _currentHimawariSectorId = match.safe_id; _pendingSectorFly = true; }
                 _tropicalSectorOverride = null;
             }
             if (_currentHimawariSectorId && !_himawariSectors.some(s => s.safe_id === _currentHimawariSectorId)) {
@@ -5935,6 +5941,14 @@
                 }, delay);
                 delay += src.fulldisk ? 1500 : 0;
             }
+            // When a typhoon sector was just selected, pan/zoom the map to its bounds
+            if (_pendingSectorFly && _currentHimawariSectorId && map && src.coords) {
+                _pendingSectorFly = false;
+                const sw = src.coords[3]; // [w, s]
+                const ne = src.coords[1]; // [e, n]
+                map.fitBounds([sw, ne], { padding: 20, duration: 1000, maxZoom: 9 });
+            }
+
             // Fetch timestamp from last_updated.txt
             const cb = Math.floor(Date.now() / 60000);
             fetch(src.base + 'last_updated.txt?cb=' + cb, { cache: 'no-store' })
@@ -5997,6 +6011,7 @@
     function switchHimawariSector(sectorId) {
         if (_currentSatSource !== 'himawari') return;
         _currentHimawariSectorId = sectorId || '';
+        if (sectorId) _pendingSectorFly = true;
         if (currentLayer === 'satellite') {
             stopSatAnimation();
             clearSatLayer();
@@ -7534,16 +7549,23 @@
             // support svh, we watch for container growth that the user didn't trigger
             // and snap the zoom back to the mobile-appropriate level.
             if (window.innerWidth <= 640) {
-                const _mobileInitialZoom = 5;
+                let _mobileZoomLock = 5;
                 let _lastMapContainerH = document.getElementById('map').offsetHeight;
-                let _userZoomed = false;
-                map.on('zoomstart', (e) => { if (e.originalEvent) _userZoomed = true; });
+                let _userIsZooming = false;
+                // Track when a user gesture starts a zoom (has originalEvent)
+                map.on('zoomstart', (e) => { if (e.originalEvent) _userIsZooming = true; });
+                // After any zoom completes (user or programmatic), update the lock and
+                // clear the flag so future URL-bar resizes snap to the correct level.
+                map.on('zoomend', () => {
+                    _mobileZoomLock = map.getZoom();
+                    _userIsZooming = false;
+                });
                 map.on('resize', () => {
                     const newH = document.getElementById('map').offsetHeight;
                     // Only snap back when the container grows unexpectedly (URL-bar
-                    // collapse adds ~60–80 px) and the user hasn't intentionally zoomed.
-                    if (!_userZoomed && newH > _lastMapContainerH + 20) {
-                        map.jumpTo({ zoom: _mobileInitialZoom });
+                    // collapse adds ~60–80 px) and the user isn't mid-gesture.
+                    if (!_userIsZooming && newH > _lastMapContainerH + 20) {
+                        map.jumpTo({ zoom: _mobileZoomLock });
                     }
                     _lastMapContainerH = newH;
                 });
