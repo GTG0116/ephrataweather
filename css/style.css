@@ -2021,6 +2021,76 @@ body {
     line-height: 1.45;
 }
 
+/* --- Alert Modal Warning Tier Explainer --- */
+.alert-modal-tiers {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    margin-bottom: 12px;
+}
+
+.alert-tiers-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 9px;
+}
+
+.alert-tiers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.alert-tier-item {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    opacity: 0.4;
+    padding: 3px 0;
+    transition: opacity 0.15s;
+}
+
+.alert-tier-item.alert-tier-current {
+    opacity: 1;
+    padding: 4px 8px;
+    margin: 0 -8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+}
+
+.alert-tier-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+    min-width: 82px;
+    color: var(--text-secondary);
+}
+
+.alert-tier-label.subtype-emergency    { color: #f080f0; }
+.alert-tier-label.subtype-pds          { color: #c880ff; }
+.alert-tier-label.subtype-observed     { color: #ff7070; }
+.alert-tier-label.subtype-considerable { color: #ffaa44; }
+
+.alert-tier-current .alert-tier-label {
+    color: var(--text-primary);
+}
+
+.alert-tier-desc {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.alert-tier-current .alert-tier-desc {
+    color: var(--text-primary);
+}
+
 @media (max-width: 920px) {
     .alert-modal-summary { padding: 10px 12px; }
     .alert-summary-label { min-width: 52px; font-size: 0.68rem; }
@@ -2028,6 +2098,9 @@ body {
     .alert-modal-advice  { padding: 10px 12px; }
     .alert-advice-title  { font-size: 0.8rem; }
     .alert-advice-steps li { font-size: 0.78rem; }
+    .alert-modal-tiers   { padding: 10px 12px; }
+    .alert-tiers-title   { font-size: 0.68rem; }
+    .alert-tier-desc     { font-size: 0.78rem; }
 }
 
 /* --- Alert Modal Action Buttons (screenshot / share / view on radar) --- */
