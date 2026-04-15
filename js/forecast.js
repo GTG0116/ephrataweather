@@ -67,6 +67,26 @@ async function initForecastView(lat, lng) {
         console.error('Forecast error:', err);
     }
 
+    // Fetch pollen forecast (5 days) in the background — non-blocking
+    _forecastPollenData = [];
+    WeatherAPI.getPollen(lat, lng, 5).then(pollenResp => {
+        const days = pollenResp.dailyInfo || [];
+        _forecastPollenData = days.map(day => {
+            const result = { tree: null, grass: null, weed: null };
+            (day.pollenTypeInfo || []).forEach(p => {
+                const code = (p.code || '').toUpperCase();
+                const displayName = (p.displayName || '').toLowerCase();
+                const level = p.indexInfo?.category || p.indexInfo?.displayName || null;
+                if (code === 'TREE' || displayName.includes('tree')) result.tree = level;
+                else if (code === 'GRASS' || displayName.includes('grass')) result.grass = level;
+                else if (code === 'WEED' || displayName.includes('weed')) result.weed = level;
+            });
+            return result;
+        });
+        // Refresh pollen rows if a day detail is currently open
+        if (_openDayDetailIndex >= 0) _renderDayDetailPollen(_openDayDetailIndex);
+    }).catch(e => console.warn('Forecast pollen unavailable:', e.message));
+
     const tsEl = document.getElementById('last-updated');
     if (tsEl) tsEl.textContent =
         'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -84,6 +104,10 @@ if (typeof _SPA_MODE === 'undefined') {
 
 // Store forecast data for detail view
 let forecastDays = [];
+
+// Pollen data for the first 5 forecast days (from Google Pollen API).
+// Array indexed by day (0–4); each entry is { tree, grass, weed } level strings.
+let _forecastPollenData = [];
 
 // ---- Forecast Charts ----
 let _activeForecastChart = 'temp';
@@ -825,11 +849,40 @@ function showDayDetail(index) {
     // Fair Weather Index
     _renderDayDetailFWI(day);
 
+    // Pollen (available for first 5 days from Google Pollen API)
+    _renderDayDetailPollen(index);
+
     // Severe weather section (SPC outlook)
     _refreshDayDetailSPCInfo();
     // Rainfall and fire weather sections
     _refreshDayDetailWPCRainInfo();
     _refreshDayDetailFireInfo();
+}
+
+function _renderDayDetailPollen(index) {
+    const treeRow  = document.getElementById('detail-pollen-tree-row');
+    const grassRow = document.getElementById('detail-pollen-grass-row');
+    const weedRow  = document.getElementById('detail-pollen-weed-row');
+    if (!treeRow || !grassRow || !weedRow) return;
+
+    // Pollen is only available for the first 5 days
+    const pollen = (index < 5) ? _forecastPollenData[index] : null;
+
+    function _applyPollen(row, el, level) {
+        const hasData = level != null;
+        row.style.display = hasData ? '' : 'none';
+        if (!hasData) return;
+        el.textContent = level;
+        const lower = level.toLowerCase();
+        el.style.color = lower.includes('very high') ? '#EF5350'
+            : lower.includes('high')                 ? '#FF7043'
+            : lower.includes('moderate') || lower.includes('medium') ? '#FFC107'
+            : 'var(--text-secondary)';
+    }
+
+    _applyPollen(treeRow,  document.getElementById('detail-pollen-tree'),  pollen?.tree);
+    _applyPollen(grassRow, document.getElementById('detail-pollen-grass'), pollen?.grass);
+    _applyPollen(weedRow,  document.getElementById('detail-pollen-weed'),  pollen?.weed);
 }
 
 function _renderDayDetailFWI(day) {

@@ -1593,6 +1593,9 @@
                     <div id="detail-snow-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Snow</div><div style="font-size:1.1rem;font-weight:500;" id="detail-snow">--</div></div>
                     <div id="detail-sunrise-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunrise</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunrise">--</div></div>
                     <div id="detail-sunset-row" style="text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Sunset</div><div style="font-size:1.1rem;font-weight:500;" id="detail-sunset">--</div></div>
+                    <div id="detail-pollen-tree-row" style="display:none;text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Tree Pollen</div><div style="font-size:1.1rem;font-weight:500;" id="detail-pollen-tree">--</div></div>
+                    <div id="detail-pollen-grass-row" style="display:none;text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Grass Pollen</div><div style="font-size:1.1rem;font-weight:500;" id="detail-pollen-grass">--</div></div>
+                    <div id="detail-pollen-weed-row" style="display:none;text-align:center;"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Weed Pollen</div><div style="font-size:1.1rem;font-weight:500;" id="detail-pollen-weed">--</div></div>
                 </div>
             </div>
         </section>
@@ -3122,6 +3125,7 @@
     let _alertFilters = {};          // eventType → true/false
     let _activeAlerts  = [];         // original NWS GeoJSON features (for click lookup)
     let _alertRefreshTimer = null;
+    let _mapAutoRefreshTimer = null;  // 60-second auto-refresh for the active map layer
     let _tropicalOverlayEnabled = false;
     let _tropicalBasin = 'both';
     let _tropicalRefreshTimer = null;
@@ -4447,8 +4451,11 @@
 
         const seq = _startMapClick(e);
 
-        // Collect ALL unique alert features at the clicked point
+        // Collect ALL unique alert objects at the clicked point, then sort by
+        // priority so the most important alert is in the front (panel 0) and
+        // the least important is in the back (last panel).
         const seenKeys = new Set();
+        const alertObjects = [];
         for (const feat of features) {
             const alertFeature = _activeAlerts.find(f => f.id === feat.id)
                               || _activeAlerts.find(f =>
@@ -4464,7 +4471,7 @@
             let params = props.parameters || {};
             if (typeof params === 'string') { try { params = JSON.parse(params); } catch (_) {} }
 
-            const alertObj = {
+            alertObjects.push({
                 event:       props.event       || '',
                 headline:    props.headline    || props.event || '',
                 description: props.description || '',
@@ -4477,7 +4484,15 @@
                 parameters:  params,
                 raw:         { properties: { affectedZones: props.affectedZones || [] } },
                 geometry:    alertFeature.geometry || null,
-            };
+            });
+        }
+
+        // Sort most important first — reuse the same priority function from current.js
+        if (typeof _alertPriority === 'function') {
+            alertObjects.sort((a, b) => _alertPriority(b) - _alertPriority(a));
+        }
+
+        for (const alertObj of alertObjects) {
             _addMapPanel({ bodyHtml: _buildAlertPanelHtml(alertObj), type: 'alert', label: 'Alert', alertObj }, seq);
         }
     }
@@ -7599,6 +7614,21 @@
                 // Restore my-location marker if it was enabled
                 if (_myLocationEnabled) _addMyLocationLayer();
             });
+        }
+
+        // Auto-refresh map data every 60 seconds so new radar frames and
+        // overlay updates are captured automatically.
+        if (!_mapAutoRefreshTimer) {
+            _mapAutoRefreshTimer = setInterval(() => {
+                if (!map) return;
+                if (currentLayer === 'radar') {
+                    refreshRadar();
+                } else if (currentLayer === 'satellite') {
+                    refreshSat();
+                } else if (currentLayer === 'surface-analysis') {
+                    _ensureMapReady().then(() => loadSurfaceAnalysisLayer());
+                }
+            }, 60000);
         }
     }
 

@@ -704,39 +704,41 @@ const WeatherAPI = {
 
     // === Air Quality ===
     async getAirQuality(lat, lng) {
+        // Primary: Open-Meteo AQI (free, no key required)
         try {
-            // AQI uses airquality.googleapis.com with POST request
-            const url = `https://airquality.googleapis.com/v1/currentConditions:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}`;
-            const resp = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    location: { latitude: lat, longitude: lng }
-                })
+            const params = new URLSearchParams({
+                latitude: lat, longitude: lng,
+                current: 'us_aqi,pm10,pm2_5'
             });
-            if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
-            return await resp.json();
+            const resp = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${params}`);
+            if (!resp.ok) throw new Error(`Open-Meteo AQI error: ${resp.status}`);
+            const data = await resp.json();
+            const c = data.current;
+            return {
+                indexes: [{ aqi: c.us_aqi, dominantPollutant: (c.pm2_5 || 0) >= (c.pm10 || 0) ? 'PM2.5' : 'PM10' }]
+            };
         } catch (e) {
-            console.warn('Google AQI failed, using Open-Meteo:', e.message);
+            console.warn('Open-Meteo AQI failed, falling back to Google:', e.message);
         }
 
-        const params = new URLSearchParams({
-            latitude: lat, longitude: lng,
-            current: 'us_aqi,pm10,pm2_5'
+        // Fallback: Google AQI API
+        const url = `https://airquality.googleapis.com/v1/currentConditions:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}`;
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                location: { latitude: lat, longitude: lng }
+            })
         });
-        const resp = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?${params}`);
-        if (!resp.ok) throw new Error(`Open-Meteo AQI error: ${resp.status}`);
-        const data = await resp.json();
-        const c = data.current;
-        return {
-            indexes: [{ aqi: c.us_aqi, dominantPollutant: (c.pm2_5 || 0) >= (c.pm10 || 0) ? 'PM2.5' : 'PM10' }]
-        };
+        if (!resp.ok) throw new Error(`Google AQI API ${resp.status}`);
+        return await resp.json();
     },
 
     // === Pollen ===
-    async getPollen(lat, lng) {
+    // days: 1–5 (Google Pollen API supports up to 5 days ahead)
+    async getPollen(lat, lng, days = 5) {
         // Pollen uses pollen.googleapis.com, not weather.googleapis.com
-        const url = `https://pollen.googleapis.com/v1/forecast:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}&location.latitude=${lat}&location.longitude=${lng}&days=1`;
+        const url = `https://pollen.googleapis.com/v1/forecast:lookup?key=${CONFIG.GOOGLE_WEATHER_API_KEY}&location.latitude=${lat}&location.longitude=${lng}&days=${days}`;
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`Google Pollen API ${resp.status}`);
         return await resp.json();
