@@ -260,12 +260,12 @@ const HistoricalWeather = (() => {
             </div>
 
             ${hourlyHtml ? `
-            <h3 class="section-title" style="margin-top:28px;">Hourly Breakdown</h3>
-            <div class="glass-static fade-in" style="border-radius:var(--radius-lg);overflow:hidden;margin-bottom:24px;padding:0;">
+            <h3 class="section-title" style="margin-top:20px;margin-bottom:12px;">Hourly Breakdown</h3>
+            <div class="hist-hourly-wrap glass-static fade-in">
                 <div class="hist-hourly-scroll">${hourlyHtml}</div>
             </div>` : ''}
 
-            <h3 class="section-title" style="margin-top:${hourlyHtml ? '0' : '28px'};">Day Summary</h3>
+            <h3 class="section-title" style="margin-bottom:12px;">Day Summary</h3>
             <div class="cards-grid cards-grid-3 fade-in" style="margin-bottom:24px;">
 
                 <div class="card glass">
