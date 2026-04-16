@@ -1202,21 +1202,30 @@
         .refresh-btn.spinning svg { animation: spin 0.8s linear; }
 
         /* ---- Historical Weather View ---- */
+        /* Mobile-first: single column by default */
         .hist-layout {
-            display: grid;
-            grid-template-columns: 320px 1fr;
-            gap: 20px;
-            align-items: start;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
-        @media (max-width: 800px) {
-            .hist-layout { grid-template-columns: 1fr; }
+        @media (min-width: 860px) {
+            .hist-layout {
+                display: grid;
+                grid-template-columns: 300px 1fr;
+                gap: 20px;
+                align-items: start;
+            }
+            .hist-panel-calendar {
+                position: sticky;
+                top: 20px;
+            }
         }
 
         .hist-panel-calendar {
-            padding: 18px 16px 14px;
+            padding: 16px 14px 12px;
             border-radius: var(--radius-lg);
-            position: sticky;
-            top: 20px;
+            box-sizing: border-box;
+            width: 100%;
         }
         .hist-panel-title {
             display: flex;
@@ -1225,12 +1234,12 @@
             font-size: 0.9rem;
             font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 4px;
+            margin-bottom: 3px;
         }
         .hist-panel-subtitle {
             font-size: 0.75rem;
             color: var(--text-muted);
-            margin-bottom: 14px;
+            margin-bottom: 12px;
         }
         .hist-location-chip {
             color: var(--accent-blue);
@@ -1243,26 +1252,28 @@
             align-items: center;
             justify-content: space-between;
             margin-bottom: 10px;
-            gap: 8px;
+            gap: 6px;
         }
         .hist-cal-title {
             display: flex;
-            gap: 6px;
+            gap: 5px;
             align-items: center;
             flex: 1;
             justify-content: center;
+            min-width: 0;
         }
         .hist-select {
             background: rgba(255,255,255,0.08);
             border: 1px solid rgba(255,255,255,0.15);
             color: var(--text-primary);
             border-radius: 8px;
-            padding: 5px 8px;
+            padding: 5px 6px;
             font-size: 0.82rem;
             font-family: inherit;
             cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
+            min-width: 0;
+            flex: 1;
+            max-width: 130px;
         }
         .hist-select:focus { outline: none; border-color: rgba(100,180,255,0.5); }
         .hist-select option { background: #1a2744; color: #fff; }
@@ -1271,8 +1282,9 @@
             border: 1px solid rgba(255,255,255,0.15);
             color: var(--text-secondary);
             border-radius: 8px;
-            width: 32px;
-            height: 32px;
+            width: 34px;
+            height: 34px;
+            min-width: 34px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1289,15 +1301,16 @@
             grid-template-columns: repeat(7, 1fr);
             gap: 2px;
             margin-bottom: 10px;
+            width: 100%;
         }
         .hist-cal-dow {
             text-align: center;
-            font-size: 0.65rem;
+            font-size: 0.62rem;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.04em;
             color: var(--text-muted);
-            padding: 4px 0 6px;
+            padding: 4px 0 5px;
         }
         .hist-cal-day {
             aspect-ratio: 1;
@@ -1305,11 +1318,10 @@
             align-items: center;
             justify-content: center;
             font-size: 0.78rem;
-            border-radius: 8px;
+            border-radius: 7px;
             cursor: pointer;
             transition: background 0.15s, color 0.15s;
             color: var(--text-secondary);
-            position: relative;
         }
         .hist-cal-day:not(.disabled):not(.empty):hover {
             background: rgba(100,180,255,0.18);
@@ -1321,17 +1333,11 @@
             font-weight: 700;
             box-shadow: 0 0 0 1.5px rgba(100,180,255,0.6);
         }
-        .hist-cal-day.today {
-            color: var(--accent-blue);
-            font-weight: 600;
-        }
-        .hist-cal-day.disabled {
-            color: rgba(255,255,255,0.18);
-            cursor: default;
-        }
+        .hist-cal-day.today { color: var(--accent-blue); font-weight: 600; }
+        .hist-cal-day.disabled { color: rgba(255,255,255,0.18); cursor: default; }
         .hist-cal-day.empty { cursor: default; }
         .hist-cal-note {
-            font-size: 0.68rem;
+            font-size: 0.67rem;
             color: var(--text-muted);
             text-align: center;
             line-height: 1.4;
@@ -1343,8 +1349,8 @@
         .hist-message {
             text-align: center;
             color: var(--text-muted);
-            font-size: 0.9rem;
-            padding: 40px 20px;
+            font-size: 0.88rem;
+            padding: 32px 16px;
             line-height: 1.6;
         }
 
@@ -1353,54 +1359,66 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 24px 28px;
+            padding: 18px 20px;
             border-radius: var(--radius-lg);
-            margin-bottom: 24px;
-            gap: 16px;
+            margin-bottom: 20px;
+            gap: 12px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+        @media (min-width: 480px) {
+            .hist-result-hero { padding: 22px 26px; }
         }
         .hist-hero-left { flex: 1; min-width: 0; }
         .hist-date-label {
-            font-size: 0.82rem;
+            font-size: 0.75rem;
             font-weight: 500;
             color: var(--text-muted);
-            margin-bottom: 6px;
+            margin-bottom: 5px;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
         .hist-temp-range {
-            font-size: 2.8rem;
+            font-size: 2.2rem;
             font-weight: 200;
             letter-spacing: -0.03em;
             line-height: 1;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
+        }
+        @media (min-width: 480px) {
+            .hist-temp-range { font-size: 2.8rem; }
         }
         .hist-temp-hi { color: var(--text-primary); }
-        .hist-temp-sep { color: var(--text-muted); margin: 0 4px; font-weight: 100; }
+        .hist-temp-sep { color: var(--text-muted); margin: 0 3px; font-weight: 100; }
         .hist-temp-lo { color: var(--text-secondary); }
         .hist-temp-unit {
-            font-size: 1rem;
+            font-size: 0.9rem;
             color: var(--text-muted);
             font-weight: 400;
             vertical-align: super;
-            margin-left: 3px;
+            margin-left: 2px;
         }
         .hist-condition-text {
-            font-size: 1rem;
+            font-size: 0.95rem;
             color: var(--text-secondary);
-            margin-bottom: 4px;
+            margin-bottom: 3px;
         }
-        .hist-feels {
-            font-size: 0.82rem;
-            color: var(--text-muted);
-        }
+        .hist-feels { font-size: 0.78rem; color: var(--text-muted); }
         .hist-hero-icon { flex-shrink: 0; opacity: 0.9; }
 
         /* Hourly strip */
+        .hist-hourly-wrap {
+            border-radius: var(--radius-lg);
+            margin-bottom: 20px;
+            overflow: hidden;
+            /* Establish a block formatting context so the scroll child is contained */
+        }
         .hist-hourly-scroll {
             display: flex;
             overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
             gap: 0;
-            padding: 12px 8px;
+            padding: 10px 6px;
             scrollbar-width: thin;
             scrollbar-color: rgba(255,255,255,0.15) transparent;
         }
@@ -1411,31 +1429,29 @@
             flex-direction: column;
             align-items: center;
             gap: 3px;
-            padding: 6px 10px;
-            min-width: 64px;
-            border-radius: 10px;
+            padding: 5px 8px;
+            min-width: 60px;
+            border-radius: 8px;
             transition: background 0.15s;
+            flex-shrink: 0;
         }
         .hist-hourly-item:hover { background: rgba(255,255,255,0.07); }
         .hist-hourly-time {
-            font-size: 0.68rem;
+            font-size: 0.65rem;
             color: var(--text-muted);
             white-space: nowrap;
         }
         .hist-hourly-icon { line-height: 0; }
         .hist-hourly-temp {
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 600;
             color: var(--text-primary);
         }
-        .hist-hourly-wind {
-            font-size: 0.65rem;
-            color: var(--text-muted);
-        }
+        .hist-hourly-wind { font-size: 0.62rem; color: var(--text-muted); }
         .hist-hourly-precip {
-            font-size: 0.65rem;
+            font-size: 0.62rem;
             color: rgba(100,180,255,0.8);
-            min-height: 10px;
+            min-height: 9px;
         }
     </style>
 </head>
