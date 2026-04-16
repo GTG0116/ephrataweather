@@ -1200,6 +1200,243 @@
         .refresh-btn svg { display: block; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .refresh-btn.spinning svg { animation: spin 0.8s linear; }
+
+        /* ---- Historical Weather View ---- */
+        .hist-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+        @media (max-width: 800px) {
+            .hist-layout { grid-template-columns: 1fr; }
+        }
+
+        .hist-panel-calendar {
+            padding: 18px 16px 14px;
+            border-radius: var(--radius-lg);
+            position: sticky;
+            top: 20px;
+        }
+        .hist-panel-title {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        .hist-panel-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+        }
+        .hist-location-chip {
+            color: var(--accent-blue);
+            font-weight: 500;
+        }
+
+        /* Calendar navigation */
+        .hist-cal-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            gap: 8px;
+        }
+        .hist-cal-title {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex: 1;
+            justify-content: center;
+        }
+        .hist-select {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 5px 8px;
+            font-size: 0.82rem;
+            font-family: inherit;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        .hist-select:focus { outline: none; border-color: rgba(100,180,255,0.5); }
+        .hist-select option { background: #1a2744; color: #fff; }
+        .hist-cal-btn {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.18s;
+            flex-shrink: 0;
+        }
+        .hist-cal-btn:hover:not(:disabled) { background: rgba(100,180,255,0.15); color: var(--text-primary); }
+        .hist-cal-btn:disabled { opacity: 0.3; cursor: default; }
+
+        /* Calendar grid */
+        .hist-cal-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            margin-bottom: 10px;
+        }
+        .hist-cal-dow {
+            text-align: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            padding: 4px 0 6px;
+        }
+        .hist-cal-day {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.78rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            color: var(--text-secondary);
+            position: relative;
+        }
+        .hist-cal-day:not(.disabled):not(.empty):hover {
+            background: rgba(100,180,255,0.18);
+            color: var(--text-primary);
+        }
+        .hist-cal-day.selected {
+            background: rgba(100,180,255,0.35);
+            color: #fff;
+            font-weight: 700;
+            box-shadow: 0 0 0 1.5px rgba(100,180,255,0.6);
+        }
+        .hist-cal-day.today {
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+        .hist-cal-day.disabled {
+            color: rgba(255,255,255,0.18);
+            cursor: default;
+        }
+        .hist-cal-day.empty { cursor: default; }
+        .hist-cal-note {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            text-align: center;
+            line-height: 1.4;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+        }
+
+        /* Result area */
+        .hist-message {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            padding: 40px 20px;
+            line-height: 1.6;
+        }
+
+        /* Result hero */
+        .hist-result-hero {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 24px 28px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            gap: 16px;
+        }
+        .hist-hero-left { flex: 1; min-width: 0; }
+        .hist-date-label {
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .hist-temp-range {
+            font-size: 2.8rem;
+            font-weight: 200;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+        .hist-temp-hi { color: var(--text-primary); }
+        .hist-temp-sep { color: var(--text-muted); margin: 0 4px; font-weight: 100; }
+        .hist-temp-lo { color: var(--text-secondary); }
+        .hist-temp-unit {
+            font-size: 1rem;
+            color: var(--text-muted);
+            font-weight: 400;
+            vertical-align: super;
+            margin-left: 3px;
+        }
+        .hist-condition-text {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .hist-feels {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+        .hist-hero-icon { flex-shrink: 0; opacity: 0.9; }
+
+        /* Hourly strip */
+        .hist-hourly-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 0;
+            padding: 12px 8px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.15) transparent;
+        }
+        .hist-hourly-scroll::-webkit-scrollbar { height: 4px; }
+        .hist-hourly-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+        .hist-hourly-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            padding: 6px 10px;
+            min-width: 64px;
+            border-radius: 10px;
+            transition: background 0.15s;
+        }
+        .hist-hourly-item:hover { background: rgba(255,255,255,0.07); }
+        .hist-hourly-time {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .hist-hourly-icon { line-height: 0; }
+        .hist-hourly-temp {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .hist-hourly-wind {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+        .hist-hourly-precip {
+            font-size: 0.65rem;
+            color: rgba(100,180,255,0.8);
+            min-height: 10px;
+        }
     </style>
 </head>
 <body>
@@ -1299,6 +1536,14 @@
                     <line x1="8.5" y1="22" x2="15.5" y2="22"/>
                 </svg>
                 METAR
+            </a>
+            <a href="#history" class="nav-link" data-view="history">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/>
+                    <polyline points="12 7 12 12 9 15"/>
+                    <path d="M3.6 9h2.4" stroke-opacity="0.6"/>
+                </svg>
+                History
             </a>
         </nav>
 
@@ -1400,6 +1645,27 @@
                         </div>
                         <h3>METAR</h3>
                         <p>Surface weather observations by station ID or nearest location</p>
+                    </a>
+                    <!-- History: clock/calendar icon -->
+                    <a href="#history" class="nav-card glass" data-view="history">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <!-- Clock circle -->
+                                <circle cx="32" cy="36" r="22" stroke="rgba(180,210,255,0.7)" stroke-width="2" fill="rgba(100,160,255,0.08)"/>
+                                <!-- Clock hands -->
+                                <line x1="32" y1="36" x2="32" y2="22" stroke="rgba(180,210,255,0.9)" stroke-width="2.5" stroke-linecap="round"/>
+                                <line x1="32" y1="36" x2="42" y2="42" stroke="rgba(180,210,255,0.75)" stroke-width="2.5" stroke-linecap="round"/>
+                                <!-- Center dot -->
+                                <circle cx="32" cy="36" r="2.5" fill="rgba(180,210,255,0.9)"/>
+                                <!-- Calendar top tabs -->
+                                <line x1="22" y1="9" x2="22" y2="17" stroke="rgba(180,210,255,0.6)" stroke-width="2.5" stroke-linecap="round"/>
+                                <line x1="42" y1="9" x2="42" y2="17" stroke="rgba(180,210,255,0.6)" stroke-width="2.5" stroke-linecap="round"/>
+                                <!-- Counter-clockwise arrow hint -->
+                                <path d="M13 36 A19 19 0 0 1 32 17" stroke="rgba(180,210,255,0.45)" stroke-width="1.8" fill="none" stroke-dasharray="4 3" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <h3>Historical Weather</h3>
+                        <p>Look up observed conditions for any date back to January 1940</p>
                     </a>
                 </div>
             </div>
@@ -2126,6 +2392,29 @@
             </div>
         </section>
 
+        <!-- ===================================================
+             VIEW: HISTORICAL WEATHER
+             =================================================== -->
+        <section id="view-history" class="view">
+            <div class="hist-layout">
+                <!-- Calendar panel -->
+                <div class="hist-panel-calendar glass-static">
+                    <div class="hist-panel-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 9 15"/></svg>
+                        Historical Search
+                    </div>
+                    <p class="hist-panel-subtitle">Using location: <span id="hist-location-name" class="hist-location-chip"></span></p>
+                    <div id="hist-calendar"></div>
+                </div>
+                <!-- Results panel -->
+                <div class="hist-panel-results">
+                    <div id="hist-result">
+                        <div class="hist-message">Select a date on the calendar to view historical weather observations.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </div><!-- end app-container -->
 
     <!-- Image Zoom Overlay (fixed, outside normal flow) -->
@@ -2451,6 +2740,7 @@
     <script>var _SPA_MODE = true;</script>
     <script src="js/current.js"></script>
     <script src="js/forecast.js"></script>
+    <script src="js/historical.js"></script>
 
     <script>
     // ============================================================
@@ -4668,7 +4958,7 @@
     // ============================================================
     // SPA ROUTER
     // ============================================================
-    const VALID_VIEWS = ['home', 'current', 'forecast', 'maps', 'metar'];
+    const VALID_VIEWS = ['home', 'current', 'forecast', 'maps', 'metar', 'history'];
     const viewInited = {};
     let currentViewId = null;
 
@@ -4708,7 +4998,7 @@
 
         // Update page title
         const forecastTitle = WeatherAPI.getDataSource() === 'nws' ? '7-Day Forecast' : '10-Day Forecast';
-        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: forecastTitle, maps: 'Maps', metar: 'METAR' };
+        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: forecastTitle, maps: 'Maps', metar: 'METAR', history: 'Historical Weather' };
         document.title = (titles[viewId] || 'Ephrata Weather') + ' – Ephrata Weather';
 
         // Init view if not already done
@@ -4793,6 +5083,9 @@
             } else {
                 searchMetarByLocation();
             }
+
+        } else if (viewId === 'history') {
+            HistoricalWeather.init();
         }
     }
 
