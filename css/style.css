@@ -1836,6 +1836,7 @@ body {
     padding: 18px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    min-height: 0; /* Required so grid child can scroll rather than expand */
 }
 
 .alert-modal-title {
@@ -1862,6 +1863,29 @@ body {
 .alert-modal-map {
     min-height: 380px;
     border-left: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Single-column layout when alert opened from map view (no embedded map needed) */
+.alert-modal.alert-modal-no-map {
+    grid-template-columns: 1fr;
+    max-width: 640px;
+}
+
+/* IEM structured hazard tags displayed above the alert body text */
+.alert-modal-iem-tags {
+    background: rgba(255, 200, 50, 0.07);
+    border: 1px solid rgba(255, 200, 50, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-family: monospace;
+    font-size: 0.82rem;
+    line-height: 1.7;
+}
+
+.iem-tag-row {
+    color: var(--text-secondary);
+    letter-spacing: 0.01em;
 }
 
 .alert-modal-close {

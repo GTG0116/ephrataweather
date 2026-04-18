@@ -73,6 +73,11 @@ const _nwsPointsCache = {};
 const _alertsCache = {};
 const _ALERTS_TTL_MS = 30 * 1000;
 
+// IEM storm-based warnings cache (sbw.geojson) — 60-second TTL.
+let _iemSbwCache = null;
+let _iemSbwCacheTs = 0;
+const _IEM_SBW_TTL_MS = 60 * 1000;
+
 // Wrapper that aborts a fetch if it takes longer than the given milliseconds.
 async function _fetchWithTimeout(url, options, timeoutMs) {
     const controller = new AbortController();
@@ -798,6 +803,23 @@ const WeatherAPI = {
         const result = { alerts };
         _alertsCache[key] = { ts: Date.now(), data: result };
         return result;
+    },
+
+    // === IEM Storm-Based Warnings ===
+    // Fetches all active polygon-based NWS warnings from IEM's sbw.geojson.
+    // Includes structured hazard tags: windtag, hailtag, damagetag, windthreat, hailthreat,
+    // tornadotag, is_pds, is_emergency, squalltag, floodtag_damage.
+    // Caller is responsible for filtering features to the user's location (e.g. via turf.js).
+    async getIEMStormBasedWarnings() {
+        const now = Date.now();
+        if (_iemSbwCache && (now - _iemSbwCacheTs) < _IEM_SBW_TTL_MS) return _iemSbwCache;
+        const url = 'https://mesonet.agron.iastate.edu/geojson/sbw.geojson';
+        const resp = await _fetchWithTimeout(url, {}, 15000);
+        if (!resp.ok) throw new Error(`IEM SBW API ${resp.status}`);
+        const data = await resp.json();
+        _iemSbwCache = data.features || [];
+        _iemSbwCacheTs = now;
+        return _iemSbwCache;
     },
 
     // === Location Timezone (from NWS /points) ===

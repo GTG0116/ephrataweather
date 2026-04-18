@@ -4782,6 +4782,7 @@
             if (typeof params === 'string') { try { params = JSON.parse(params); } catch (_) {} }
 
             alertObjects.push({
+                id:          alertFeature.id   || props.id || '',
                 event:       props.event       || '',
                 headline:    props.headline    || props.event || '',
                 description: props.description || '',
