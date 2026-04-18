@@ -67,6 +67,22 @@ function _nwsWindSpeed(str) {
 
 // NWS grid points cache (avoids redundant /points requests)
 const _nwsPointsCache = {};
+
+// Short-lived cache for NWS alerts to avoid hammering the API on rapid refreshes/navigation.
+// NWS alerts rarely change in under 30 seconds, so this is safe.
+const _alertsCache = {};
+const _ALERTS_TTL_MS = 30 * 1000;
+
+// Wrapper that aborts a fetch if it takes longer than the given milliseconds.
+async function _fetchWithTimeout(url, options, timeoutMs) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(id);
+    }
+}
 async function _getNWSPoints(lat, lng) {
     const key = `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}`;
     if (_nwsPointsCache[key]) return _nwsPointsCache[key];
@@ -746,11 +762,14 @@ const WeatherAPI = {
 
     // === Weather Alerts (NWS API) ===
     async getAlerts(lat, lng) {
+        const key = `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}`;
+        const cached = _alertsCache[key];
+        if (cached && (Date.now() - cached.ts) < _ALERTS_TTL_MS) return cached.data;
+
         const url = `https://api.weather.gov/alerts/active?point=${lat},${lng}`;
-        const resp = await fetch(url, {
-            cache: 'no-store',
+        const resp = await _fetchWithTimeout(url, {
             headers: { 'Accept': 'application/geo+json' }
-        });
+        }, 10000);
         if (!resp.ok) throw new Error(`NWS Alerts API ${resp.status}`);
 
         const data = await resp.json();
@@ -776,7 +795,9 @@ const WeatherAPI = {
             };
         });
 
-        return { alerts };
+        const result = { alerts };
+        _alertsCache[key] = { ts: Date.now(), data: result };
+        return result;
     },
 
     // === Location Timezone (from NWS /points) ===

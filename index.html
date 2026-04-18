@@ -1211,13 +1211,17 @@
         @media (min-width: 860px) {
             .hist-layout {
                 display: grid;
-                grid-template-columns: 300px 1fr;
+                grid-template-columns: 280px minmax(0, 1fr);
                 gap: 20px;
                 align-items: start;
             }
             .hist-panel-calendar {
                 position: sticky;
                 top: 20px;
+            }
+            .hist-panel-results {
+                min-width: 0;
+                overflow: hidden;
             }
         }
 
