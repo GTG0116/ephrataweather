@@ -894,20 +894,86 @@ function _dedupeLocations(locations) {
     return out;
 }
 
+// IEM phenomena code → NWS event name (for enrichment matching)
+const _IEM_PHENOMENA_MAP = {
+    'TO.W': 'tornado warning',
+    'SV.W': 'severe thunderstorm warning',
+    'FF.W': 'flash flood warning',
+    'MA.W': 'special marine warning',
+    'EW.W': 'extreme wind warning',
+    'SQ.W': 'snow squall warning',
+    'DS.W': 'dust storm warning',
+    'BZ.W': 'blizzard warning',
+    'WS.W': 'winter storm warning',
+    'IP.W': 'ice storm warning',
+    'ZR.W': 'freezing rain warning',
+    'WC.W': 'wind chill warning',
+    'HW.W': 'high wind warning',
+    'HU.W': 'hurricane warning',
+    'TY.W': 'typhoon warning',
+    'TR.W': 'tropical storm warning',
+    'FL.W': 'flood warning',
+    'FA.W': 'areal flood warning',
+};
+
+// Enrich NWS storm-based alerts with IEM tag fields (windtag, hailtag, etc.)
+// using turf.js point-in-polygon on the IEM sbw.geojson features.
+function _enrichAlertsWithIEM(alerts, iemFeatures, lat, lng) {
+    if (!iemFeatures.length || !window.turf) return alerts;
+    const point = turf.point([lng, lat]);
+    return alerts.map(alert => {
+        const eventLower = (alert.event || '').toLowerCase();
+        const iemFeature = iemFeatures.find(f => {
+            if (!f.geometry) return false;
+            const p = f.properties;
+            const key = `${p.phenomena}.${p.significance}`;
+            const mapped = _IEM_PHENOMENA_MAP[key] || '';
+            if (!eventLower.includes(mapped) && !mapped.includes(eventLower)) return false;
+            try { return turf.booleanPointInPolygon(point, f); } catch (_) { return false; }
+        });
+        if (!iemFeature) return alert;
+        const p = iemFeature.properties;
+        return {
+            ...alert,
+            iem_windtag:      p.windtag      || null,
+            iem_hailtag:      p.hailtag      || null,
+            iem_tornadotag:   p.tornadotag   || null,
+            iem_damagetag:    p.damagetag    || null,
+            iem_windthreat:   p.windthreat   || null,
+            iem_hailthreat:   p.hailthreat   || null,
+            iem_squalltag:    p.squalltag    || null,
+            iem_floodtag:     p.floodtag_damage || null,
+            iem_is_pds:       !!(p.is_pds),
+            iem_is_emergency: !!(p.is_emergency),
+        };
+    });
+}
+
 async function loadAndRenderAlerts(lat, lng) {
     // Fetch location timezone in the background — doesn't need to block alerts
     WeatherAPI.getLocationTimeZone(lat, lng).then(tz => { _locationTimeZone = tz; }).catch(() => {});
 
-    // Fetch and render the current location's alerts immediately — don't wait for
-    // any other locations. Previously we awaited all favorite locations before
-    // rendering, but their data was never used, adding unnecessary latency.
+    // Fetch NWS alerts and IEM storm-based warnings in parallel
     let currentAlerts = [];
-    try {
-        const result = await WeatherAPI.getAlerts(lat, lng);
-        currentAlerts = result.alerts || [];
-    } catch (e) {
-        console.warn('Alerts fetch error:', e);
+    let iemFeatures = [];
+    const [nwsResult, iemResult] = await Promise.allSettled([
+        WeatherAPI.getAlerts(lat, lng),
+        WeatherAPI.getIEMStormBasedWarnings(),
+    ]);
+    if (nwsResult.status === 'fulfilled') {
+        currentAlerts = nwsResult.value.alerts || [];
+    } else {
+        console.warn('Alerts fetch error:', nwsResult.reason);
     }
+    if (iemResult.status === 'fulfilled') {
+        iemFeatures = iemResult.value;
+    } else {
+        console.warn('IEM SBW fetch error:', iemResult.reason);
+    }
+
+    // Enrich storm-based NWS alerts with IEM structured hazard tags
+    currentAlerts = _enrichAlertsWithIEM(currentAlerts, iemFeatures, lat, lng);
+
     renderAlerts(currentAlerts);
 
     // Handle shared alert link: if the URL contains an alert ID, open it now
@@ -1195,6 +1261,26 @@ function openAlertDetail(indexOrAlert, skipMap) {
         lastInserted.insertAdjacentElement('afterend', adviceEl);
     }
 
+    // ---- IEM structured hazard tags (windtag, hailtag, damagetag, etc.) ----
+    const existingIemTags = document.getElementById('alert-modal-iem-tags');
+    if (existingIemTags) existingIemTags.remove();
+    const iemRows = [];
+    if (alert.iem_damagetag)  iemRows.push(`THUNDERSTORM DAMAGE THREAT...${alert.iem_damagetag}`);
+    if (alert.iem_hailthreat) iemRows.push(`HAIL THREAT...${alert.iem_hailthreat}`);
+    if (alert.iem_hailtag)    iemRows.push(`MAX HAIL SIZE...${alert.iem_hailtag}`);
+    if (alert.iem_windthreat) iemRows.push(`WIND THREAT...${alert.iem_windthreat}`);
+    if (alert.iem_windtag)    iemRows.push(`MAX WIND GUST...${alert.iem_windtag}`);
+    if (alert.iem_tornadotag) iemRows.push(`TORNADO...${alert.iem_tornadotag}`);
+    if (alert.iem_squalltag)  iemRows.push(`SNOW SQUALL...${alert.iem_squalltag}`);
+    if (alert.iem_floodtag)   iemRows.push(`FLASH FLOOD DAMAGE THREAT...${alert.iem_floodtag}`);
+    if (iemRows.length) {
+        const iemEl = document.createElement('div');
+        iemEl.id = 'alert-modal-iem-tags';
+        iemEl.className = 'alert-modal-iem-tags';
+        iemEl.innerHTML = iemRows.map(r => `<div class="iem-tag-row">${_escapeHtml(r)}</div>`).join('');
+        bodyEl.insertAdjacentElement('beforebegin', iemEl);
+    }
+
     const parts = [alert.description, alert.instruction].filter(Boolean);
     bodyEl.textContent = parts.length ? parts.join('\n\n') : 'No additional text provided by NWS.';
 
@@ -1220,11 +1306,14 @@ function openAlertDetail(indexOrAlert, skipMap) {
     bodyEl.insertAdjacentElement('afterend', actionsEl);
 
     // Optionally hide the map section (e.g. when opened from the map view)
+    const modalInner = modal.querySelector('.alert-modal');
     const mapEl = document.getElementById('alert-modal-map');
     if (skipMap) {
         if (mapEl) mapEl.style.display = 'none';
+        if (modalInner) modalInner.classList.add('alert-modal-no-map');
     } else {
         if (mapEl) mapEl.style.display = '';
+        if (modalInner) modalInner.classList.remove('alert-modal-no-map');
         _drawAlertMap(alert);
     }
 
@@ -1236,9 +1325,11 @@ function closeAlertDetail() {
     const modal = document.getElementById('alert-modal');
     if (modal) modal.style.display = 'none';
     document.body.style.overflow = '';
-    // Restore map section so next open from current conditions shows it
+    // Restore map section and layout so next open from current conditions shows it
     const mapEl = document.getElementById('alert-modal-map');
     if (mapEl) mapEl.style.display = '';
+    const modalInner = modal && modal.querySelector('.alert-modal');
+    if (modalInner) modalInner.classList.remove('alert-modal-no-map');
 }
 
 function _drawAlertMap(alert) {
