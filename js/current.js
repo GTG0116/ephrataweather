@@ -895,26 +895,19 @@ function _dedupeLocations(locations) {
 }
 
 async function loadAndRenderAlerts(lat, lng) {
-    // Fetch location timezone so alert times display in the location's local time
+    // Fetch location timezone in the background — doesn't need to block alerts
     WeatherAPI.getLocationTimeZone(lat, lng).then(tz => { _locationTimeZone = tz; }).catch(() => {});
 
-    const currentLoc = LocationManager.getCurrent();
-    const favorites = LocationManager.getFavorites() || [];
-    const locations = _dedupeLocations([
-        { lat, lng, name: currentLoc?.name || 'Current Location', isCurrent: true },
-        ...favorites.map((f) => ({ lat: f.lat, lng: f.lng, name: f.name, isCurrent: false }))
-    ]);
-
-    const results = await Promise.allSettled(locations.map((loc) => WeatherAPI.getAlerts(loc.lat, loc.lng)));
-
-    const byLocation = [];
-    results.forEach((result, i) => {
-        if (result.status === 'fulfilled') {
-            byLocation.push({ location: locations[i], alerts: result.value.alerts || [] });
-        }
-    });
-
-    const currentAlerts = byLocation.find((x) => x.location.isCurrent)?.alerts || [];
+    // Fetch and render the current location's alerts immediately — don't wait for
+    // any other locations. Previously we awaited all favorite locations before
+    // rendering, but their data was never used, adding unnecessary latency.
+    let currentAlerts = [];
+    try {
+        const result = await WeatherAPI.getAlerts(lat, lng);
+        currentAlerts = result.alerts || [];
+    } catch (e) {
+        console.warn('Alerts fetch error:', e);
+    }
     renderAlerts(currentAlerts);
 
     // Handle shared alert link: if the URL contains an alert ID, open it now
@@ -930,7 +923,7 @@ async function loadAndRenderAlerts(lat, lng) {
         }
     }
 
-    // Fetch SPC and WPC outlooks in parallel instead of sequentially
+    // Fetch SPC and WPC outlooks in parallel
     await Promise.allSettled([
         loadAndRenderSPCOutlook(lat, lng).catch(err => console.warn('SPC outlook error:', err)),
         loadAndRenderSPCFireOutlook(lat, lng).catch(err => console.warn('SPC fire weather error:', err)),
