@@ -729,8 +729,14 @@ function _buildDayDescription(day) {
 
 function closeDayDetail() {
     const detail = document.getElementById('day-detail');
-    if (detail) detail.style.display = 'none';
+    if (!detail || detail.style.display === 'none') { _openDayDetailIndex = -1; return; }
+    detail.classList.remove('is-open');
+    detail.classList.add('is-closing');
     _openDayDetailIndex = -1;
+    setTimeout(() => {
+        detail.style.display = 'none';
+        detail.classList.remove('is-closing');
+    }, 220);
 }
 
 function showDayDetail(index) {
@@ -740,7 +746,11 @@ function showDayDetail(index) {
     _openDayDetailIndex = index;
 
     const detail = document.getElementById('day-detail');
+    detail.classList.remove('is-closing', 'is-open');
     detail.style.display = 'block';
+    // Trigger reflow so removing+re-adding the animation class restarts it
+    void detail.offsetWidth;
+    detail.classList.add('is-open');
     detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     const dateStr = day.displayDate || day.interval?.startTime;

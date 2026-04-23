@@ -1317,19 +1317,26 @@ function openAlertDetail(indexOrAlert, skipMap) {
         _drawAlertMap(alert);
     }
 
+    modal.classList.remove('is-closing');
+    modal.classList.add('is-open');
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 }
 
 function closeAlertDetail() {
     const modal = document.getElementById('alert-modal');
-    if (modal) modal.style.display = 'none';
-    document.body.style.overflow = '';
-    // Restore map section and layout so next open from current conditions shows it
-    const mapEl = document.getElementById('alert-modal-map');
-    if (mapEl) mapEl.style.display = '';
-    const modalInner = modal && modal.querySelector('.alert-modal');
-    if (modalInner) modalInner.classList.remove('alert-modal-no-map');
+    if (!modal || modal.style.display === 'none') return;
+    modal.classList.remove('is-open');
+    modal.classList.add('is-closing');
+    setTimeout(() => {
+        modal.style.display = 'none';
+        modal.classList.remove('is-closing');
+        document.body.style.overflow = '';
+        const mapEl = document.getElementById('alert-modal-map');
+        if (mapEl) mapEl.style.display = '';
+        const modalInner = modal.querySelector('.alert-modal');
+        if (modalInner) modalInner.classList.remove('alert-modal-no-map');
+    }, 220);
 }
 
 function _drawAlertMap(alert) {
