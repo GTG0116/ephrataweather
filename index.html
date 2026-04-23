@@ -76,17 +76,23 @@
 
         /* ---- Map controls (from maps.html) ---- */
         .map-controls-panel {
-            padding: 14px 16px 10px;
+            padding: 12px 16px 10px;
             margin-bottom: 12px;
             position: relative;
             z-index: 1;
         }
+        /* Grouped layer selector: three rows labelled by category */
+        .layer-groups {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
         .layer-row {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
-            margin-bottom: 10px;
         }
         .layer-label {
             font-size: 0.72rem;
@@ -96,20 +102,101 @@
             color: var(--text-muted);
             margin-right: 4px;
         }
+        .layer-group-label {
+            font-size: 0.62rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255,255,255,0.38);
+            width: 78px;
+            flex-shrink: 0;
+        }
         .layer-btn {
-            padding: 7px 15px;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.13);
+            padding: 6px 13px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.11);
             color: var(--text-secondary);
             border-radius: var(--radius-sm);
             cursor: pointer;
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 500;
             font-family: inherit;
             transition: all var(--transition-smooth);
         }
         .layer-btn:hover { background: rgba(255,255,255,0.14); color: var(--text-primary); }
         .layer-btn.active { background: rgba(100,180,255,0.22); border-color: rgba(100,180,255,0.45); color: #8dd4ff; }
+
+        /* Collapsible Map Options (basemap, my location, alerts, tropical) */
+        .map-options-wrap {
+            display: none;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.07);
+        }
+        .map-options-wrap.visible { display: block; }
+        .map-options-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 5px 12px 5px 10px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.11);
+            border-radius: var(--radius-sm);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.76rem;
+            font-family: inherit;
+            font-weight: 500;
+            transition: all var(--transition-smooth);
+        }
+        .map-options-toggle:hover {
+            background: rgba(255,255,255,0.09);
+            color: var(--text-secondary);
+            border-color: rgba(255,255,255,0.18);
+        }
+        .map-options-toggle .map-options-chevron {
+            transition: transform 0.25s ease;
+            opacity: 0.7;
+        }
+        .map-options-wrap.expanded .map-options-toggle .map-options-chevron {
+            transform: rotate(180deg);
+        }
+        .map-options-wrap.expanded .map-options-toggle {
+            background: rgba(100,180,255,0.10);
+            border-color: rgba(100,180,255,0.28);
+            color: #8dd4ff;
+        }
+        .map-options-badge {
+            display: none;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #66CCFF;
+            box-shadow: 0 0 6px rgba(102,204,255,0.55);
+            margin-left: -2px;
+        }
+        .map-options-badge.active { display: inline-block; }
+        .map-options-body {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: rgba(0,0,0,0.18);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: var(--radius-sm);
+        }
+        .map-options-wrap.expanded .map-options-body { display: flex; }
+        .map-options-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .map-options-group + .map-options-group {
+            margin-top: 4px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
 
         .spc-controls { display: none; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.07); }
         .spc-controls.visible { display: flex; }
@@ -817,6 +904,7 @@
             .layer-btn, .day-btn, .type-btn { padding: 5px 9px; font-size: 0.75rem; }
             .chart-tab { padding: 5px 9px; font-size: 0.73rem; }
             .mapboxgl-popup-content { max-height: min(220px, 38vh) !important; padding: 8px 10px !important; }
+            .layer-group-label { width: 100%; margin-bottom: 2px; }
         }
 
         /* ---- Redesigned Header ---- */
@@ -1892,20 +1980,28 @@
         <section id="view-maps" class="view">
             <div id="maps-fullscreen-root">
             <!-- Map Controls Panel -->
-            <!-- Layer selector -->
             <div class="map-controls-panel glass-static" style="margin-bottom:14px;">
-                <!-- Layer selector -->
-                <div class="layer-row">
-                    <button class="layer-btn" data-layer="spc" onclick="switchLayer('spc')">SPC Outlook</button>
-                    <button class="layer-btn" data-layer="satellite" onclick="switchLayer('satellite')">Satellite</button>
-                    <button class="layer-btn active" data-layer="radar" onclick="switchLayer('radar')">Radar</button>
-                    <button class="layer-btn" data-layer="surface-analysis" onclick="switchLayer('surface-analysis')">Surface Analysis</button>
-                    <button class="layer-btn" data-layer="temperature" onclick="switchLayer('temperature')">Temperature</button>
-                    <button class="layer-btn" data-layer="wind" onclick="switchLayer('wind')">Wind</button>
-                    <button class="layer-btn" data-layer="clouds" onclick="switchLayer('clouds')">Clouds</button>
-                    <button class="layer-btn" data-layer="wpc-rain" onclick="switchLayer('wpc-rain')">WPC Rainfall</button>
-                    <button class="layer-btn" data-layer="fire-wx" onclick="switchLayer('fire-wx')">Fire Weather</button>
-                    <button class="layer-btn" data-layer="rtma" onclick="switchLayer('rtma')">RTMA</button>
+                <!-- Layer selector, grouped by category for scannability -->
+                <div class="layer-groups">
+                    <div class="layer-row">
+                        <span class="layer-group-label">Imagery</span>
+                        <button class="layer-btn active" data-layer="radar" onclick="switchLayer('radar')">Radar</button>
+                        <button class="layer-btn" data-layer="satellite" onclick="switchLayer('satellite')">Satellite</button>
+                    </div>
+                    <div class="layer-row">
+                        <span class="layer-group-label">Outlooks</span>
+                        <button class="layer-btn" data-layer="spc" onclick="switchLayer('spc')">SPC Outlook</button>
+                        <button class="layer-btn" data-layer="wpc-rain" onclick="switchLayer('wpc-rain')">WPC Rainfall</button>
+                        <button class="layer-btn" data-layer="fire-wx" onclick="switchLayer('fire-wx')">Fire Weather</button>
+                        <button class="layer-btn" data-layer="surface-analysis" onclick="switchLayer('surface-analysis')">Surface Analysis</button>
+                    </div>
+                    <div class="layer-row">
+                        <span class="layer-group-label">Conditions</span>
+                        <button class="layer-btn" data-layer="rtma" onclick="switchLayer('rtma')">RTMA</button>
+                        <button class="layer-btn" data-layer="temperature" onclick="switchLayer('temperature')">Temperature</button>
+                        <button class="layer-btn" data-layer="wind" onclick="switchLayer('wind')">Wind</button>
+                        <button class="layer-btn" data-layer="clouds" onclick="switchLayer('clouds')">Clouds</button>
+                    </div>
                 </div>
                 <!-- SPC Sub-Controls -->
                 <div class="spc-controls visible" id="spc-controls">
@@ -2094,31 +2190,46 @@
                         <div class="sf-legend-item"><span style="color:#c62828;font-weight:700;font-size:1rem;line-height:1;">L</span>&nbsp;Low Pressure</div>
                     </div>
                 </div>
-                <!-- Basemap -->
-                <div class="spc-controls" id="basemap-controls">
-                    <div class="ctrl-row">
-                        <span class="ctrl-label">Map:</span>
-                        <select id="basemap-select" class="ctrl-select" onchange="setBaseMapStyle(this.value)">
-                            <option value="dark">Dark</option>
-                            <option value="streets">Streets</option>
-                            <option value="satellite-streets">Satellite + Streets</option>
-                            <option value="outdoors">Outdoors</option>
-                        </select>
-                    </div>
-                    <div class="ctrl-row" style="gap:10px;align-items:center;">
-                        <span class="ctrl-label">My Location</span>
-                        <label class="alert-master-toggle" title="Show your location on the map">
-                            <input type="checkbox" id="my-location-toggle-chk" onchange="toggleMyLocationLayer()">
-                            <span class="amt-track"><span class="amt-knob"></span></span>
-                        </label>
-                        <span class="ctrl-label" id="my-location-status" style="font-size:0.7rem;opacity:0.55;transition:opacity 0.2s;">OFF</span>
-                    </div>
-                </div>
                 <div class="owm-key-warn" id="owm-key-warn">
                     &#9888; OpenWeatherMap API key not set. Add your key to <code>js/config.js</code> as <code>OWM_API_KEY</code>.
                 </div>
-                <!-- Alert Overlay Controls — visible for all interactive map layers -->
-                <div class="spc-controls" id="alert-overlay-controls" style="position:relative;z-index:10;">
+                <!-- Collapsible Map Options: basemap, my location, alerts, tropical cyclones -->
+                <div class="map-options-wrap" id="map-options-wrap">
+                    <button type="button" class="map-options-toggle" id="map-options-toggle"
+                            onclick="toggleMapOptions()" aria-expanded="false" aria-controls="map-options-body">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                        <span>Map Options</span>
+                        <span class="map-options-badge" id="map-options-badge" aria-hidden="true"></span>
+                        <svg class="map-options-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <div class="map-options-body" id="map-options-body">
+                        <!-- Basemap + My Location -->
+                        <div class="map-options-group" id="basemap-controls">
+                            <div class="ctrl-row">
+                                <span class="ctrl-label">Map:</span>
+                                <select id="basemap-select" class="ctrl-select" onchange="setBaseMapStyle(this.value)">
+                                    <option value="dark">Dark</option>
+                                    <option value="streets">Streets</option>
+                                    <option value="satellite-streets">Satellite + Streets</option>
+                                    <option value="outdoors">Outdoors</option>
+                                </select>
+                            </div>
+                            <div class="ctrl-row" style="gap:10px;align-items:center;">
+                                <span class="ctrl-label">My Location</span>
+                                <label class="alert-master-toggle" title="Show your location on the map">
+                                    <input type="checkbox" id="my-location-toggle-chk" onchange="toggleMyLocationLayer()">
+                                    <span class="amt-track"><span class="amt-knob"></span></span>
+                                </label>
+                                <span class="ctrl-label" id="my-location-status" style="font-size:0.7rem;opacity:0.55;transition:opacity 0.2s;">OFF</span>
+                            </div>
+                        </div>
+                        <!-- Alert Overlay + Tropical Cyclones -->
+                        <div class="map-options-group" id="alert-overlay-controls" style="position:relative;z-index:10;">
                     <div class="ctrl-row" style="gap:10px;align-items:center;">
                         <span class="ctrl-label">Alert Overlay</span>
                         <label class="alert-master-toggle" title="Toggle alert overlay">
@@ -2233,7 +2344,9 @@
                             Radius Circles
                         </label>
                     </div>
-                </div>
+                        </div><!-- end alert-overlay-controls -->
+                    </div><!-- end map-options-body -->
+                </div><!-- end map-options-wrap -->
             </div>
 
             <!-- Map (for SPC / WPC / Fire / Temperature / Wind / Satellite / Radar) -->
@@ -3629,12 +3742,35 @@
                 btn.style.background = btn.style.borderColor = btn.style.color = '';
             }
         });
+        _syncMapOptionsBadge();
     }
 
     // Show alert overlay controls whenever the interactive map is visible
     function _showAlertOverlayControls(show) {
         const el = document.getElementById('alert-overlay-controls');
         if (el) el.classList.toggle('visible', show);
+        // Also toggle visibility of the collapsible Map Options wrapper
+        const wrap = document.getElementById('map-options-wrap');
+        if (wrap) wrap.classList.toggle('visible', show);
+    }
+
+    // Toggle the collapsible Map Options panel
+    function toggleMapOptions() {
+        const wrap = document.getElementById('map-options-wrap');
+        const btn = document.getElementById('map-options-toggle');
+        if (!wrap) return;
+        const expanded = wrap.classList.toggle('expanded');
+        if (btn) btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+
+    // Reflect active state (alerts on / tropical on / my-location on) as a small dot badge
+    function _syncMapOptionsBadge() {
+        const badge = document.getElementById('map-options-badge');
+        if (!badge) return;
+        const alerts = !!(typeof _alertOverlayEnabled !== 'undefined' && _alertOverlayEnabled);
+        const tropical = !!(typeof _tropicalOverlayEnabled !== 'undefined' && _tropicalOverlayEnabled);
+        const myLoc = !!(typeof _myLocationEnabled !== 'undefined' && _myLocationEnabled);
+        badge.classList.toggle('active', alerts || tropical || myLoc);
     }
 
     // --- Resolve zone geometries for alerts that have geometry: null ---
@@ -4989,6 +5125,7 @@
             status.textContent = _myLocationEnabled ? 'ON' : 'OFF';
             status.style.opacity = _myLocationEnabled ? '1' : '0.55';
         }
+        if (typeof _syncMapOptionsBadge === 'function') _syncMapOptionsBadge();
     }
 
     // Initialize prefs on load
