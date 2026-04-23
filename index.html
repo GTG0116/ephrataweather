@@ -4928,8 +4928,49 @@
     function handleAlertOverlayClick(e) {
         if (!_alertOverlayEnabled || !map) return;
         if (!map.getLayer('alert-overlay-fill')) return;
-        const features = map.queryRenderedFeatures(e.point, { layers: ['alert-overlay-fill'] });
-        if (!features.length) return;
+        if (!_activeAlerts.length) return;
+
+        // Use direct geometry hit-testing against the in-memory alert features
+        // rather than relying on queryRenderedFeatures properties. This avoids
+        // mismatches when overlapping polygons are rendered in a different
+        // order or when custom props are not present in returned features.
+        const _pointInRing = (pt, ring) => {
+            let inside = false;
+            for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                const [xi, yi] = ring[i];
+                const [xj, yj] = ring[j];
+                const intersects = ((yi > pt[1]) !== (yj > pt[1])) &&
+                    (pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi);
+                if (intersects) inside = !inside;
+            }
+            return inside;
+        };
+        const _pointInPolygonCoords = (pt, polygonCoords) => {
+            if (!polygonCoords?.length) return false;
+            if (!_pointInRing(pt, polygonCoords[0])) return false; // exterior ring
+            // Hole rings: if point is inside any hole, treat as outside.
+            for (let i = 1; i < polygonCoords.length; i++) {
+                if (_pointInRing(pt, polygonCoords[i])) return false;
+            }
+            return true;
+        };
+        const _pointInAlertGeometry = (lng, lat, geometry) => {
+            if (!geometry) return false;
+            const pt = [lng, lat];
+            if (geometry.type === 'Polygon') {
+                return _pointInPolygonCoords(pt, geometry.coordinates);
+            }
+            if (geometry.type === 'MultiPolygon') {
+                return geometry.coordinates.some(poly => _pointInPolygonCoords(pt, poly));
+            }
+            return false;
+        };
+
+        const clickedLng = e.lngLat?.lng;
+        const clickedLat = e.lngLat?.lat;
+        if (clickedLng == null || clickedLat == null) return;
+        const hitFeatures = _activeAlerts.filter(f => _pointInAlertGeometry(clickedLng, clickedLat, f.geometry));
+        if (!hitFeatures.length) return;
 
         const seq = _startMapClick(e);
 
@@ -4938,13 +4979,8 @@
         // the least important is in the back (last panel).
         const seenKeys = new Set();
         const alertObjects = [];
-        for (const feat of features) {
-            const clickedUid = String(feat.properties?.__alert_uid || feat.id || '');
-            const alertFeature = _activeAlerts.find(f =>
-                String(f.properties?.__alert_uid || f.id || '') === clickedUid
-            );
-            if (!alertFeature) continue;
-            const key = clickedUid || _alertOverlayUid(alertFeature);
+        for (const alertFeature of hitFeatures) {
+            const key = String(alertFeature.properties?.__alert_uid || alertFeature.id || _alertOverlayUid(alertFeature));
             if (seenKeys.has(key)) continue;
             seenKeys.add(key);
 
