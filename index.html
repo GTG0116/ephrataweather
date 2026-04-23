@@ -3572,6 +3572,18 @@
     let _tropicalRefreshTimer = null;
     let _tropicalShowRadiusCircles = true;
 
+    // Build a deterministic alert UID so rendered polygons can map back to the
+    // exact source alert, even when multiple alerts share event/expiry values.
+    function _alertOverlayUid(feature, idx = 0) {
+        const props = feature?.properties || {};
+        return String(
+            feature?.id ||
+            props.id ||
+            props['@id'] ||
+            `${props.event || 'alert'}|${props.sent || ''}|${props.effective || ''}|${props.expires || ''}|${idx}`
+        );
+    }
+
     // --- Persistence ---
     function _loadAlertPrefs() {
         try {
@@ -3856,9 +3868,15 @@
             );
             if (!resp.ok) return;
             const data = await resp.json();
-            const alerts = (data.features || []).filter(f =>
-                ALERT_OVERLAY_KEYS.includes(f.properties?.event || '')
-            );
+            const alerts = (data.features || [])
+                .filter(f => ALERT_OVERLAY_KEYS.includes(f.properties?.event || ''))
+                .map((feature, idx) => {
+                    const uid = _alertOverlayUid(feature, idx);
+                    feature.id = uid;
+                    feature.properties = feature.properties || {};
+                    feature.properties.__alert_uid = uid;
+                    return feature;
+                });
 
             // Normalize any existing geometries (NWS sometimes returns GeometryCollection
             // which Mapbox GL JS cannot render — flatten to Polygon/MultiPolygon)
@@ -4921,13 +4939,12 @@
         const seenKeys = new Set();
         const alertObjects = [];
         for (const feat of features) {
-            const alertFeature = _activeAlerts.find(f => f.id === feat.id)
-                              || _activeAlerts.find(f =>
-                                     f.properties?.event === feat.properties?.event &&
-                                     f.properties?.expires === feat.properties?.expires);
+            const clickedUid = String(feat.properties?.__alert_uid || feat.id || '');
+            const alertFeature = _activeAlerts.find(f =>
+                String(f.properties?.__alert_uid || f.id || '') === clickedUid
+            );
             if (!alertFeature) continue;
-            const key = alertFeature.id
-                     || (alertFeature.properties?.event + '|' + alertFeature.properties?.expires);
+            const key = clickedUid || _alertOverlayUid(alertFeature);
             if (seenKeys.has(key)) continue;
             seenKeys.add(key);
 
