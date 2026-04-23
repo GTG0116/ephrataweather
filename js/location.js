@@ -326,6 +326,8 @@ function initLocationSearch() {
     }
  
     function openDropdown() {
+        dropdown.classList.remove('is-closing');
+        dropdown.classList.add('is-open');
         dropdown.style.display = 'block';
         isOpen = true;
         favoritesEl.style.display = '';
@@ -334,10 +336,15 @@ function initLocationSearch() {
         resultsEl.innerHTML = '';
         setTimeout(() => searchInput.focus(), 50);
     }
- 
+
     function closeDropdown() {
-        dropdown.style.display = 'none';
         isOpen = false;
+        dropdown.classList.remove('is-open');
+        dropdown.classList.add('is-closing');
+        setTimeout(() => {
+            dropdown.style.display = 'none';
+            dropdown.classList.remove('is-closing');
+        }, 180);
     }
  
     trigger.addEventListener('click', (e) => {

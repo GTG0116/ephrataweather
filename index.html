@@ -2781,12 +2781,18 @@
     }
 
     function openSourceInfoModal() {
-        document.getElementById('source-info-modal').classList.add('open');
+        const el = document.getElementById('source-info-modal');
+        el.classList.remove('is-closing');
+        el.classList.add('open');
         document.body.style.overflow = 'hidden';
     }
     function closeSourceInfoModal() {
-        document.getElementById('source-info-modal').classList.remove('open');
-        document.body.style.overflow = '';
+        const el = document.getElementById('source-info-modal');
+        el.classList.add('is-closing');
+        setTimeout(() => {
+            el.classList.remove('open', 'is-closing');
+            document.body.style.overflow = '';
+        }, 220);
     }
 
     // ============================================================
@@ -2798,12 +2804,18 @@
     function openOutlookInfoModal(type) {
         const defaultTab = _OUTLOOK_TAB_MAP[type] || 'spc-cat';
         switchOutlookTab(defaultTab);
-        document.getElementById('outlook-info-modal').classList.add('open');
+        const el = document.getElementById('outlook-info-modal');
+        el.classList.remove('is-closing');
+        el.classList.add('open');
         document.body.style.overflow = 'hidden';
     }
     function closeOutlookInfoModal() {
-        document.getElementById('outlook-info-modal').classList.remove('open');
-        document.body.style.overflow = '';
+        const el = document.getElementById('outlook-info-modal');
+        el.classList.add('is-closing');
+        setTimeout(() => {
+            el.classList.remove('open', 'is-closing');
+            document.body.style.overflow = '';
+        }, 220);
     }
     function switchOutlookTab(tab) {
         document.querySelectorAll('#outlook-info-tabs .outlook-tab').forEach(btn =>
@@ -2890,7 +2902,9 @@
         document.getElementById('discussion-modal-subtitle').textContent = info.label;
         document.getElementById('discussion-modal-body').innerHTML =
             '<div class="discussion-loading">Loading discussion…</div>';
-        document.getElementById('discussion-modal').classList.add('open');
+        const el = document.getElementById('discussion-modal');
+        el.classList.remove('is-closing');
+        el.classList.add('open');
         document.body.style.overflow = 'hidden';
         fetchDiscussionText(info.url).then(text => {
             if (!text.trim()) {
@@ -2909,8 +2923,12 @@
     }
 
     function closeDiscussionModal() {
-        document.getElementById('discussion-modal').classList.remove('open');
-        document.body.style.overflow = '';
+        const el = document.getElementById('discussion-modal');
+        el.classList.add('is-closing');
+        setTimeout(() => {
+            el.classList.remove('open', 'is-closing');
+            document.body.style.overflow = '';
+        }, 220);
     }
 
     function openSPCDiscussion() {
