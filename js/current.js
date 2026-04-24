@@ -5,6 +5,12 @@
 // Auto-refresh timer handle — cleared and restarted each time the view inits.
 let _autoRefreshTimer = null;
 
+// In-memory cache of the last successfully rendered condition and daily data.
+// Used to re-apply day/night icon + background when revisiting the view without
+// a full re-fetch, and to persist the condition across auto-refresh cycles.
+let _lastCondType = null;
+let _lastDailyData = null;
+
 // initCurrentView can be called by the SPA router or by a standalone page.
 // Pass lat/lng directly, or omit to use LocationManager.getCurrent().
 async function initCurrentView(lat, lng) {
@@ -130,7 +136,7 @@ async function _autoRefreshCurrent() {
     ]);
 
     if (currentResult.status === 'fulfilled') {
-        renderCurrentConditions(currentResult.value, null);
+        renderCurrentConditions(currentResult.value, _lastDailyData);
     }
     if (aqiResult.status === 'fulfilled') {
         renderAirQuality(aqiResult.value);
@@ -1958,6 +1964,8 @@ function renderCurrentConditions(data, dailyData) {
     }
 
     const condType = data.weatherCondition?.type || condition;
+    _lastCondType = condType;
+    _lastDailyData = dailyData;
     const isNight = _isNighttime(dailyData?.forecastDays?.[0]);
     const iconSvg = WeatherIcons.fromText(condType, isNight);
     document.getElementById('current-icon').innerHTML = iconSvg;
@@ -2014,11 +2022,26 @@ function renderCurrentConditions(data, dailyData) {
     }
 
     applyWeatherBackground(condType, isNight);
+
+    // Persist enough data so the background can be restored instantly on next load.
+    try {
+        const day0 = dailyData?.forecastDays?.[0];
+        const srMs = _parseSunTime(day0?.sunrise);
+        const ssMs = _parseSunTime(day0?.sunset);
+        if (condType) {
+            localStorage.setItem('ephrata_last_cond', JSON.stringify({
+                condType,
+                srMs: (!isNaN(srMs) && srMs) ? srMs : null,
+                ssMs: (!isNaN(ssMs) && ssMs) ? ssMs : null
+            }));
+        }
+    } catch (_) {}
 }
 
 // Maps a condition type to one of the bg-cond-* CSS classes and applies it
-// to the .bg-gradient element with a brief opacity cross-fade.
-function applyWeatherBackground(condType, isNight) {
+// to the .bg-gradient element. Pass instant=true to skip the cross-fade
+// (used on page load to avoid a visible flash from default to actual color).
+function applyWeatherBackground(condType, isNight, instant = false) {
     const el = document.querySelector('.bg-gradient');
     if (!el) return;
     const ct = (condType || '').toUpperCase();
@@ -2043,6 +2066,14 @@ function applyWeatherBackground(condType, isNight) {
     if (!cls) return;
     if (el.classList.contains(cls)) return; // already correct, nothing to do
 
+    if (instant) {
+        el.style.transition = 'none';
+        el.className = el.className.replace(/\bbg-cond-\S+/g, '').trim();
+        el.classList.add(cls);
+        el.style.opacity = '1';
+        return;
+    }
+
     el.style.transition = 'opacity 0.6s ease';
     void el.offsetHeight; // flush styles so transition is registered before opacity change
     el.style.opacity = '0';
@@ -2053,6 +2084,34 @@ function applyWeatherBackground(condType, isNight) {
         el.style.opacity = '1';
     }, 650);
 }
+
+// Reads the persisted condition/sunrise/sunset from localStorage and applies the
+// background immediately (no transition). Called at app startup so the correct
+// background is visible before any API fetch completes.
+window._applyBgFromCache = function () {
+    try {
+        const s = JSON.parse(localStorage.getItem('ephrata_last_cond') || 'null');
+        if (!s?.condType) return;
+        const now = Date.now();
+        const isNight = (s.srMs && s.ssMs) ? (now < s.srMs || now > s.ssMs) : false;
+        applyWeatherBackground(s.condType, isNight, true);
+    } catch (_) {}
+};
+
+// Re-evaluates day/night using the in-memory cached daily data and updates
+// the current-conditions icon + background. Called when the user returns to
+// the current-conditions view without triggering a full re-fetch, so the icon
+// and background always reflect the actual time of day.
+window._refreshCurrentDayNight = function () {
+    if (!_lastCondType) {
+        window._applyBgFromCache();
+        return;
+    }
+    const isNight = _isNighttime(_lastDailyData?.forecastDays?.[0]);
+    const iconEl = document.getElementById('current-icon');
+    if (iconEl) iconEl.innerHTML = WeatherIcons.fromText(_lastCondType, isNight);
+    applyWeatherBackground(_lastCondType, isNight);
+};
 
 function renderHourlyForecast(data, forecastDays) {
     const strip = document.getElementById('hourly-strip');
