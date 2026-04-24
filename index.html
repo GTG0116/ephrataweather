@@ -5234,6 +5234,10 @@
         if (!viewInited[viewId]) {
             viewInited[viewId] = true;
             await initViewData(viewId);
+        } else if (viewId === 'current') {
+            // Already inited — re-evaluate day/night with current time so the icon
+            // and background are correct even if the user was away for hours.
+            if (typeof window._refreshCurrentDayNight === 'function') window._refreshCurrentDayNight();
         } else if (viewId === 'maps') {
             // Map needs a resize when its container becomes visible
             if (window._spaMap) setTimeout(() => window._spaMap.resize(), 50);
@@ -8206,12 +8210,51 @@
     document.addEventListener('webkitfullscreenchange', _handleFullscreenChange);
 
     // ============================================================
+    // GLOBAL BACKGROUND HELPER
+    // Fetches just enough data to set the weather background on any page.
+    // Only called when the initial view is NOT current-conditions (which would
+    // fetch its own data anyway). Runs concurrently with view init.
+    // ============================================================
+    async function _initGlobalBackground(loc) {
+        if (!loc?.lat) return;
+        const src = WeatherAPI.getDataSource();
+        const cFn = src === 'nws'        ? WeatherAPI.getNWSCurrentConditions(loc.lat, loc.lng)
+                  : src === 'open-meteo' ? WeatherAPI.getOpenMeteoCurrentConditions(loc.lat, loc.lng)
+                  : src === 'owm'        ? WeatherAPI.getOWMCurrentConditions(loc.lat, loc.lng)
+                  :                        WeatherAPI.getCurrentConditions(loc.lat, loc.lng);
+        const dFn = src === 'nws'        ? WeatherAPI.getNWSDailyForecast(loc.lat, loc.lng, 1)
+                  : src === 'open-meteo' ? WeatherAPI.getOpenMeteoDailyForecast(loc.lat, loc.lng, 1)
+                  : src === 'owm'        ? WeatherAPI.getOWMDailyForecast(loc.lat, loc.lng, 1)
+                  :                        WeatherAPI.getDailyForecast(loc.lat, loc.lng, 1);
+        const [cr, dr] = await Promise.allSettled([cFn, dFn]);
+        if (cr.status !== 'fulfilled') return;
+        const condType = cr.value.weatherCondition?.type || '';
+        if (!condType) return;
+        const day0 = dr.status === 'fulfilled' ? dr.value?.forecastDays?.[0] : null;
+        const isNight = _isNighttime(day0);
+        applyWeatherBackground(condType, isNight);
+        try {
+            const srMs = day0 ? _parseSunTime(day0.sunrise) : null;
+            const ssMs = day0 ? _parseSunTime(day0.sunset) : null;
+            localStorage.setItem('ephrata_last_cond', JSON.stringify({
+                condType,
+                srMs: (srMs && !isNaN(srMs)) ? srMs : null,
+                ssMs: (ssMs && !isNaN(ssMs)) ? ssMs : null
+            }));
+        } catch (_) {}
+    }
+
+    // ============================================================
     // BOOTSTRAP
     // ============================================================
     (async function () {
         // Show current time in the badge immediately on load
         const _tsInit = document.getElementById('last-updated');
         if (_tsInit) _tsInit.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+        // Apply the last-known background instantly from cache before any fetch,
+        // so there is no visible flash from the default gradient to the weather color.
+        if (typeof window._applyBgFromCache === 'function') window._applyBgFromCache();
 
         const loc = await LocationManager.init();
         const nameEl = document.getElementById('location-name');
@@ -8226,6 +8269,12 @@
 
         // Show initial view based on hash (default: home)
         await showView(getViewFromHash());
+
+        // If the user landed on a non-current view, fetch conditions in the background
+        // so the background color is accurate regardless of which page is open.
+        if (getViewFromHash() !== 'current') {
+            _initGlobalBackground(loc).catch(() => {});
+        }
 
     })();
     </script>
