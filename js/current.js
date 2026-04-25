@@ -2247,7 +2247,8 @@ function _renderMetricRow(hours, metric) {
     });
     if (lastX !== null) areaPath += ` L${lastX.toFixed(1)},${H} Z`;
 
-    // Dots and value labels
+    const targets = [];
+    // Dots
     let dotsHtml = '';
     vals.forEach((v, i) => {
         if (v == null) return;
@@ -2260,7 +2261,8 @@ function _renderMetricRow(hours, metric) {
             label = rating.short;
         }
         dotsHtml += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${dotColor}" stroke="rgba(10,15,35,0.8)" stroke-width="1.5"/>`;
-        dotsHtml += `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" fill="${metric === 'fwi' ? dotColor : 'rgba(255,255,255,0.9)'}" font-size="10.5" font-weight="500">${label}</text>`;
+        const t = hourTimeLabel(hours[i], i);
+        targets.push({ x, y, color: dotColor, text: `${t}: ${label}` });
     });
 
     const gradId = `mg_${metric}`;
@@ -2275,6 +2277,55 @@ function _renderMetricRow(hours, metric) {
         <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
         ${dotsHtml}
     </svg>`;
+
+    const svg = row.querySelector('svg');
+    if (!svg || !targets.length) return;
+    const tip = document.createElement('div');
+    tip.className = 'chart-touch-tip';
+    tip.style.display = 'none';
+    row.appendChild(tip);
+    const focus = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    focus.innerHTML = `<line x1="0" y1="18" x2="0" y2="${H - 6}" stroke="rgba(255,255,255,0.35)" stroke-dasharray="3 3"/>
+        <circle cx="0" cy="0" r="5" fill="none" stroke="#8dd4ff" stroke-width="2"/>
+        <circle cx="0" cy="0" r="2.5" fill="#8dd4ff"/>`;
+    focus.style.display = 'none';
+    svg.appendChild(focus);
+    const bandW = Math.max(22, (_ITEM_COL - 2));
+    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    targets.forEach((pt) => {
+        const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        r.setAttribute('x', String(Math.max(_STRIP_PAD, pt.x - bandW / 2)));
+        r.setAttribute('y', '0');
+        r.setAttribute('width', String(bandW));
+        r.setAttribute('height', String(H));
+        r.setAttribute('fill', 'transparent');
+        r.style.cursor = 'pointer';
+        const show = () => {
+            const [vline, ring, dot] = focus.children;
+            vline.setAttribute('x1', pt.x.toFixed(1));
+            vline.setAttribute('x2', pt.x.toFixed(1));
+            ring.setAttribute('cx', pt.x.toFixed(1));
+            ring.setAttribute('cy', pt.y.toFixed(1));
+            ring.setAttribute('stroke', pt.color);
+            dot.setAttribute('cx', pt.x.toFixed(1));
+            dot.setAttribute('cy', pt.y.toFixed(1));
+            dot.setAttribute('fill', pt.color);
+            focus.style.display = '';
+            tip.textContent = pt.text;
+            tip.style.left = `${Math.max(8, Math.min(svgW - 170, pt.x - 70))}px`;
+            tip.style.top = `${Math.max(4, pt.y - 38)}px`;
+            tip.style.display = 'block';
+        };
+        r.addEventListener('click', show);
+        r.addEventListener('touchstart', show, { passive: true });
+        hit.appendChild(r);
+    });
+    svg.appendChild(hit);
+}
+
+function hourTimeLabel(hour, index) {
+    if (index === 0) return 'Now';
+    return WeatherAPI.formatTime(hour.interval?.startTime || hour.displayDateTime);
 }
 
 function _updateMetricPills(hours) {

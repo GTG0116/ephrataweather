@@ -111,11 +111,87 @@ let _forecastPollenData = [];
 
 // ---- Forecast Charts ----
 let _activeForecastChart = 'temp';
+let _forecastChartTapEls = null;
+
+function _ensureForecastChartTapUI() {
+    const container = document.getElementById('forecast-charts-container');
+    if (!container) return null;
+    if (_forecastChartTapEls?.tooltip && _forecastChartTapEls?.hint && _forecastChartTapEls?.focus) {
+        return _forecastChartTapEls;
+    }
+    const tip = document.createElement('div');
+    tip.className = 'chart-touch-tip';
+    tip.style.display = 'none';
+    container.appendChild(tip);
+
+    const hint = document.createElement('div');
+    hint.className = 'chart-tap-hint';
+    hint.textContent = 'Tap chart to inspect exact values';
+    container.appendChild(hint);
+
+    _forecastChartTapEls = { tooltip: tip, hint, focus: null };
+    return _forecastChartTapEls;
+}
+
+function _attachForecastTapTargets(svg, tapTargets, domainX) {
+    const ui = _ensureForecastChartTapUI();
+    if (!ui || !Array.isArray(tapTargets) || !tapTargets.length) {
+        if (ui?.tooltip) ui.tooltip.style.display = 'none';
+        return;
+    }
+    const W = Number(svg.getAttribute('viewBox')?.split(' ')[2] || svg.clientWidth || 700);
+    const H = Number(svg.getAttribute('viewBox')?.split(' ')[3] || svg.clientHeight || 180);
+    const left = domainX?.left ?? 44;
+    const right = domainX?.right ?? (W - 16);
+    const span = Math.max(16, (right - left) / tapTargets.length);
+
+    const focus = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    focus.innerHTML = `
+        <line x1="0" y1="20" x2="0" y2="${H - 40}" stroke="rgba(255,255,255,0.35)" stroke-dasharray="3 3"/>
+        <circle cx="0" cy="0" r="5" fill="none" stroke="#8dd4ff" stroke-width="2"/>
+        <circle cx="0" cy="0" r="2.5" fill="#8dd4ff"/>
+    `;
+    focus.style.display = 'none';
+    svg.appendChild(focus);
+    ui.focus = focus;
+
+    const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    tapTargets.forEach((pt) => {
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', String(Math.max(left, pt.x - span * 0.5)));
+        rect.setAttribute('y', '0');
+        rect.setAttribute('width', String(span));
+        rect.setAttribute('height', String(H));
+        rect.setAttribute('fill', 'transparent');
+        rect.style.cursor = 'pointer';
+        const show = () => {
+            const [vline, ring, dot] = focus.children;
+            vline.setAttribute('x1', pt.x.toFixed(1));
+            vline.setAttribute('x2', pt.x.toFixed(1));
+            ring.setAttribute('cx', pt.x.toFixed(1));
+            ring.setAttribute('cy', pt.y.toFixed(1));
+            dot.setAttribute('cx', pt.x.toFixed(1));
+            dot.setAttribute('cy', pt.y.toFixed(1));
+            ring.setAttribute('stroke', pt.color || '#8dd4ff');
+            dot.setAttribute('fill', pt.color || '#8dd4ff');
+            focus.style.display = '';
+            ui.tooltip.innerHTML = `<strong>${pt.title}</strong><br>${pt.value}`;
+            ui.tooltip.style.left = `${Math.min(W - 140, Math.max(8, pt.x - 64))}px`;
+            ui.tooltip.style.top = `${Math.max(12, pt.y - 58)}px`;
+            ui.tooltip.style.display = 'block';
+        };
+        rect.addEventListener('click', show);
+        rect.addEventListener('touchstart', show, { passive: true });
+        overlay.appendChild(rect);
+    });
+    svg.appendChild(overlay);
+}
 
 function switchForecastChart(metric) {
     _activeForecastChart = metric;
     document.querySelectorAll('.chart-tab[data-fmetric]').forEach((btn) =>
         btn.classList.toggle('active', btn.dataset.fmetric === metric));
+    if (_forecastChartTapEls?.tooltip) _forecastChartTapEls.tooltip.style.display = 'none';
     _drawForecastChart(metric, forecastDays);
 }
 
@@ -189,14 +265,16 @@ function _drawForecastChart(metric, days) {
         });
         if (points.length) areaPath += ` L${points[points.length-1].x},${PAD_T + plotH} Z`;
 
-        // Dots + labels
+        const tapTargets = [];
+        // Dots
         let dots = '';
         days.forEach((d, i) => {
             const v = vals[i];
             if (v != null) {
-                const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
                 dots += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(v) - 7}" text-anchor="${anchor}" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(v)}</text>`;
+                `;
+                const dateStr = d.displayDate || d.interval?.startTime;
+                tapTargets.push({ x: xOf(i), y: yOf(v), title: WeatherAPI.formatDayName(dateStr, false), value: `${Math.round(v)} mph`, color: '#42A5F5' });
             }
         });
 
@@ -213,6 +291,7 @@ function _drawForecastChart(metric, days) {
             ${dots}
             <text x="${PAD_L - 5}" y="${PAD_T - 6}" text-anchor="end" fill="rgba(255,255,255,0.3)" font-size="8">mph</text>
         `;
+        _attachForecastTapTargets(svg, tapTargets, { left: PAD_L, right: PAD_L + plotW });
         return;
     }
 
@@ -268,20 +347,22 @@ function _drawForecastChart(metric, days) {
             xLabels += `<text x="${x}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
         });
 
+        const tapTargets = [];
         // Dots on hi/lo lines at each day
         let dots = '';
         days.forEach((d, i) => {
             const hi = d.maxTemperature?.degrees;
             const lo = d.minTemperature?.degrees;
-            const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
             if (hi != null) {
                 dots += `<circle cx="${xOf(i)}" cy="${yOf(hi)}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(hi) - 7}" text-anchor="${anchor}" fill="#FF7043" font-size="8.5" font-weight="500">${Math.round(hi)}\u00B0</text>`;
+                `;
             }
             if (lo != null) {
                 dots += `<circle cx="${xOf(i)}" cy="${yOf(lo)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(lo) + 15}" text-anchor="${anchor}" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(lo)}\u00B0</text>`;
+                `;
             }
+            const dateStr = d.displayDate || d.interval?.startTime;
+            if (hi != null && lo != null) tapTargets.push({ x: xOf(i), y: (yOf(hi) + yOf(lo)) / 2, title: WeatherAPI.formatDayName(dateStr, false), value: `High ${Math.round(hi)}° · Low ${Math.round(lo)}°`, color: '#FF8A65' });
         });
 
         svg.innerHTML = `
@@ -298,6 +379,7 @@ function _drawForecastChart(metric, days) {
             <path d="${loLineFixed}" fill="none" stroke="#42A5F5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
             ${dots}
         `;
+        _attachForecastTapTargets(svg, tapTargets, { left: PAD_L, right: PAD_L + plotW });
     } else if (metric === 'precip') {
         // Precipitation chance — vertical bar chart
         const xOf = (i) => PAD_L + i * barW + barW * 0.15;
@@ -311,6 +393,7 @@ function _drawForecastChart(metric, days) {
                         <text x="${PAD_L - 5}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.45)" font-size="9.5">${v}%</text>`;
         });
 
+        const tapTargets = [];
         let bars = '', xLabels = '';
         days.forEach((d, i) => {
             const chance = d.precipitation?.probability ?? 0;
@@ -321,15 +404,14 @@ function _drawForecastChart(metric, days) {
             bars += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}"
                           fill="rgba(38,198,218,${alpha.toFixed(2)})"
                           rx="3" ry="3"/>`;
-            if (chance > 0) {
-                bars += `<text x="${x + bw / 2}" y="${y - 5}" text-anchor="middle" fill="rgba(38,198,218,0.9)" font-size="8.5" font-weight="500">${Math.round(chance)}%</text>`;
-            }
             const dateStr = d.displayDate || d.interval?.startTime;
             const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
             xLabels += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
+            tapTargets.push({ x: x + bw / 2, y: Math.max(y, PAD_T + 14), title: WeatherAPI.formatDayName(dateStr, false), value: `${Math.round(chance)}% chance`, color: '#26C6DA' });
         });
 
         svg.innerHTML = `${yLabels}${bars}${xLabels}`;
+        _attachForecastTapTargets(svg, tapTargets, { left: PAD_L, right: PAD_L + plotW });
         return;
     }
 
@@ -359,6 +441,7 @@ function _drawForecastChart(metric, days) {
                         <text x="${PAD_L - 5}" y="${y + 4}" text-anchor="end" fill="rgba(255,255,255,0.45)" font-size="9.5">${v}</text>`;
         });
 
+        const tapTargets = [];
         let bars = '', xLabels = '';
         days.forEach((d, i) => {
             const v = vals[i];
@@ -366,8 +449,9 @@ function _drawForecastChart(metric, days) {
             if (v != null) {
                 const y = yOf(v);
                 const bh = (v / maxV) * plotH;
-                bars += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${uvColor(v)}" rx="3" ry="3"/>
-                         <text x="${x + bw / 2}" y="${y - 5}" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="8.5" font-weight="500">${Math.round(v)}</text>`;
+                bars += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${uvColor(v)}" rx="3" ry="3"/>`;
+                const dateStr = d.displayDate || d.interval?.startTime;
+                tapTargets.push({ x: x + bw / 2, y: Math.max(y, PAD_T + 14), title: WeatherAPI.formatDayName(dateStr, false), value: `UV ${Math.round(v)}`, color: uvColor(v) });
             }
             const dateStr = d.displayDate || d.interval?.startTime;
             const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
@@ -376,6 +460,7 @@ function _drawForecastChart(metric, days) {
 
         svg.innerHTML = `${yLabels}${bars}${xLabels}
             <text x="${PAD_L - 5}" y="${PAD_T - 6}" text-anchor="end" fill="rgba(255,255,255,0.3)" font-size="8">UV</text>`;
+        _attachForecastTapTargets(svg, tapTargets, { left: PAD_L, right: PAD_L + plotW });
         return;
     }
 
@@ -415,6 +500,7 @@ function _drawForecastChart(metric, days) {
         loLineFixed = loPoints.map((p, i) => (i === 0 ? `M${p.x},${p.y}` : ` L${p.x},${p.y}`)).join('');
         bandPath += ' Z';
 
+        const tapTargets = [];
         let xLabels = '', dots = '';
         days.forEach((d, i) => {
             const dateStr = d.displayDate || d.interval?.startTime;
@@ -422,11 +508,9 @@ function _drawForecastChart(metric, days) {
             xLabels += `<text x="${xOf(i)}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
             const hi = hiVals[i];
             const lo = loVals[i];
-            const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
-            if (hi != null) dots += `<circle cx="${xOf(i)}" cy="${yOf(hi)}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(hi) - 7}" text-anchor="${anchor}" fill="#FF7043" font-size="8.5" font-weight="500">${Math.round(hi)}\u00B0</text>`;
-            if (lo != null) dots += `<circle cx="${xOf(i)}" cy="${yOf(lo)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(lo) + 15}" text-anchor="${anchor}" fill="#42A5F5" font-size="8.5" font-weight="500">${Math.round(lo)}\u00B0</text>`;
+            if (hi != null) dots += `<circle cx="${xOf(i)}" cy="${yOf(hi)}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>`;
+            if (lo != null) dots += `<circle cx="${xOf(i)}" cy="${yOf(lo)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>`;
+            if (hi != null && lo != null) tapTargets.push({ x: xOf(i), y: (yOf(hi) + yOf(lo)) / 2, title: WeatherAPI.formatDayName(dateStr, false), value: `Feels ${Math.round(hi)}° / ${Math.round(lo)}°`, color: '#FF8A65' });
         });
 
         svg.innerHTML = `
@@ -441,6 +525,7 @@ function _drawForecastChart(metric, days) {
             <path d="${hiLine}" fill="none" stroke="#FF7043" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
             <path d="${loLineFixed}" fill="none" stroke="#42A5F5" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
             ${dots}`;
+        _attachForecastTapTargets(svg, tapTargets, { left: PAD_L, right: PAD_L + plotW });
         return;
     }
 
@@ -475,13 +560,14 @@ function _drawForecastChart(metric, days) {
         });
         if (points.length) areaPath += ` L${points[points.length-1].x},${PAD_T + plotH} Z`;
 
+        const tapTargets = [];
         let dots = '';
         days.forEach((d, i) => {
             const v = vals[i];
             if (v != null) {
-                const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
-                dots += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="#26C6DA" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                         <text x="${xOf(i)}" y="${yOf(v) - 7}" text-anchor="${anchor}" fill="#26C6DA" font-size="8.5" font-weight="500">${Math.round(v)}%</text>`;
+                dots += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="#26C6DA" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>`;
+                const dateStr = d.displayDate || d.interval?.startTime;
+                tapTargets.push({ x: xOf(i), y: yOf(v), title: WeatherAPI.formatDayName(dateStr, false), value: `${Math.round(v)}% humidity`, color: '#26C6DA' });
             }
         });
 
@@ -496,6 +582,7 @@ function _drawForecastChart(metric, days) {
             <path d="${areaPath}" fill="url(#fg_hum)"/>
             <path d="${linePath}" fill="none" stroke="#26C6DA" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
             ${dots}`;
+        _attachForecastTapTargets(svg, tapTargets, { left: PAD_L, right: PAD_L + plotW });
         return;
     }
 
@@ -538,6 +625,7 @@ function _drawForecastChart(metric, days) {
                         <circle cx="${legendX - 36}" cy="${legendY}" r="3.5" fill="rgba(255,112,67,0.9)"/>
                         <text x="${legendX - 30}" y="${legendY + 4}" fill="rgba(255,112,67,0.8)" font-size="8">Sunset</text>`;
 
+        const tapTargets = [];
         let bars = '', dayLabels = '';
         days.forEach((d, i) => {
             const rm = rMins[i];
@@ -556,15 +644,15 @@ function _drawForecastChart(metric, days) {
                 // Sunrise dot + label (anchored start = extends right, away from sunset label)
                 bars += `<circle cx="${x1}" cy="${y}" r="4" fill="rgba(255,183,77,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>`;
                 const rTime = sunriseVals[i].toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                bars += `<text x="${x1 + 7}" y="${labelY}" text-anchor="start" fill="rgba(255,183,77,1)" font-size="8" font-weight="500" stroke="rgba(10,15,35,0.9)" stroke-width="3" paint-order="stroke">${rTime}</text>`;
                 // Sunset dot + label (anchored end = extends left, away from sunrise label)
                 bars += `<circle cx="${x2}" cy="${y}" r="4" fill="rgba(255,112,67,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>`;
                 const sTime = sunsetVals[i].toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                bars += `<text x="${x2 - 7}" y="${labelY}" text-anchor="end" fill="rgba(255,112,67,1)" font-size="8" font-weight="500" stroke="rgba(10,15,35,0.9)" stroke-width="3" paint-order="stroke">${sTime}</text>`;
+                tapTargets.push({ x: (x1 + x2) / 2, y, title: WeatherAPI.formatDayName(dateStr, false), value: `Sunrise ${rTime} · Sunset ${sTime}`, color: 'rgba(255,183,77,0.9)' });
             }
         });
 
         svg.innerHTML = `${xLabels}${dayLabels}${legend}${bars}`;
+        _attachForecastTapTargets(svg, tapTargets, { left: PAD_L, right: PAD_L + plotW });
         return;
     }
 }
