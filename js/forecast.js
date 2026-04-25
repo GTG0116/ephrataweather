@@ -266,15 +266,18 @@ function _drawForecastChart(metric, days) {
         if (points.length) areaPath += ` L${points[points.length-1].x},${PAD_T + plotH} Z`;
 
         const tapTargets = [];
-        // Dots
+        // Dots + value labels
         let dots = '';
         days.forEach((d, i) => {
             const v = vals[i];
             if (v != null) {
-                dots += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                `;
+                const px = xOf(i), py = yOf(v);
+                const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+                const lblY = py < PAD_T + 14 ? py + 14 : py - 7;
+                dots += `<circle cx="${px}" cy="${py}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                         <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#42A5F5" font-size="8" font-weight="600" opacity="0.9">${Math.round(v)}</text>`;
                 const dateStr = d.displayDate || d.interval?.startTime;
-                tapTargets.push({ x: xOf(i), y: yOf(v), title: WeatherAPI.formatDayName(dateStr, false), value: `${Math.round(v)} mph`, color: '#42A5F5' });
+                tapTargets.push({ x: px, y: py, title: WeatherAPI.formatDayName(dateStr, false), value: `${Math.round(v)} mph`, color: '#42A5F5' });
             }
         });
 
@@ -348,18 +351,23 @@ function _drawForecastChart(metric, days) {
         });
 
         const tapTargets = [];
-        // Dots on hi/lo lines at each day
+        // Dots + value labels on hi/lo lines at each day
         let dots = '';
         days.forEach((d, i) => {
             const hi = d.maxTemperature?.degrees;
             const lo = d.minTemperature?.degrees;
+            const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
             if (hi != null) {
-                dots += `<circle cx="${xOf(i)}" cy="${yOf(hi)}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                `;
+                const px = xOf(i), py = yOf(hi);
+                const lblY = Math.max(PAD_T + 10, py - 7);
+                dots += `<circle cx="${px}" cy="${py}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                         <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#FF7043" font-size="8" font-weight="600" opacity="0.9">${Math.round(hi)}°</text>`;
             }
             if (lo != null) {
-                dots += `<circle cx="${xOf(i)}" cy="${yOf(lo)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
-                `;
+                const px = xOf(i), py = yOf(lo);
+                const lblY = Math.min(H - PAD_B - 5, py + 14);
+                dots += `<circle cx="${px}" cy="${py}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                         <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#42A5F5" font-size="8" font-weight="600" opacity="0.9">${Math.round(lo)}°</text>`;
             }
             const dateStr = d.displayDate || d.interval?.startTime;
             if (hi != null && lo != null) tapTargets.push({ x: xOf(i), y: (yOf(hi) + yOf(lo)) / 2, title: WeatherAPI.formatDayName(dateStr, false), value: `High ${Math.round(hi)}° · Low ${Math.round(lo)}°`, color: '#FF8A65' });
@@ -404,6 +412,10 @@ function _drawForecastChart(metric, days) {
             bars += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}"
                           fill="rgba(38,198,218,${alpha.toFixed(2)})"
                           rx="3" ry="3"/>`;
+            if (chance > 0) {
+                const lblY = Math.max(PAD_T + 10, y - 3);
+                bars += `<text x="${x + bw / 2}" y="${lblY}" text-anchor="middle" fill="rgba(38,198,218,0.9)" font-size="8" font-weight="600">${Math.round(chance)}%</text>`;
+            }
             const dateStr = d.displayDate || d.interval?.startTime;
             const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
             xLabels += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
@@ -450,6 +462,8 @@ function _drawForecastChart(metric, days) {
                 const y = yOf(v);
                 const bh = (v / maxV) * plotH;
                 bars += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${uvColor(v)}" rx="3" ry="3"/>`;
+                const lblY = Math.max(PAD_T + 10, y - 3);
+                bars += `<text x="${x + bw / 2}" y="${lblY}" text-anchor="middle" fill="${uvColor(v)}" font-size="8" font-weight="600" opacity="0.95">${Math.round(v)}</text>`;
                 const dateStr = d.displayDate || d.interval?.startTime;
                 tapTargets.push({ x: x + bw / 2, y: Math.max(y, PAD_T + 14), title: WeatherAPI.formatDayName(dateStr, false), value: `UV ${Math.round(v)}`, color: uvColor(v) });
             }
@@ -508,8 +522,19 @@ function _drawForecastChart(metric, days) {
             xLabels += `<text x="${xOf(i)}" y="${H - 6}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="9.5">${label}</text>`;
             const hi = hiVals[i];
             const lo = loVals[i];
-            if (hi != null) dots += `<circle cx="${xOf(i)}" cy="${yOf(hi)}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>`;
-            if (lo != null) dots += `<circle cx="${xOf(i)}" cy="${yOf(lo)}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>`;
+            const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+            if (hi != null) {
+                const px = xOf(i), py = yOf(hi);
+                const lblY = Math.max(PAD_T + 10, py - 7);
+                dots += `<circle cx="${px}" cy="${py}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                          <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#FF7043" font-size="8" font-weight="600" opacity="0.9">${Math.round(hi)}°</text>`;
+            }
+            if (lo != null) {
+                const px = xOf(i), py = yOf(lo);
+                const lblY = Math.min(H - PAD_B - 5, py + 14);
+                dots += `<circle cx="${px}" cy="${py}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                          <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#42A5F5" font-size="8" font-weight="600" opacity="0.9">${Math.round(lo)}°</text>`;
+            }
             if (hi != null && lo != null) tapTargets.push({ x: xOf(i), y: (yOf(hi) + yOf(lo)) / 2, title: WeatherAPI.formatDayName(dateStr, false), value: `Feels ${Math.round(hi)}° / ${Math.round(lo)}°`, color: '#FF8A65' });
         });
 
@@ -565,9 +590,13 @@ function _drawForecastChart(metric, days) {
         days.forEach((d, i) => {
             const v = vals[i];
             if (v != null) {
-                dots += `<circle cx="${xOf(i)}" cy="${yOf(v)}" r="3" fill="#26C6DA" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>`;
+                const px = xOf(i), py = yOf(v);
+                const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
+                const lblY = py < PAD_T + 14 ? py + 14 : py - 7;
+                dots += `<circle cx="${px}" cy="${py}" r="3" fill="#26C6DA" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
+                         <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#26C6DA" font-size="8" font-weight="600" opacity="0.9">${Math.round(v)}%</text>`;
                 const dateStr = d.displayDate || d.interval?.startTime;
-                tapTargets.push({ x: xOf(i), y: yOf(v), title: WeatherAPI.formatDayName(dateStr, false), value: `${Math.round(v)}% humidity`, color: '#26C6DA' });
+                tapTargets.push({ x: px, y: py, title: WeatherAPI.formatDayName(dateStr, false), value: `${Math.round(v)}% humidity`, color: '#26C6DA' });
             }
         });
 

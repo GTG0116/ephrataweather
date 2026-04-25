@@ -5536,7 +5536,14 @@
                 const value = Number(row[valueIndex]);
                 const time = row[timeIndex];
                 if (Number.isNaN(value)) return null;
-                const ts = new Date(time).getTime();
+                // NOAA SWPC timestamps are UTC but use "YYYY-MM-DD HH:mm:ss.sss" with no
+                // tz suffix. Browsers treat that format as local time, causing times to be
+                // hours off. Append Z to force correct UTC parsing in all browsers.
+                let timeStr = time;
+                if (typeof time === 'string' && /^\d{4}-\d{2}-\d{2} /.test(time)) {
+                    timeStr = time.replace(' ', 'T') + 'Z';
+                }
+                const ts = new Date(timeStr).getTime();
                 return { t: Number.isNaN(ts) ? null : ts, value };
             })
             .filter(Boolean)
@@ -5636,89 +5643,130 @@
             return;
         }
         const w = 360, h = 190;
-        const pad = { l: 36, r: 10, t: 14, b: 24 };
+        const pad = { l: 50, r: 10, t: 14, b: 26 };
+        const plotW = w - pad.l - pad.r;
+        const plotH = h - pad.t - pad.b;
+
         const minX = Math.min(...points.map(p => p.t));
         const maxX = Math.max(...points.map(p => p.t));
         let minY = Math.min(...points.map(p => p.value));
         let maxY = Math.max(...points.map(p => p.value));
-        if (minY === maxY) {
-            minY -= 1;
-            maxY += 1;
+        const rangeY = maxY - minY || 2;
+        minY -= rangeY * 0.1;
+        maxY += rangeY * 0.1;
+
+        const xOf = t => pad.l + ((t - minX) / (maxX - minX)) * plotW;
+        const yOf = v => pad.t + plotH - ((v - minY) / (maxY - minY)) * plotH;
+
+        // Y-axis grid lines + labels (5 ticks)
+        let yGrid = '';
+        for (let i = 0; i <= 4; i++) {
+            const v = minY + (maxY - minY) * (i / 4);
+            const yv = yOf(v);
+            const lbl = Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1);
+            yGrid += `<line x1="${pad.l}" y1="${yv.toFixed(1)}" x2="${w - pad.r}" y2="${yv.toFixed(1)}" stroke="rgba(255,255,255,${i === 0 || i === 4 ? '0.1' : '0.05'})" stroke-width="1"/>
+<text x="${pad.l - 4}" y="${(yv + 3.5).toFixed(1)}" text-anchor="end" fill="rgba(255,255,255,0.4)" font-size="9.5">${lbl}</text>`;
         }
-        const x = t => pad.l + ((t - minX) / (maxX - minX)) * (w - pad.l - pad.r);
-        const y = v => h - pad.b - ((v - minY) / (maxY - minY)) * (h - pad.t - pad.b);
-        const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
-        const mid = points[Math.floor(points.length / 2)];
-        const startLabel = new Date(points[0].t).toLocaleTimeString([], { hour: 'numeric' });
-        const midLabel = new Date(mid.t).toLocaleTimeString([], { hour: 'numeric' });
-        const endLabel = new Date(points[points.length - 1].t).toLocaleTimeString([], { hour: 'numeric' });
-        const gradId = `${cardId.replace(/[^a-z0-9]/gi, '')}-grad`;
-        const overlayId = `${cardId.replace(/[^a-z0-9]/gi, '')}-overlay`;
+
+        // Zero reference line for charts that span positive and negative (e.g. Bz)
+        const hasZero = minY < 0 && maxY > 0;
+        const zeroLine = hasZero
+            ? `<line x1="${pad.l}" y1="${yOf(0).toFixed(1)}" x2="${w - pad.r}" y2="${yOf(0).toFixed(1)}" stroke="rgba(141,212,255,0.35)" stroke-width="1" stroke-dasharray="4 3"/>`
+            : '';
+
+        // X-axis time labels (5 evenly spaced)
+        let xLabels = '';
+        for (let i = 0; i <= 4; i++) {
+            const t = minX + (maxX - minX) * (i / 4);
+            const xv = pad.l + (i / 4) * plotW;
+            const lbl = new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const anchor = i === 0 ? 'start' : i === 4 ? 'end' : 'middle';
+            xLabels += `<text x="${xv.toFixed(1)}" y="${h - 8}" text-anchor="${anchor}" fill="rgba(255,255,255,0.38)" font-size="9">${lbl}</text>`;
+        }
+
+        // Line + area paths
+        const linePath = points.map((p, i) => `${i ? 'L' : 'M'}${xOf(p.t).toFixed(1)},${yOf(p.value).toFixed(1)}`).join('');
+        const areaPath = `${linePath} L${xOf(points[points.length - 1].t).toFixed(1)},${pad.t + plotH} L${xOf(points[0].t).toFixed(1)},${pad.t + plotH} Z`;
+
+        const gradId = `sc${cardId.replace(/[^a-z0-9]/gi, '')}_g`;
+        const overlayId = `sc${cardId.replace(/[^a-z0-9]/gi, '')}_o`;
+
         holder.innerHTML = `
             <h4>${title}</h4>
             <svg class="space-chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${title}">
                 <defs>
                     <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stop-color="#8dd4ff" stop-opacity="0.32"/>
-                        <stop offset="100%" stop-color="#8dd4ff" stop-opacity="0"/>
+                        <stop offset="0%" stop-color="#8dd4ff" stop-opacity="0.3"/>
+                        <stop offset="100%" stop-color="#8dd4ff" stop-opacity="0.02"/>
                     </linearGradient>
                 </defs>
-                <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${h - pad.b}" stroke="rgba(255,255,255,0.24)" stroke-width="1"/>
-                <line x1="${pad.l}" y1="${h - pad.b}" x2="${w - pad.r}" y2="${h - pad.b}" stroke="rgba(255,255,255,0.24)" stroke-width="1"/>
-                <line x1="${pad.l}" y1="${pad.t}" x2="${w - pad.r}" y2="${pad.t}" stroke="rgba(255,255,255,0.09)" stroke-width="1"/>
-                <path d="${d} L${x(points[points.length - 1].t).toFixed(1)},${h - pad.b} L${x(points[0].t).toFixed(1)},${h - pad.b} Z" fill="url(#${gradId})"/>
-                <path d="${d}" fill="none" stroke="#8dd4ff" stroke-width="2"/>
+                ${yGrid}
+                ${zeroLine}
+                <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + plotH}" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+                <line x1="${pad.l}" y1="${pad.t + plotH}" x2="${w - pad.r}" y2="${pad.t + plotH}" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+                <path d="${areaPath}" fill="url(#${gradId})"/>
+                <path d="${linePath}" fill="none" stroke="#8dd4ff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
                 <g id="${overlayId}"></g>
-                <text x="${pad.l}" y="${h - 8}" fill="var(--text-muted)" font-size="10">${startLabel}</text>
-                <text x="${w / 2}" y="${h - 8}" text-anchor="middle" fill="var(--text-muted)" font-size="10">${midLabel}</text>
-                <text x="${w - pad.r}" y="${h - 8}" text-anchor="end" fill="var(--text-muted)" font-size="10">${endLabel}</text>
-                <text x="${pad.l + 3}" y="${pad.t + 10}" fill="var(--text-muted)" font-size="10">${maxY.toFixed(1)} ${yLabel}</text>
-                <text x="${pad.l + 3}" y="${h - pad.b - 4}" fill="var(--text-muted)" font-size="10">${minY.toFixed(1)} ${yLabel}</text>
+                ${xLabels}
             </svg>
         `;
+
         const svg = holder.querySelector('svg');
-        const overlay = holder.querySelector(`#${overlayId}`);
+        const overlayG = holder.querySelector(`#${overlayId}`);
+
         const tip = document.createElement('div');
         tip.className = 'chart-touch-tip';
         tip.style.display = 'none';
-        tip.style.left = '10px';
-        tip.style.top = '12px';
         holder.appendChild(tip);
+
         const focus = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        focus.innerHTML = `<line x1="0" y1="${pad.t}" x2="0" y2="${h - pad.b}" stroke="rgba(255,255,255,0.32)" stroke-dasharray="3 3"/>
+        focus.innerHTML = `
+            <line x1="0" y1="${pad.t}" x2="0" y2="${pad.t + plotH}" stroke="rgba(255,255,255,0.32)" stroke-dasharray="3 3" stroke-width="1"/>
             <circle cx="0" cy="0" r="5" fill="none" stroke="#8dd4ff" stroke-width="2"/>
             <circle cx="0" cy="0" r="2.5" fill="#8dd4ff"/>`;
         focus.style.display = 'none';
-        overlay.appendChild(focus);
-        const hitW = Math.max(14, (w - pad.l - pad.r) / points.length);
-        points.forEach((p) => {
-            const xp = x(p.t);
-            const yp = y(p.value);
-            const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            hit.setAttribute('x', String(Math.max(pad.l, xp - hitW / 2)));
-            hit.setAttribute('y', '0');
-            hit.setAttribute('width', String(hitW));
-            hit.setAttribute('height', String(h));
-            hit.setAttribute('fill', 'transparent');
-            hit.style.cursor = 'pointer';
-            const show = () => {
-                const [vline, ring, dot] = focus.children;
-                vline.setAttribute('x1', xp.toFixed(1));
-                vline.setAttribute('x2', xp.toFixed(1));
-                ring.setAttribute('cx', xp.toFixed(1));
-                ring.setAttribute('cy', yp.toFixed(1));
-                dot.setAttribute('cx', xp.toFixed(1));
-                dot.setAttribute('cy', yp.toFixed(1));
-                focus.style.display = '';
-                tip.innerHTML = `<strong>${new Date(p.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</strong><br>${p.value.toFixed(1)} ${yLabel}`;
-                tip.style.display = 'block';
-                tip.style.left = `${Math.max(10, Math.min(w - 140, xp - 62))}px`;
-                tip.style.top = `${Math.max(10, yp - 54)}px`;
-            };
-            hit.addEventListener('click', show);
-            hit.addEventListener('touchstart', show, { passive: true });
-            overlay.appendChild(hit);
-        });
+        overlayG.appendChild(focus);
+
+        // Single transparent rect covering the whole plot area for pointer tracking
+        const trackRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        trackRect.setAttribute('x', String(pad.l));
+        trackRect.setAttribute('y', '0');
+        trackRect.setAttribute('width', String(plotW));
+        trackRect.setAttribute('height', String(h));
+        trackRect.setAttribute('fill', 'transparent');
+        trackRect.style.cursor = 'crosshair';
+        overlayG.appendChild(trackRect);
+
+        const getNearestPoint = (clientX) => {
+            const svgRect = svg.getBoundingClientRect();
+            const localX = (clientX - svgRect.left) * (w / svgRect.width);
+            let best = points[0], bestDist = Infinity;
+            for (const p of points) {
+                const dist = Math.abs(xOf(p.t) - localX);
+                if (dist < bestDist) { bestDist = dist; best = p; }
+            }
+            return best;
+        };
+
+        const showPoint = (p, clientX, clientY) => {
+            const xp = xOf(p.t), yp = yOf(p.value);
+            const [vline, ring, dot] = focus.children;
+            vline.setAttribute('x1', xp.toFixed(1)); vline.setAttribute('x2', xp.toFixed(1));
+            ring.setAttribute('cx', xp.toFixed(1)); ring.setAttribute('cy', yp.toFixed(1));
+            dot.setAttribute('cx', xp.toFixed(1)); dot.setAttribute('cy', yp.toFixed(1));
+            focus.style.display = '';
+            const timeStr = new Date(p.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            tip.innerHTML = `<strong>${timeStr}</strong><br>${p.value.toFixed(1)} ${yLabel}`;
+            tip.style.display = 'block';
+            const hr = holder.getBoundingClientRect();
+            tip.style.left = Math.max(8, Math.min(hr.width - 130, clientX - hr.left - 60)) + 'px';
+            tip.style.top = Math.max(8, clientY - hr.top - 58) + 'px';
+        };
+
+        trackRect.addEventListener('mousemove', e => showPoint(getNearestPoint(e.clientX), e.clientX, e.clientY));
+        trackRect.addEventListener('mouseleave', () => { focus.style.display = 'none'; tip.style.display = 'none'; });
+        trackRect.addEventListener('touchstart', e => showPoint(getNearestPoint(e.touches[0].clientX), e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+        trackRect.addEventListener('touchmove', e => showPoint(getNearestPoint(e.touches[0].clientX), e.touches[0].clientX, e.touches[0].clientY), { passive: true });
     }
 
     async function initSpaceWeatherView() {
@@ -8364,18 +8412,24 @@
             });
             if (linePts.length > 0) areaPath += ` L${linePts[linePts.length-1].x},${PAD_T+plotH} Z`;
 
-            // Data dots + value labels (show only for small datasets)
+            // Data dots + value labels with smart vertical positioning to avoid clipping
             let dots = '';
-            if (n <= 20) {
-                series.forEach((v, i) => {
-                    if (v == null) return;
-                    const px = xOf(i), py = yOf(v);
-                    const anchor = i === 0 ? 'start' : i === n-1 ? 'end' : 'middle';
+            // Thin out labels at high density so they don't overlap horizontally
+            const minSpacing = 24; // px between label centres
+            const spacing = plotW / Math.max(n - 1, 1);
+            const labelStep = spacing >= minSpacing ? 1 : Math.ceil(minSpacing / spacing);
+            series.forEach((v, i) => {
+                if (v == null) return;
+                const px = xOf(i), py = yOf(v);
+                dots += `<circle cx="${px}" cy="${py}" r="3" fill="${clr}" stroke="rgba(15,20,40,0.85)" stroke-width="1.5"/>`;
+                if (i % labelStep === 0) {
+                    const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
                     const lbl = metric === 'pressure' ? v.toFixed(2) : Math.round(v);
-                    dots += `<circle cx="${px}" cy="${py}" r="3" fill="${clr}" stroke="rgba(15,20,40,0.85)" stroke-width="1.5"/>
-                             <text x="${px}" y="${py-7}" text-anchor="${anchor}" fill="${clr}" font-size="8" font-weight="600">${lbl}</text>`;
-                });
-            }
+                    // Place above unless point is near the top, then place below
+                    const lblY = py < PAD_T + 14 ? py + 14 : py - 7;
+                    dots += `<text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="${clr}" font-size="8" font-weight="600" opacity="0.9">${lbl}</text>`;
+                }
+            });
 
             return { linePath, areaPath, dots };
         };
