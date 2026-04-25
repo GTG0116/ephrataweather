@@ -6214,7 +6214,12 @@
             windrh: 'https://www.spc.noaa.gov/products/fire_wx/day2fw_windrh.nolyr.geojson',
         },
     };
-    const DROUGHT_URL = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NWS_Climate_Outlooks/cpc_usdm/MapServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson';
+    const DROUGHT_URLS = [
+        // Primary source: NOAA/NIDIS USDM GeoJSON (updated weekly, Thursday).
+        'https://www.ncei.noaa.gov/pub/data/nidis/geojson/us/usdm/USDM-current.geojson',
+        // Fallback legacy ArcGIS endpoint (kept as backup for compatibility).
+        'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NWS_Climate_Outlooks/cpc_usdm/MapServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson'
+    ];
 
     // Official NWS WPC ERO colors (Moderate=red, High=pink like SPC High)
     const WPC_ERO_FILL_EXPR = ['match', ['get', 'CATEGORY'],
@@ -6413,8 +6418,29 @@
         if (!map) return;
         showLoading('Loading U.S. Drought Monitor…');
         try {
-            const data = await fetchSPCGeoJSON(DROUGHT_URL);
-            const normalized = normalizeDroughtData(data);
+            let normalized = null;
+            let lastError = null;
+
+            for (const url of DROUGHT_URLS) {
+                try {
+                    const data = await fetchSPCGeoJSON(url);
+                    const candidate = normalizeDroughtData(data);
+                    const hasClassifiedFeatures = (candidate?.features || []).some(f => (f?.properties?.CATEGORY || '') !== '');
+                    if (!hasClassifiedFeatures) {
+                        throw new Error('No drought category fields found in feed response');
+                    }
+                    normalized = candidate;
+                    break;
+                } catch (err) {
+                    lastError = err;
+                    console.warn('Drought feed failed, trying next source:', url, err);
+                }
+            }
+
+            if (!normalized) {
+                throw (lastError || new Error('No drought feeds returned usable data'));
+            }
+
             clearDroughtLayers();
             map.addSource('drought-data', { type: 'geojson', data: normalized });
             map.addLayer({ id: 'drought-fill', type: 'fill', source: 'drought-data',
