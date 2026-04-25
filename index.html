@@ -1556,7 +1556,7 @@
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
         }
         .space-stat-label { display:flex; align-items:center; gap:6px; font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
-        .space-mini-icon { font-size:0.86rem; filter:saturate(1.15); }
+        .space-mini-icon { width:14px; height:14px; flex-shrink:0; filter:saturate(1.15); display:block; }
         .space-stat-value { font-size:1.35rem; font-weight:600; color:#d7efff; text-shadow:0 0 12px rgba(112,187,255,0.35); }
         .space-stat-sub { margin-top:3px; font-size:0.72rem; color:var(--text-secondary); }
         .space-chart-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-top:10px; }
@@ -2628,11 +2628,11 @@
             <div class="glass-static" style="padding:16px;">
                 <h3 class="section-title" style="margin-bottom:10px;">Space Weather</h3>
                 <div class="space-grid">
-                    <div class="space-stat"><div class="space-stat-label"><span class="space-mini-icon">🧲</span>KP Index</div><div class="space-stat-value" id="space-kp">--</div><div class="space-stat-sub" id="space-kp-time">Latest</div></div>
-                    <div class="space-stat"><div class="space-stat-label"><span class="space-mini-icon">🌐</span>G Scale</div><div class="space-stat-value" id="space-g">--</div><div class="space-stat-sub" id="space-g-time">NOAA Scale</div></div>
-                    <div class="space-stat"><div class="space-stat-label"><span class="space-mini-icon">☄️</span>Solar Wind Speed</div><div class="space-stat-value" id="space-speed">--</div><div class="space-stat-sub">km/s</div></div>
-                    <div class="space-stat"><div class="space-stat-label"><span class="space-mini-icon">⚛️</span>Proton Density</div><div class="space-stat-value" id="space-density">--</div><div class="space-stat-sub">p/cm³</div></div>
-                    <div class="space-stat"><div class="space-stat-label"><span class="space-mini-icon">🧭</span>Bz</div><div class="space-stat-value" id="space-bz">--</div><div class="space-stat-sub">nT</div></div>
+                    <div class="space-stat"><div class="space-stat-label"><svg class="space-mini-icon" viewBox="0 0 14 14" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"><path d="M1.5 3.5C4 1.2 10 1.2 12.5 3.5"/><path d="M1.5 7C4 4.7 10 4.7 12.5 7"/><path d="M1.5 10.5C4 8.2 10 8.2 12.5 10.5"/></svg>KP Index</div><div class="space-stat-value" id="space-kp">--</div><div class="space-stat-sub" id="space-kp-time">Latest</div></div>
+                    <div class="space-stat"><div class="space-stat-label"><svg class="space-mini-icon" viewBox="0 0 14 14" fill="none" stroke="#38bdf8" stroke-width="1.4"><circle cx="7" cy="7" r="4.8"/><path d="M2.2 7C4.5 4.5 9.5 9.5 11.8 7" stroke-width="1.1"/><ellipse cx="7" cy="7" rx="2" ry="4.8" stroke-width="1"/></svg>G Scale</div><div class="space-stat-value" id="space-g">--</div><div class="space-stat-sub" id="space-g-time">NOAA Scale</div></div>
+                    <div class="space-stat"><div class="space-stat-label"><svg class="space-mini-icon" viewBox="0 0 14 14" fill="none" stroke="#f97316" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="2.5" cy="7" r="1.5" fill="#f97316" stroke="none"/><line x1="5" y1="4.5" x2="11" y2="4.5"/><polyline points="8.5 3 11 4.5 8.5 6"/><line x1="5" y1="9.5" x2="11" y2="9.5"/><polyline points="8.5 8 11 9.5 8.5 11"/></svg>Solar Wind Speed</div><div class="space-stat-value" id="space-speed">--</div><div class="space-stat-sub">km/s</div></div>
+                    <div class="space-stat"><div class="space-stat-label"><svg class="space-mini-icon" viewBox="0 0 14 14" fill="none" stroke="#4ade80" stroke-width="1.3"><circle cx="7" cy="7" r="1.6" fill="#4ade80" stroke="none"/><ellipse cx="7" cy="7" rx="5.8" ry="2.1"/><ellipse cx="7" cy="7" rx="5.8" ry="2.1" transform="rotate(60 7 7)"/><ellipse cx="7" cy="7" rx="5.8" ry="2.1" transform="rotate(120 7 7)"/></svg>Proton Density</div><div class="space-stat-value" id="space-density">--</div><div class="space-stat-sub">p/cm³</div></div>
+                    <div class="space-stat"><div class="space-stat-label"><svg class="space-mini-icon" viewBox="0 0 14 14" fill="none" stroke="#c084fc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="1" x2="7" y2="13"/><polyline points="4.5 3.5 7 1 9.5 3.5"/><polyline points="4.5 10.5 7 13 9.5 10.5"/><line x1="3" y1="7" x2="11" y2="7" stroke-dasharray="2 1.5" stroke-width="1.1" opacity="0.7"/></svg>Bz</div><div class="space-stat-value" id="space-bz">--</div><div class="space-stat-sub">nT</div></div>
                 </div>
 
                 <div class="space-timeframe-row">
@@ -6215,9 +6215,11 @@
         },
     };
     const DROUGHT_URLS = [
-        // Primary source: NOAA/NIDIS USDM GeoJSON (updated weekly, Thursday).
+        // Primary: NOAA/NIDIS USDM GeoJSON (updated weekly, Thursday).
         'https://www.ncei.noaa.gov/pub/data/nidis/geojson/us/usdm/USDM-current.geojson',
-        // Fallback legacy ArcGIS endpoint (kept as backup for compatibility).
+        // Secondary: ESRI Living Atlas USDM feature layer (public, CORS-enabled, DM field = 0–4).
+        'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Drought_Monitor/FeatureServer/0/query?where=1=1&outFields=DM&outSR=4326&f=geojson',
+        // Tertiary: Legacy NOAA NCEP ArcGIS endpoint (kept as last resort).
         'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NWS_Climate_Outlooks/cpc_usdm/MapServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson'
     ];
 
