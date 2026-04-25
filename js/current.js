@@ -2260,7 +2260,9 @@ function _renderMetricRow(hours, metric) {
             dotColor = rating.color;
             label = rating.short;
         }
-        dotsHtml += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${dotColor}" stroke="rgba(10,15,35,0.8)" stroke-width="1.5"/>`;
+        const lblY = Math.max(PAD_T - 2, y - 10);
+        dotsHtml += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.5" fill="${dotColor}" stroke="rgba(10,15,35,0.8)" stroke-width="1.5"/>
+                     <text x="${x.toFixed(1)}" y="${lblY.toFixed(1)}" text-anchor="middle" fill="${dotColor}" font-size="8.5" font-weight="600" opacity="0.9">${label}</text>`;
         const t = hourTimeLabel(hours[i], i);
         targets.push({ x, y, color: dotColor, text: `${t}: ${label}` });
     });
