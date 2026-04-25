@@ -2074,6 +2074,7 @@
                         <button class="layer-btn" data-layer="spc" onclick="switchLayer('spc')">SPC Outlook</button>
                         <button class="layer-btn" data-layer="wpc-rain" onclick="switchLayer('wpc-rain')">WPC Rainfall</button>
                         <button class="layer-btn" data-layer="fire-wx" onclick="switchLayer('fire-wx')">Fire Weather</button>
+                        <button class="layer-btn" data-layer="drought" onclick="switchLayer('drought')">Drought</button>
                         <button class="layer-btn" data-layer="surface-analysis" onclick="switchLayer('surface-analysis')">Surface Analysis</button>
                     </div>
                     <div class="layer-row">
@@ -2176,6 +2177,19 @@
                             </button>
                             <button onclick="openDiscussionModal('fire-' + currentFireDay)" class="icon-action-btn" title="Forecaster Discussion">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Drought Monitor Sub-Controls -->
+                <div class="spc-controls" id="drought-controls">
+                    <div class="ctrl-row">
+                        <div class="ctrl-icon-row">
+                            <button onclick="openOutlookInfoModal('drought')" class="icon-action-btn" title="What do these drought categories mean?">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                            </button>
+                            <button onclick="openDroughtMonitorSite()" class="icon-action-btn" title="Open U.S. Drought Monitor">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7"/><path d="M10 14L21 3"/><path d="M21 14v7h-7"/><path d="M3 10V3h7"/><path d="M3 21l11-11"/></svg>
                             </button>
                         </div>
                     </div>
@@ -2690,6 +2704,7 @@
                 <button class="outlook-tab" data-otab="spc-prob" onclick="switchOutlookTab('spc-prob')">SPC Probability</button>
                 <button class="outlook-tab" data-otab="wpc" onclick="switchOutlookTab('wpc')">WPC Rainfall</button>
                 <button class="outlook-tab" data-otab="fire" onclick="switchOutlookTab('fire')">Fire Weather</button>
+                <button class="outlook-tab" data-otab="drought" onclick="switchOutlookTab('drought')">Drought</button>
             </div>
 
             <!-- SPC Categorical -->
@@ -2883,6 +2898,48 @@
                     <strong style="color:#FF8844;">Remember:</strong> Fire weather outlooks focus on the <em>atmosphere's</em> potential to support fire spread — local fuel conditions, recent precipitation, and any active fire situations also play a key role in actual fire behavior.
                 </div>
             </div>
+
+            <!-- Drought -->
+            <div id="otab-drought" class="outlook-section">
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:14px;">
+                    The <strong>U.S. Drought Monitor</strong> shows long-term dryness impacts based on precipitation deficits, soil moisture, streamflow, and local expert analysis. Drought categories reflect persistent conditions over weeks to months, not just short-term weather.
+                </p>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FCD37F;border:1px solid #E9A137;"></div>
+                    <div>
+                        <div class="cat-name">D0 — Abnormally Dry</div>
+                        <div class="cat-desc">Dryness is developing or lingering. This is not full drought yet, but it can be an early warning sign of stress on vegetation, reduced streamflow, and increased fire risk if dry conditions continue.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#FFAA00;border:1px solid #CC8800;"></div>
+                    <div>
+                        <div class="cat-name">D1 — Moderate Drought</div>
+                        <div class="cat-desc">Short-term water shortages begin to impact crops, lawns, and small streams. Voluntary water conservation may be encouraged, and fire danger can increase in dry/fine fuels.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#E36E00;border:1px solid #B85400;"></div>
+                    <div>
+                        <div class="cat-name">D2 — Severe Drought</div>
+                        <div class="cat-desc">Water shortages become more significant. Crop and pasture losses are more likely, streams and reservoirs may run low, and mandatory water restrictions can begin in some areas.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#C00000;border:1px solid #8F0000;"></div>
+                    <div>
+                        <div class="cat-name">D3 — Extreme Drought</div>
+                        <div class="cat-desc">Major agricultural and hydrologic impacts. Reservoirs and groundwater can be heavily stressed, wildfire risk can become very high, and widespread restrictions are common.</div>
+                    </div>
+                </div>
+                <div class="cat-row">
+                    <div class="cat-swatch" style="background:#730000;border:1px solid #540000;"></div>
+                    <div>
+                        <div class="cat-name">D4 — Exceptional Drought</div>
+                        <div class="cat-desc">The highest drought level. Widespread, long-lasting impacts are expected, including major crop/pasture losses, severe water shortages, and extreme wildfire vulnerability.</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -3030,7 +3087,7 @@
     // OUTLOOK INFO MODAL
     // ============================================================
     // Maps from the outlook type passed by the button to the default tab to show
-    const _OUTLOOK_TAB_MAP = { spc: 'spc-cat', prob: 'spc-prob', wpc: 'wpc', fire: 'fire' };
+    const _OUTLOOK_TAB_MAP = { spc: 'spc-cat', prob: 'spc-prob', wpc: 'wpc', fire: 'fire', drought: 'drought' };
 
     function openOutlookInfoModal(type) {
         const defaultTab = _OUTLOOK_TAB_MAP[type] || 'spc-cat';
@@ -3167,6 +3224,9 @@
         // Days 4–8 have no discussion text; cap at Day 3
         const key = day >= 3 ? 'spc-3' : (day >= 1 ? 'spc-' + day : 'spc-1');
         openDiscussionModal(key);
+    }
+    function openDroughtMonitorSite() {
+        window.open('https://droughtmonitor.unl.edu/', '_blank', 'noopener,noreferrer');
     }
 
     // ============================================================
@@ -6134,6 +6194,7 @@
     function clearOWMLayers() { removeLayer('owm-layer'); removeSource('owm-source'); }
     function clearWPCLayers() { removeLayer('wpc-fill'); removeLayer('wpc-line'); removeSource('wpc-data'); }
     function clearFireLayers() { removeLayer('fire-fill'); removeLayer('fire-line'); removeSource('fire-data'); }
+    function clearDroughtLayers() { removeLayer('drought-fill'); removeLayer('drought-line'); removeSource('drought-data'); }
 
     // ============================================================
     // WPC ERO & FIRE WEATHER — URLS, COLORS, LEGENDS
@@ -6153,6 +6214,7 @@
             windrh: 'https://www.spc.noaa.gov/products/fire_wx/day2fw_windrh.nolyr.geojson',
         },
     };
+    const DROUGHT_URL = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NWS_Climate_Outlooks/cpc_usdm/MapServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson';
 
     // Official NWS WPC ERO colors (Moderate=red, High=pink like SPC High)
     const WPC_ERO_FILL_EXPR = ['match', ['get', 'CATEGORY'],
@@ -6169,6 +6231,12 @@
     const FIRE_LINE_EXPR = ['match', ['get', 'CATEGORY'],
         'ELEV', '#CCCC00', 'CRIT', '#CC0000', 'EXTCRIT', '#CC00AA',
         'rgba(0,0,0,0)'];
+    const DROUGHT_FILL_EXPR = ['match', ['get', 'CATEGORY'],
+        'D0', '#FCD37F', 'D1', '#FFAA00', 'D2', '#E36E00', 'D3', '#C00000', 'D4', '#730000',
+        'rgba(0,0,0,0)'];
+    const DROUGHT_LINE_EXPR = ['match', ['get', 'CATEGORY'],
+        'D0', '#E9A137', 'D1', '#CC8800', 'D2', '#B85400', 'D3', '#8F0000', 'D4', '#540000',
+        'rgba(0,0,0,0)'];
 
     const WPC_ERO_LEGEND = [
         { fill: '#66BB44', stroke: '#44AA22', label: 'Marginal' },
@@ -6180,6 +6248,13 @@
         { fill: '#FFFF00', stroke: '#CCCC00', label: 'Elevated' },
         { fill: '#FF0000', stroke: '#CC0000', label: 'Critical' },
         { fill: '#FF73DF', stroke: '#CC00AA', label: 'Extremely Critical' },
+    ];
+    const DROUGHT_LEGEND_DATA = [
+        { fill: '#FCD37F', stroke: '#E9A137', label: 'D0: Abnormally Dry' },
+        { fill: '#FFAA00', stroke: '#CC8800', label: 'D1: Moderate Drought' },
+        { fill: '#E36E00', stroke: '#B85400', label: 'D2: Severe Drought' },
+        { fill: '#C00000', stroke: '#8F0000', label: 'D3: Extreme Drought' },
+        { fill: '#730000', stroke: '#540000', label: 'D4: Exceptional Drought' },
     ];
 
     let currentWPCDay = 1;
@@ -6218,6 +6293,23 @@
         });
         return { ...data, features };
     }
+    function normalizeDroughtData(data) {
+        if (!data?.features) return data;
+        const features = data.features.map(f => {
+            const props = f.properties || {};
+            const raw = (props.DM || props.dm || props.CATEGORY || props.category || props.LABEL || props.label || props.DROUGHT || props.DROUGHT_LVL || '').toString().trim().toUpperCase();
+            let cat = raw;
+            if (/^\d$/.test(raw)) cat = 'D' + raw;
+            if (/^D[0-4]$/.test(raw)) return { ...f, properties: { ...props, CATEGORY: raw } };
+            if (raw.includes('ABNORM')) cat = 'D0';
+            else if (raw.includes('MODERATE')) cat = 'D1';
+            else if (raw.includes('SEVERE')) cat = 'D2';
+            else if (raw.includes('EXTREME')) cat = 'D3';
+            else if (raw.includes('EXCEPTIONAL')) cat = 'D4';
+            return { ...f, properties: { ...props, CATEGORY: (/^D[0-4]$/.test(cat) ? cat : '') } };
+        });
+        return { ...data, features };
+    }
 
     function updateWPCLegend() {
         document.getElementById('spc-legend').classList.add('visible');
@@ -6230,6 +6322,13 @@
         document.getElementById('spc-legend').classList.add('visible');
         document.getElementById('legend-title').textContent = 'Fire Weather Risk';
         document.getElementById('legend-items').innerHTML = FIRE_LEGEND_DATA.map(e =>
+            `<div class="legend-row"><div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};opacity:0.85;"></div><span>${e.label}</span></div>`
+        ).join('');
+    }
+    function updateDroughtLegend() {
+        document.getElementById('spc-legend').classList.add('visible');
+        document.getElementById('legend-title').textContent = 'U.S. Drought Monitor';
+        document.getElementById('legend-items').innerHTML = DROUGHT_LEGEND_DATA.map(e =>
             `<div class="legend-row"><div class="legend-swatch" style="background:${e.fill};border:1px solid ${e.stroke};opacity:0.85;"></div><span>${e.label}</span></div>`
         ).join('');
     }
@@ -6279,6 +6378,26 @@
             clearFireLayers(); hideSPCLegend();
         } finally { hideLoading(); }
     }
+    async function loadDroughtLayer() {
+        if (!map) return;
+        showLoading('Loading U.S. Drought Monitor…');
+        try {
+            const data = await fetchSPCGeoJSON(DROUGHT_URL);
+            const normalized = normalizeDroughtData(data);
+            clearDroughtLayers();
+            map.addSource('drought-data', { type: 'geojson', data: normalized });
+            map.addLayer({ id: 'drought-fill', type: 'fill', source: 'drought-data',
+                paint: { 'fill-color': DROUGHT_FILL_EXPR, 'fill-opacity': 0.55, 'fill-antialias': true }
+            }, _overlayBefore());
+            map.addLayer({ id: 'drought-line', type: 'line', source: 'drought-data',
+                paint: { 'line-color': DROUGHT_LINE_EXPR, 'line-width': 1.5 }
+            }, _overlayBefore());
+            updateDroughtLegend();
+        } catch (e) {
+            console.error('Drought fetch error:', e);
+            clearDroughtLayers(); hideSPCLegend();
+        } finally { hideLoading(); }
+    }
 
     function selectWPCDay(day) {
         currentWPCDay = day;
@@ -6312,8 +6431,8 @@
     }
 
     async function handleOutlookClick(e) {
-        if (currentLayer !== 'wpc-rain' && currentLayer !== 'fire-wx') return;
-        const layerId = currentLayer === 'wpc-rain' ? 'wpc-fill' : 'fire-fill';
+        if (currentLayer !== 'wpc-rain' && currentLayer !== 'fire-wx' && currentLayer !== 'drought') return;
+        const layerId = currentLayer === 'wpc-rain' ? 'wpc-fill' : (currentLayer === 'fire-wx' ? 'fire-fill' : 'drought-fill');
         if (!map.getLayer(layerId)) return;
         const features = map.queryRenderedFeatures(e.point, { layers: [layerId] });
         if (!features.length) return;
@@ -6326,12 +6445,23 @@
             const bodyHtml = `<div class="popup-title">Excessive Rainfall Risk</div>
                 <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`;
             _addMapPanel({ bodyHtml, type: 'outlook', label: 'Rainfall Risk' }, seq);
-        } else {
+        } else if (currentLayer === 'fire-wx') {
             const labels = { ELEV: 'Elevated', CRIT: 'Critical', EXTCRIT: 'Extremely Critical' };
             const bodyHtml = `<div class="popup-title">Fire Weather Risk</div>
                 <div class="popup-stat"><span class="popup-key">Type</span><span class="popup-val">Wind/RH</span></div>
                 <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`;
             _addMapPanel({ bodyHtml, type: 'outlook', label: 'Fire Risk' }, seq);
+        } else {
+            const labels = {
+                D0: 'Abnormally Dry',
+                D1: 'Moderate Drought',
+                D2: 'Severe Drought',
+                D3: 'Extreme Drought',
+                D4: 'Exceptional Drought',
+            };
+            const bodyHtml = `<div class="popup-title">U.S. Drought Monitor</div>
+                <div class="popup-stat"><span class="popup-key">Category</span><span class="popup-val">${labels[cat] || cat}</span></div>`;
+            _addMapPanel({ bodyHtml, type: 'outlook', label: 'Drought' }, seq);
         }
     }
 
@@ -8372,6 +8502,7 @@
         document.getElementById('satellite-controls').classList.toggle('visible', layer === 'satellite');
         document.getElementById('wpc-controls').classList.toggle('visible', layer === 'wpc-rain');
         document.getElementById('fire-controls').classList.toggle('visible', layer === 'fire-wx');
+        document.getElementById('drought-controls').classList.toggle('visible', layer === 'drought');
         document.getElementById('rtma-controls').classList.toggle('visible', layer === 'rtma');
         document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
         document.getElementById('surface-analysis-controls').classList.toggle('visible', layer === 'surface-analysis');
@@ -8381,6 +8512,7 @@
         document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
         const hasInteractiveMap = mapLayer || layer === 'spc' || layer === 'radar' ||
             layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx' ||
+            layer === 'drought' ||
             layer === 'rtma' || layer === 'surface-analysis';
         document.getElementById('basemap-controls').classList.toggle('visible', hasInteractiveMap);
         _showAlertOverlayControls(hasInteractiveMap);
@@ -8392,36 +8524,40 @@
         }
 
         if (layer === 'spc') {
-            clearOWMLayers(); clearWPCLayers(); clearFireLayers();
+            clearOWMLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers();
             buildTypeButtons(currentDay);
         } else if (layer === 'satellite') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
             _showSatelliteView();
             _ensureMapReady().then(() => { _autoSelectSatSource(); loadSatLayer(); });
         } else if (layer === 'radar') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
             _showRadarView();
             _ensureMapReady().then(() => loadRadarLayer());
         } else if (layer === 'surface-analysis') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
             _showMapView();
             _ensureMapReady().then(() => loadSurfaceAnalysisLayer());
         } else if (layer === 'wpc-rain') {
-            clearSPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
             _showWPCRainView();
             renderWPCRainImages();
             _ensureMapReady().then(() => loadWPCLayer(currentWPCDay));
         } else if (layer === 'fire-wx') {
-            clearSPCLayers(); clearWPCLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
             _showFireWxView();
             renderFireWxImages();
             _ensureMapReady().then(() => loadFireLayer(currentFireDay, currentFireType));
-        } else if (layer === 'rtma') {
+        } else if (layer === 'drought') {
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
+            _showMapView();
+            _ensureMapReady().then(() => loadDroughtLayer());
+        } else if (layer === 'rtma') {
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
             _showMapView();
             _ensureMapReady().then(() => loadRtmaLayer());
         } else {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend();
             _showMapView();
             clearOWMLayers();
             if (mapLayer) loadOWMLayer(layer);
