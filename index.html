@@ -1553,6 +1553,20 @@
         .space-stat-value { font-size:1.35rem; font-weight:600; color:var(--text-primary); }
         .space-stat-sub { margin-top:3px; font-size:0.72rem; color:var(--text-secondary); }
         .space-chart-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-top:10px; }
+        .space-timeframe-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:2px 0 6px; }
+        .space-timeframe-label { font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; }
+        .space-timeframe-btn {
+            padding: 5px 9px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.05);
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .space-timeframe-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-secondary); }
+        .space-timeframe-btn.active { background: rgba(100,180,255,0.2); border-color: rgba(100,180,255,0.45); color:#8dd4ff; }
         .space-chart-card { padding:10px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08); border-radius:12px; }
         .space-chart-card h4 { margin:0 0 8px; font-size:0.86rem; color:var(--text-secondary); font-weight:600; }
         .space-chart-svg { width:100%; height:190px; display:block; border-radius:8px; background:rgba(0,0,0,0.2); }
@@ -2587,6 +2601,17 @@
                     <div class="space-stat"><div class="space-stat-label">Solar Wind Speed</div><div class="space-stat-value" id="space-speed">--</div><div class="space-stat-sub">km/s</div></div>
                     <div class="space-stat"><div class="space-stat-label">Proton Density</div><div class="space-stat-value" id="space-density">--</div><div class="space-stat-sub">p/cm³</div></div>
                     <div class="space-stat"><div class="space-stat-label">Bz</div><div class="space-stat-value" id="space-bz">--</div><div class="space-stat-sub">nT</div></div>
+                </div>
+
+                <div class="space-timeframe-row">
+                    <span class="space-timeframe-label">Chart Range</span>
+                    <button class="space-timeframe-btn" data-space-hours="0.5" onclick="setSpaceChartTimeframe(0.5)">30 min</button>
+                    <button class="space-timeframe-btn" data-space-hours="1" onclick="setSpaceChartTimeframe(1)">1 hr</button>
+                    <button class="space-timeframe-btn" data-space-hours="3" onclick="setSpaceChartTimeframe(3)">3 hr</button>
+                    <button class="space-timeframe-btn" data-space-hours="6" onclick="setSpaceChartTimeframe(6)">6 hr</button>
+                    <button class="space-timeframe-btn" data-space-hours="12" onclick="setSpaceChartTimeframe(12)">12 hr</button>
+                    <button class="space-timeframe-btn" data-space-hours="18" onclick="setSpaceChartTimeframe(18)">18 hr</button>
+                    <button class="space-timeframe-btn active" data-space-hours="24" onclick="setSpaceChartTimeframe(24)">24 hr</button>
                 </div>
 
                 <div class="space-chart-grid" id="space-chart-grid"></div>
@@ -5373,6 +5398,58 @@
         if (el) el.textContent = text;
     }
 
+    let _spaceChartWindowHours = 24;
+    const _spaceChartCache = {
+        speed: [],
+        density: [],
+        bz: []
+    };
+
+    function _spaceWindowLabel(hours = _spaceChartWindowHours) {
+        if (hours < 1) return `${Math.round(hours * 60)}m`;
+        return `${hours}h`;
+    }
+
+    function _spaceFilterPoints(points, hours = _spaceChartWindowHours) {
+        if (!Array.isArray(points) || !points.length) return [];
+        const latest = Math.max(...points.map(p => p.t));
+        const cutoff = latest - (hours * 60 * 60 * 1000);
+        const filtered = points.filter(p => p.t >= cutoff);
+        return filtered.length ? filtered : points;
+    }
+
+    function _renderSpaceChartsFromCache() {
+        _renderSpaceChart(
+            'space-chart-speed',
+            `Solar Wind Speed (${_spaceWindowLabel()})`,
+            _spaceFilterPoints(_spaceChartCache.speed),
+            'km/s'
+        );
+        _renderSpaceChart(
+            'space-chart-density',
+            `Proton Density (${_spaceWindowLabel()})`,
+            _spaceFilterPoints(_spaceChartCache.density),
+            'p/cm³'
+        );
+        _renderSpaceChart(
+            'space-chart-bz',
+            `Bz Magnetic Field (${_spaceWindowLabel()})`,
+            _spaceFilterPoints(_spaceChartCache.bz),
+            'nT'
+        );
+    }
+
+    function setSpaceChartTimeframe(hours) {
+        const num = Number(hours);
+        if (Number.isNaN(num) || num <= 0) return;
+        _spaceChartWindowHours = num;
+        document.querySelectorAll('.space-timeframe-btn').forEach(btn => {
+            const isActive = Number(btn.dataset.spaceHours) === num;
+            btn.classList.toggle('active', isActive);
+        });
+        _renderSpaceChartsFromCache();
+    }
+
     function _spaceSeriesFromRows(rows, valueIndex, timeIndex = 0) {
         if (!Array.isArray(rows)) return [];
         return rows
@@ -5415,27 +5492,52 @@
         return null;
     }
 
+    function _spaceKpToGScale(kp) {
+        if (kp >= 9) return 5;
+        if (kp >= 8) return 4;
+        if (kp >= 7) return 3;
+        if (kp >= 6) return 2;
+        if (kp >= 5) return 1;
+        return 0;
+    }
+
+    function _spaceNumericFromText(input) {
+        if (input === null || input === undefined) return null;
+        const match = String(input).match(/-?\d+(\.\d+)?/);
+        if (!match) return null;
+        const num = Number(match[0]);
+        return Number.isNaN(num) ? null : num;
+    }
+
     function _spaceLatestGScale(scalesData) {
         if (!scalesData) return null;
         const gCandidate = scalesData?.g_scale || scalesData?.G || scalesData?.g;
         if (gCandidate && typeof gCandidate === 'object') {
-            const scale = Number(gCandidate.scale ?? gCandidate.current ?? gCandidate.value);
+            const scale = Number(gCandidate.scale ?? gCandidate.current ?? gCandidate.value ?? _spaceNumericFromText(gCandidate.text));
             return { scale: Number.isNaN(scale) ? null : scale, text: gCandidate.text || gCandidate.minorprob || 'NOAA Scale' };
         }
         if (Array.isArray(scalesData)) {
             for (let i = scalesData.length - 1; i >= 0; i--) {
                 const row = scalesData[i];
                 if (!row || typeof row !== 'object') continue;
-                const scale = Number(row.G?.Scale ?? row.G?.scale ?? row.G_scale ?? row.g_scale);
-                if (!Number.isNaN(scale)) return { scale, text: row.G?.Text || row.G?.text || row.DateStamp || 'NOAA Scale' };
+                const scale = Number(row.G?.Scale ?? row.G?.scale ?? row.G_scale ?? row.g_scale ?? row.scale ?? _spaceNumericFromText(row.G?.Text ?? row.G?.text ?? row.text));
+                if (!Number.isNaN(scale)) return { scale, text: row.G?.Text || row.G?.text || row.DateStamp || row.ObsTime || row.time_tag || 'NOAA Scale' };
             }
         } else if (typeof scalesData === 'object') {
-            const entries = Object.values(scalesData);
-            for (let i = entries.length - 1; i >= 0; i--) {
-                const row = entries[i];
+            const stack = [scalesData];
+            while (stack.length) {
+                const row = stack.pop();
                 if (!row || typeof row !== 'object') continue;
-                const scale = Number(row.G?.Scale ?? row.G?.scale ?? row.G_scale ?? row.g_scale);
-                if (!Number.isNaN(scale)) return { scale, text: row.G?.Text || row.G?.text || row.DateStamp || 'NOAA Scale' };
+                const scale = Number(
+                    row.G?.Scale ?? row.G?.scale ?? row.G_scale ?? row.g_scale ??
+                    row.scale ?? row.value ?? _spaceNumericFromText(row.G?.Text ?? row.G?.text ?? row.text)
+                );
+                if (!Number.isNaN(scale)) {
+                    return { scale, text: row.G?.Text || row.G?.text || row.DateStamp || row.ObsTime || row.time_tag || row.text || 'NOAA Scale' };
+                }
+                Object.values(row).forEach(v => {
+                    if (v && typeof v === 'object') stack.push(v);
+                });
             }
         }
         return null;
@@ -5500,6 +5602,7 @@
         _spaceSetText('space-speed', '--');
         _spaceSetText('space-density', '--');
         _spaceSetText('space-bz', '--');
+        setSpaceChartTimeframe(_spaceChartWindowHours);
 
         chartGrid.innerHTML = `
             <div class="space-chart-card" id="space-chart-speed"><h4>Solar Wind Speed (24h)</h4></div>
@@ -5516,13 +5619,19 @@
             fetch('https://services.swpc.noaa.gov/json/goes/primary/xray-flares-7-day.json')
         ]);
 
+        let latestKpValue = null;
         if (kpResp.status === 'fulfilled' && kpResp.value.ok) {
             const kpData = await kpResp.value.json();
-            const latest = _spaceLatestKp(kpData);
+            const latest = _spaceLatestKp(kpData) || _spaceLatestKp(kpData?.observed ?? kpData?.data ?? []);
             if (latest) {
+                latestKpValue = latest.value;
                 _spaceSetText('space-kp', String(latest.value));
                 _spaceSetText('space-kp-time', _fmtSpaceDate(latest.time));
+            } else {
+                _spaceSetText('space-kp-time', 'No recent Kp value');
             }
+        } else {
+            _spaceSetText('space-kp-time', 'SWPC feed unavailable');
         }
 
         if (scalesResp.status === 'fulfilled' && scalesResp.value.ok) {
@@ -5531,7 +5640,19 @@
             if (gScale) {
                 _spaceSetText('space-g', `G${gScale.scale ?? '--'}`);
                 _spaceSetText('space-g-time', gScale.text || 'NOAA Scale');
+            } else if (latestKpValue !== null) {
+                const fallbackG = _spaceKpToGScale(latestKpValue);
+                _spaceSetText('space-g', `G${fallbackG}`);
+                _spaceSetText('space-g-time', 'Estimated from latest Kp');
+            } else {
+                _spaceSetText('space-g-time', 'No recent G scale value');
             }
+        } else if (latestKpValue !== null) {
+            const fallbackG = _spaceKpToGScale(latestKpValue);
+            _spaceSetText('space-g', `G${fallbackG}`);
+            _spaceSetText('space-g-time', 'Estimated from latest Kp');
+        } else {
+            _spaceSetText('space-g-time', 'SWPC feed unavailable');
         }
 
         if (plasmaResp.status === 'fulfilled' && plasmaResp.value.ok) {
@@ -5540,16 +5661,17 @@
             const density = _spaceLatestNumericFromRows(plasma, 1);
             if (speed !== null) _spaceSetText('space-speed', `${Math.round(speed)}`);
             if (density !== null) _spaceSetText('space-density', `${density.toFixed(2)}`);
-            _renderSpaceChart('space-chart-speed', 'Solar Wind Speed (24h)', _spaceSeriesFromRows(plasma, 2), 'km/s');
-            _renderSpaceChart('space-chart-density', 'Proton Density (24h)', _spaceSeriesFromRows(plasma, 1), 'p/cm³');
+            _spaceChartCache.speed = _spaceSeriesFromRows(plasma, 2);
+            _spaceChartCache.density = _spaceSeriesFromRows(plasma, 1);
         }
 
         if (magResp.status === 'fulfilled' && magResp.value.ok) {
             const mag = await magResp.value.json();
             const bz = _spaceLatestNumericFromRows(mag, 3);
             if (bz !== null) _spaceSetText('space-bz', bz.toFixed(2));
-            _renderSpaceChart('space-chart-bz', 'Bz Magnetic Field (24h)', _spaceSeriesFromRows(mag, 3), 'nT');
+            _spaceChartCache.bz = _spaceSeriesFromRows(mag, 3);
         }
+        _renderSpaceChartsFromCache();
 
         if (flaresResp.status === 'fulfilled' && flaresResp.value.ok) {
             const flares = await flaresResp.value.json();
