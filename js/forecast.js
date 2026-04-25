@@ -273,7 +273,7 @@ function _drawForecastChart(metric, days) {
             if (v != null) {
                 const px = xOf(i), py = yOf(v);
                 const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
-                const lblY = py < PAD_T + 14 ? py + 14 : py - 7;
+                const lblY = py < PAD_T + 16 ? py + 14 : py - 11;
                 dots += `<circle cx="${px}" cy="${py}" r="3" fill="#42A5F5" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
                          <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#42A5F5" font-size="8" font-weight="600" opacity="0.9">${Math.round(v)}</text>`;
                 const dateStr = d.displayDate || d.interval?.startTime;
@@ -359,7 +359,7 @@ function _drawForecastChart(metric, days) {
             const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
             if (hi != null) {
                 const px = xOf(i), py = yOf(hi);
-                const lblY = Math.max(PAD_T + 10, py - 7);
+                const lblY = Math.max(PAD_T + 10, py - 11);
                 dots += `<circle cx="${px}" cy="${py}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
                          <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#FF7043" font-size="8" font-weight="600" opacity="0.9">${Math.round(hi)}°</text>`;
             }
@@ -413,8 +413,16 @@ function _drawForecastChart(metric, days) {
                           fill="rgba(38,198,218,${alpha.toFixed(2)})"
                           rx="3" ry="3"/>`;
             if (chance > 0) {
-                const lblY = Math.max(PAD_T + 10, y - 3);
-                bars += `<text x="${x + bw / 2}" y="${lblY}" text-anchor="middle" fill="rgba(38,198,218,0.9)" font-size="8" font-weight="600">${Math.round(chance)}%</text>`;
+                const lblText = `${Math.round(chance)}%`;
+                let lblY, lblFill;
+                if (bh >= 15) {
+                    lblY = y + 12;                         // inside the top of a tall bar
+                    lblFill = 'rgba(255,255,255,0.85)';
+                } else {
+                    lblY = y - 5;                          // float above a short bar
+                    lblFill = 'rgba(38,198,218,0.9)';
+                }
+                bars += `<text x="${x + bw / 2}" y="${lblY}" text-anchor="middle" fill="${lblFill}" font-size="8" font-weight="600">${lblText}</text>`;
             }
             const dateStr = d.displayDate || d.interval?.startTime;
             const label = WeatherAPI.formatDayName(dateStr, true).slice(0, 3);
@@ -462,8 +470,15 @@ function _drawForecastChart(metric, days) {
                 const y = yOf(v);
                 const bh = (v / maxV) * plotH;
                 bars += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${uvColor(v)}" rx="3" ry="3"/>`;
-                const lblY = Math.max(PAD_T + 10, y - 3);
-                bars += `<text x="${x + bw / 2}" y="${lblY}" text-anchor="middle" fill="${uvColor(v)}" font-size="8" font-weight="600" opacity="0.95">${Math.round(v)}</text>`;
+                let lblY, lblFill;
+                if (bh >= 15) {
+                    lblY = y + 12;
+                    lblFill = 'rgba(255,255,255,0.85)';
+                } else {
+                    lblY = y - 5;
+                    lblFill = uvColor(v);
+                }
+                bars += `<text x="${x + bw / 2}" y="${lblY}" text-anchor="middle" fill="${lblFill}" font-size="8" font-weight="600">${Math.round(v)}</text>`;
                 const dateStr = d.displayDate || d.interval?.startTime;
                 tapTargets.push({ x: x + bw / 2, y: Math.max(y, PAD_T + 14), title: WeatherAPI.formatDayName(dateStr, false), value: `UV ${Math.round(v)}`, color: uvColor(v) });
             }
@@ -525,7 +540,7 @@ function _drawForecastChart(metric, days) {
             const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
             if (hi != null) {
                 const px = xOf(i), py = yOf(hi);
-                const lblY = Math.max(PAD_T + 10, py - 7);
+                const lblY = Math.max(PAD_T + 10, py - 11);
                 dots += `<circle cx="${px}" cy="${py}" r="3" fill="#FF7043" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
                           <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#FF7043" font-size="8" font-weight="600" opacity="0.9">${Math.round(hi)}°</text>`;
             }
@@ -592,7 +607,7 @@ function _drawForecastChart(metric, days) {
             if (v != null) {
                 const px = xOf(i), py = yOf(v);
                 const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
-                const lblY = py < PAD_T + 14 ? py + 14 : py - 7;
+                const lblY = py < PAD_T + 16 ? py + 14 : py - 11;
                 dots += `<circle cx="${px}" cy="${py}" r="3" fill="#26C6DA" stroke="rgba(15,20,40,0.8)" stroke-width="1.5"/>
                          <text x="${px}" y="${lblY}" text-anchor="${anchor}" fill="#26C6DA" font-size="8" font-weight="600" opacity="0.9">${Math.round(v)}%</text>`;
                 const dateStr = d.displayDate || d.interval?.startTime;
@@ -671,11 +686,14 @@ function _drawForecastChart(metric, days) {
                 // Day bar between sunrise and sunset
                 bars += `<rect x="${x1}" y="${y - barH / 2}" width="${x2 - x1}" height="${barH}" fill="rgba(255,213,79,0.2)" rx="2"/>`;
                 // Sunrise dot + label (anchored start = extends right, away from sunset label)
-                bars += `<circle cx="${x1}" cy="${y}" r="4" fill="rgba(255,183,77,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>`;
                 const rTime = sunriseVals[i].toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                const timeLblY = Math.max(PAD_T + 6, labelY);
+                bars += `<circle cx="${x1}" cy="${y}" r="4" fill="rgba(255,183,77,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>
+                         <text x="${x1 + 6}" y="${timeLblY}" text-anchor="start" fill="rgba(255,183,77,0.85)" font-size="7.5" font-weight="600">${rTime}</text>`;
                 // Sunset dot + label (anchored end = extends left, away from sunrise label)
-                bars += `<circle cx="${x2}" cy="${y}" r="4" fill="rgba(255,112,67,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>`;
                 const sTime = sunsetVals[i].toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                bars += `<circle cx="${x2}" cy="${y}" r="4" fill="rgba(255,112,67,0.9)" stroke="rgba(15,20,40,0.7)" stroke-width="1.5"/>
+                         <text x="${x2 - 6}" y="${timeLblY}" text-anchor="end" fill="rgba(255,112,67,0.85)" font-size="7.5" font-weight="600">${sTime}</text>`;
                 tapTargets.push({ x: (x1 + x2) / 2, y, title: WeatherAPI.formatDayName(dateStr, false), value: `Sunrise ${rTime} · Sunset ${sTime}`, color: 'rgba(255,183,77,0.9)' });
             }
         });
