@@ -1545,6 +1545,21 @@
             color: rgba(100,180,255,0.8);
             min-height: 9px;
         }
+
+        /* ---- Space weather view ---- */
+        .space-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:12px; margin-bottom:16px; }
+        .space-stat { padding:12px 14px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:12px; }
+        .space-stat-label { font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
+        .space-stat-value { font-size:1.35rem; font-weight:600; color:var(--text-primary); }
+        .space-stat-sub { margin-top:3px; font-size:0.72rem; color:var(--text-secondary); }
+        .space-chart-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-top:10px; }
+        .space-chart-card { padding:10px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08); border-radius:12px; }
+        .space-chart-card h4 { margin:0 0 8px; font-size:0.86rem; color:var(--text-secondary); font-weight:600; }
+        .space-chart-card img { width:100%; border-radius:8px; display:block; background:rgba(0,0,0,0.2); }
+        .space-flares { margin-top:12px; padding:12px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.08); border-radius:12px; }
+        .space-flares ul { margin:8px 0 0 18px; color:var(--text-secondary); font-size:0.82rem; line-height:1.45; }
+        .space-source-note { margin-top:12px; font-size:0.72rem; color:var(--text-muted); }
+
     </style>
 </head>
 <body>
@@ -1623,6 +1638,14 @@
                     <circle cx="12" cy="13" r="1.5" fill="currentColor"/>
                 </svg>
                 Maps
+            </a>
+
+            <a href="#space" class="nav-link" data-view="space">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M3 12h3M18 12h3M12 3v3M12 18v3M5.7 5.7l2.1 2.1M16.2 16.2l2.1 2.1M18.3 5.7l-2.1 2.1M7.8 16.2l-2.1 2.1"/>
+                </svg>
+                Space
             </a>
             <a href="#metar" class="nav-link" data-view="metar">
                 <!-- Weather station icon for METAR -->
@@ -1722,6 +1745,18 @@
                         </div>
                         <h3>Maps</h3>
                         <p>SPC outlooks, radar, satellite, temperature, and wind on an interactive map</p>
+                    </a>
+
+                    <a href="#space" class="nav-card glass" data-view="space">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 64 64" fill="none">
+                                <circle cx="32" cy="32" r="16" stroke="rgba(255,200,120,0.9)" stroke-width="2"/>
+                                <circle cx="32" cy="32" r="6" fill="rgba(255,200,120,0.45)"/>
+                                <path d="M10 32h8M46 32h8M32 10v8M32 46v8M15 15l6 6M43 43l6 6M49 15l-6 6M21 43l-6 6" stroke="rgba(150,210,255,0.65)" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <h3>Space Weather</h3>
+                        <p>KP/H scales, solar wind, proton, magnetic field, X-ray, and GOES charts</p>
                     </a>
                     <!-- METAR: Weather station icon -->
                     <a href="#metar" class="nav-card glass" data-view="metar">
@@ -2522,6 +2557,32 @@
 
                 <!-- Observations output -->
                 <div id="metar-observations"></div>
+            </div>
+        </section>
+
+
+        <!-- ===================================================
+             VIEW: SPACE WEATHER
+             =================================================== -->
+        <section id="view-space" class="view">
+            <div class="glass-static" style="padding:16px;">
+                <h3 class="section-title" style="margin-bottom:10px;">Space Weather</h3>
+                <div class="space-grid">
+                    <div class="space-stat"><div class="space-stat-label">KP Index</div><div class="space-stat-value" id="space-kp">--</div><div class="space-stat-sub" id="space-kp-time">Latest</div></div>
+                    <div class="space-stat"><div class="space-stat-label">H Scale</div><div class="space-stat-value" id="space-h">--</div><div class="space-stat-sub" id="space-h-time">NOAA Scale</div></div>
+                    <div class="space-stat"><div class="space-stat-label">Solar Wind Speed</div><div class="space-stat-value" id="space-speed">--</div><div class="space-stat-sub">km/s</div></div>
+                    <div class="space-stat"><div class="space-stat-label">Proton Density</div><div class="space-stat-value" id="space-density">--</div><div class="space-stat-sub">p/cm³</div></div>
+                    <div class="space-stat"><div class="space-stat-label">Bz</div><div class="space-stat-value" id="space-bz">--</div><div class="space-stat-sub">nT</div></div>
+                </div>
+
+                <div class="space-chart-grid" id="space-chart-grid"></div>
+
+                <div class="space-flares">
+                    <strong style="font-size:0.86rem;color:var(--text-secondary);">Recent Solar Flares</strong>
+                    <ul id="space-flares-list"><li>Loading recent flare data…</li></ul>
+                </div>
+
+                <div class="space-source-note">Data/charts from NOAA SWPC. Charts refresh at-source.</div>
             </div>
         </section>
 
@@ -5187,7 +5248,7 @@
     // ============================================================
     // SPA ROUTER
     // ============================================================
-    const VALID_VIEWS = ['home', 'current', 'forecast', 'maps', 'metar', 'history'];
+    const VALID_VIEWS = ['home', 'current', 'forecast', 'maps', 'space', 'metar', 'history'];
     const viewInited = {};
     let currentViewId = null;
 
@@ -5227,7 +5288,7 @@
 
         // Update page title
         const forecastTitle = WeatherAPI.getDataSource() === 'nws' ? '7-Day Forecast' : '10-Day Forecast';
-        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: forecastTitle, maps: 'Maps', metar: 'METAR', history: 'Historical Weather' };
+        const titles = { home: 'Ephrata Weather', current: 'Current Conditions', forecast: forecastTitle, maps: 'Maps', space: 'Space Weather', metar: 'METAR', history: 'Historical Weather' };
         document.title = (titles[viewId] || 'Ephrata Weather') + ' – Ephrata Weather';
 
         // Init view if not already done
@@ -5286,6 +5347,127 @@
         }
     }
 
+
+    function _fmtSpaceDate(iso) {
+        if (!iso) return 'Latest';
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? 'Latest' : d.toLocaleString();
+    }
+
+    function _spaceSetText(id, text) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    }
+
+    async function initSpaceWeatherView() {
+        const chartGrid = document.getElementById('space-chart-grid');
+        const flareList = document.getElementById('space-flares-list');
+        if (!chartGrid || !flareList) return;
+
+        _spaceSetText('space-kp', '--');
+        _spaceSetText('space-h', '--');
+        _spaceSetText('space-speed', '--');
+        _spaceSetText('space-density', '--');
+        _spaceSetText('space-bz', '--');
+
+        const charts = [
+            ['Solar Wind Speed – 1 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/plasma-speed-1-hour.png'],
+            ['Solar Wind Speed – 6 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/plasma-speed-6-hour.png'],
+            ['Solar Wind Speed – 12 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/plasma-speed-12-hour.png'],
+            ['Solar Wind Speed – 24 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/plasma-speed-1-day.png'],
+            ['Proton Density – 1 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/plasma-density-1-hour.png'],
+            ['Proton Density – 6 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/plasma-density-6-hour.png'],
+            ['Proton Density – 12 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/plasma-density-12-hour.png'],
+            ['Proton Density – 24 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/plasma-density-1-day.png'],
+            ['Bz – 1 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/mag-bz-1-hour.png'],
+            ['Bz – 6 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/mag-bz-6-hour.png'],
+            ['Bz – 12 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/mag-bz-12-hour.png'],
+            ['Bz – 24 Hour', 'https://services.swpc.noaa.gov/products/solar-wind/mag-bz-1-day.png'],
+            ['Low Proton Energy (GOES)', 'https://services.swpc.noaa.gov/products/goes-proton-flux-primary-1-day.png'],
+            ['GOES X-ray Flux', 'https://services.swpc.noaa.gov/products/goes-xray-flux-primary-1-day.png'],
+            ['Bt', 'https://services.swpc.noaa.gov/products/solar-wind/mag-bt-1-day.png'],
+            ['By', 'https://services.swpc.noaa.gov/products/solar-wind/mag-by-1-day.png'],
+            ['Bx', 'https://services.swpc.noaa.gov/products/solar-wind/mag-bx-1-day.png'],
+            ['GOES-18 Magnetometer Hp', 'https://services.swpc.noaa.gov/products/goes-18/magnetometer-1-day.png'],
+            ['GOES-19 Magnetometer Hp', 'https://services.swpc.noaa.gov/products/goes-19/magnetometer-1-day.png']
+        ];
+
+        chartGrid.innerHTML = charts.map(([title, url]) => `
+            <div class="space-chart-card">
+                <h4>${title}</h4>
+                <img src="${url}" alt="${title} chart" loading="lazy" referrerpolicy="no-referrer">
+            </div>
+        `).join('');
+
+        flareList.innerHTML = '<li>Loading recent flare data…</li>';
+
+        const [kpResp, scalesResp, plasmaResp, magResp, flaresResp] = await Promise.allSettled([
+            fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
+            fetch('https://services.swpc.noaa.gov/products/noaa-scales.json'),
+            fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json'),
+            fetch('https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json'),
+            fetch('https://services.swpc.noaa.gov/json/goes/primary/xray-flares-7-day.json')
+        ]);
+
+        if (kpResp.status === 'fulfilled' && kpResp.value.ok) {
+            const kpData = await kpResp.value.json();
+            const latest = Array.isArray(kpData) ? kpData[kpData.length - 1] : null;
+            if (latest) {
+                _spaceSetText('space-kp', String(latest.kp_index ?? '--'));
+                _spaceSetText('space-kp-time', _fmtSpaceDate(latest.time_tag));
+            }
+        }
+
+        if (scalesResp.status === 'fulfilled' && scalesResp.value.ok) {
+            const scalesData = await scalesResp.value.json();
+            const hScale = scalesData?.h_scale;
+            if (hScale) {
+                _spaceSetText('space-h', `H${hScale.scale ?? '--'}`);
+                _spaceSetText('space-h-time', hScale.text ?? 'NOAA Scale');
+            }
+        }
+
+        if (plasmaResp.status === 'fulfilled' && plasmaResp.value.ok) {
+            const plasma = await plasmaResp.value.json();
+            const row = Array.isArray(plasma) ? plasma[plasma.length - 1] : null;
+            if (Array.isArray(row)) {
+                const speed = Number(row[2]);
+                const density = Number(row[1]);
+                if (!Number.isNaN(speed)) _spaceSetText('space-speed', `${Math.round(speed)}`);
+                if (!Number.isNaN(density)) _spaceSetText('space-density', `${density.toFixed(2)}`);
+            }
+        }
+
+        if (magResp.status === 'fulfilled' && magResp.value.ok) {
+            const mag = await magResp.value.json();
+            const row = Array.isArray(mag) ? mag[mag.length - 1] : null;
+            if (Array.isArray(row)) {
+                const bz = Number(row[3]);
+                if (!Number.isNaN(bz)) _spaceSetText('space-bz', bz.toFixed(2));
+            }
+        }
+
+        if (flaresResp.status === 'fulfilled' && flaresResp.value.ok) {
+            const flares = await flaresResp.value.json();
+            const recent = (Array.isArray(flares) ? flares : [])
+                .filter(f => f?.max_class || f?.max_xrlong)
+                .slice(-8)
+                .reverse();
+            if (recent.length) {
+                flareList.innerHTML = recent.map(f => {
+                    const cls = f.max_class || f.max_xrlong || 'Unknown';
+                    const reg = f.ar || f.region || 'Unknown region';
+                    const t = _fmtSpaceDate(f.max_time || f.begin_time || f.end_time);
+                    return `<li><strong>${cls}</strong> from AR ${reg} (${t})</li>`;
+                }).join('');
+            } else {
+                flareList.innerHTML = '<li>No recent flares available.</li>';
+            }
+        } else {
+            flareList.innerHTML = '<li>Unable to load flare data right now.</li>';
+        }
+    }
+
     async function initViewData(viewId) {
         const loc = LocationManager.getCurrent();
 
@@ -5303,6 +5485,9 @@
 
         } else if (viewId === 'maps') {
             await initMapsView();
+
+        } else if (viewId === 'space') {
+            await initSpaceWeatherView();
 
         } else if (viewId === 'metar') {
             // Render saved favorites chips
