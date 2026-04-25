@@ -6295,18 +6295,49 @@
     }
     function normalizeDroughtData(data) {
         if (!data?.features) return data;
+
+        function toDroughtCategory(props) {
+            const candidates = [
+                props.DM, props.dm,
+                props.CATEGORY, props.category,
+                props.LABEL, props.label,
+                props.DROUGHT, props.DROUGHT_LVL, props.DROUGHT_LEVEL,
+                props.USDM, props.USDM_CLASS, props.CLASS,
+                props.gridcode, props.GRIDCODE,
+                props.VALUE, props.value, props.DN, props.dn
+            ];
+
+            for (const candidate of candidates) {
+                if (candidate === null || candidate === undefined) continue;
+                const text = String(candidate).trim().toUpperCase();
+                if (!text) continue;
+
+                // Direct canonical forms: D0..D4
+                if (/^D[0-4]$/.test(text)) return text;
+                // Numeric levels used by some ArcGIS exports.
+                // 0..4 -> D0..D4, 1..5 -> D0..D4.
+                if (/^\d+$/.test(text)) {
+                    const n = Number.parseInt(text, 10);
+                    if (n >= 0 && n <= 4) return 'D' + n;
+                    if (n >= 1 && n <= 5) return 'D' + (n - 1);
+                }
+                // Patterned labels like "D2 - Severe Drought" or "USDM_D3".
+                const dMatch = text.match(/D\s*([0-4])/);
+                if (dMatch) return 'D' + dMatch[1];
+
+                if (text.includes('ABNORM')) return 'D0';
+                if (text.includes('MODERATE')) return 'D1';
+                if (text.includes('SEVERE')) return 'D2';
+                if (text.includes('EXTREME')) return 'D3';
+                if (text.includes('EXCEPTIONAL')) return 'D4';
+            }
+            return '';
+        }
+
         const features = data.features.map(f => {
             const props = f.properties || {};
-            const raw = (props.DM || props.dm || props.CATEGORY || props.category || props.LABEL || props.label || props.DROUGHT || props.DROUGHT_LVL || '').toString().trim().toUpperCase();
-            let cat = raw;
-            if (/^\d$/.test(raw)) cat = 'D' + raw;
-            if (/^D[0-4]$/.test(raw)) return { ...f, properties: { ...props, CATEGORY: raw } };
-            if (raw.includes('ABNORM')) cat = 'D0';
-            else if (raw.includes('MODERATE')) cat = 'D1';
-            else if (raw.includes('SEVERE')) cat = 'D2';
-            else if (raw.includes('EXTREME')) cat = 'D3';
-            else if (raw.includes('EXCEPTIONAL')) cat = 'D4';
-            return { ...f, properties: { ...props, CATEGORY: (/^D[0-4]$/.test(cat) ? cat : '') } };
+            const cat = toDroughtCategory(props);
+            return { ...f, properties: { ...props, CATEGORY: cat } };
         });
         return { ...data, features };
     }
