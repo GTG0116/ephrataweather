@@ -249,6 +249,23 @@ function _alertSubtype(alert) {
         return null;
     }
 
+    // Watches can also be tagged as PDS in free-text, even when structured
+    // parameters/tags do not explicitly carry a PDS field.
+    if (event.includes('tornado watch') || event.includes('severe thunderstorm watch')) {
+        const hasPdsText =
+            desc.includes('PARTICULARLY DANGEROUS SITUATION') ||
+            headline.includes('PARTICULARLY DANGEROUS SITUATION') ||
+            /\bPDS\b/.test(desc) ||
+            /\bPDS\b/.test(headline);
+        if (alert.iem_is_pds || hasPdsText) {
+            return {
+                type: event.includes('tornado watch') ? 'pds_tornado_watch' : 'pds_svr_watch',
+                label: 'PARTICULARLY DANGEROUS SITUATION',
+                colorClass: 'subtype-pds'
+            };
+        }
+    }
+
     return null;
 }
 
@@ -939,6 +956,13 @@ function _enrichAlertsWithIEM(alerts, iemFeatures, lat, lng) {
         });
         if (!iemFeature) return alert;
         const p = iemFeature.properties;
+        const iemText = [
+            p.product_text,
+            p.producttext,
+            p.product_narrative,
+            p.narrative,
+            p.text
+        ].find(v => typeof v === 'string' && v.trim().length > 0) || null;
         return {
             ...alert,
             iem_windtag:      p.windtag      || null,
@@ -949,10 +973,23 @@ function _enrichAlertsWithIEM(alerts, iemFeatures, lat, lng) {
             iem_hailthreat:   p.hailthreat   || null,
             iem_squalltag:    p.squalltag    || null,
             iem_floodtag:     p.floodtag_damage || null,
+            iem_text:         iemText,
             iem_is_pds:       !!(p.is_pds),
             iem_is_emergency: !!(p.is_emergency),
         };
     });
+}
+
+function _getAlertBodyText(alert) {
+    const iemText = typeof alert.iem_text === 'string' ? alert.iem_text.trim() : '';
+    if (iemText) {
+        return { source: 'IEM', text: iemText };
+    }
+    const nwsText = [alert.description, alert.instruction].filter(Boolean).join('\n\n').trim();
+    if (nwsText) {
+        return { source: 'NWS API', text: nwsText };
+    }
+    return { source: 'NWS API', text: 'No additional text provided by NWS.' };
 }
 
 async function loadAndRenderAlerts(lat, lng) {
@@ -1055,11 +1092,13 @@ function _alertPriority(alert) {
             case 'tornado_emergency':      return 1000;
             case 'flash_flood_emergency':  return 950;
             case 'pds_tornado':            return 900;
+            case 'pds_tornado_watch':      return 870;
             case 'tornado_observed':       return 850;
             case 'eds_tstm':               return 800;
             case 'destructive_tstm':       return 790;
             case 'flash_flood_observed':   return 780;
             case 'considerable_tstm':      return 760;
+            case 'pds_svr_watch':          return 740;
         }
     }
 
@@ -1287,8 +1326,8 @@ function openAlertDetail(indexOrAlert, skipMap) {
         bodyEl.insertAdjacentElement('beforebegin', iemEl);
     }
 
-    const parts = [alert.description, alert.instruction].filter(Boolean);
-    bodyEl.textContent = parts.length ? parts.join('\n\n') : 'No additional text provided by NWS.';
+    const textPayload = _getAlertBodyText(alert);
+    bodyEl.textContent = `[Text source: ${textPayload.source}]\n\n${textPayload.text}`;
 
     // ---- Action buttons: View on Radar / Screenshot / Share ----
     const existingActions = document.getElementById('alert-modal-actions');
@@ -2564,7 +2603,8 @@ function screenshotAlert() {
     // Description / Instruction body text
     ctx.fillStyle = '#b0c8e0';
     ctx.font = '11px system-ui,-apple-system,Arial,sans-serif';
-    const bodyText = [alert.description, alert.instruction].filter(Boolean).join('\n\n');
+    const textPayload = _getAlertBodyText(alert);
+    const bodyText = `[Text source: ${textPayload.source}]\n\n${textPayload.text}`;
     for (const line of bodyText.split('\n')) {
         if (y > H - 36) break;
         if (!line.trim()) { y += 8; continue; }
