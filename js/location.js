@@ -135,11 +135,12 @@ const LocationManager = {
     async locateMe() {
         const pos = await this.detectLocation();
         if (!pos) return null;
-        const name = await this.reverseGeocode(pos.lat, pos.lng);
-        if (name) {
-            this.setCurrent(pos.lat, pos.lng, name);
-            window.location.reload();
-        }
+        // Fall back to coordinate string when reverse geocoding fails so the
+        // detected position is never silently discarded.
+        const name = (await this.reverseGeocode(pos.lat, pos.lng))
+                  || `${pos.lat.toFixed(3)}°, ${pos.lng.toFixed(3)}°`;
+        this.setCurrent(pos.lat, pos.lng, name);
+        window.location.reload();
         return pos;
     },
 
@@ -168,7 +169,12 @@ const LocationManager = {
 // ============================================
 // LOCATION SEARCH UI
 // ============================================
- 
+
+function _esc(str) {
+    return String(str || '').replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function initLocationSearch() {
     const container = document.getElementById('location-search-container');
     if (!container) return;
@@ -184,7 +190,7 @@ function initLocationSearch() {
     container.innerHTML = `
         <div class="loc-trigger" id="loc-trigger">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            <span id="loc-display-name">${current.name}</span>
+            <span id="loc-display-name">${_esc(current.name)}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div class="loc-dropdown" id="loc-dropdown" style="display:none;">
@@ -227,9 +233,9 @@ function initLocationSearch() {
         }
         favoritesEl.innerHTML = `<div class="loc-section-label">Favorites</div>` +
             favs.map(f => `
-                <div class="loc-fav-chip" data-lat="${f.lat}" data-lng="${f.lng}" data-name="${f.name}">
+                <div class="loc-fav-chip" data-lat="${f.lat}" data-lng="${f.lng}" data-name="${_esc(f.name)}">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="rgba(255,220,100,0.8)" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    <span>${f.name}</span>
+                    <span>${_esc(f.name)}</span>
                 </div>
             `).join('');
  
@@ -252,8 +258,8 @@ function initLocationSearch() {
             const isFav = currentFavs.some(f => f.name === r.name);
             return `
                 <div class="loc-result-item">
-                    <div class="loc-result-name" data-lat="${r.lat}" data-lng="${r.lng}" data-name="${r.name}">${r.name}</div>
-                    <button class="loc-fav-btn ${isFav ? 'active' : ''}" data-lat="${r.lat}" data-lng="${r.lng}" data-name="${r.name}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+                    <div class="loc-result-name" data-lat="${r.lat}" data-lng="${r.lng}" data-name="${_esc(r.name)}">${_esc(r.name)}</div>
+                    <button class="loc-fav-btn ${isFav ? 'active' : ''}" data-lat="${r.lat}" data-lng="${r.lng}" data-name="${_esc(r.name)}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="${isFav ? 'rgba(255,220,100,0.8)' : 'none'}" stroke="${isFav ? 'rgba(255,220,100,0.8)' : 'rgba(255,255,255,0.4)'}" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     </button>
                 </div>
