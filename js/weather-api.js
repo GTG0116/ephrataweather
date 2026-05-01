@@ -781,10 +781,10 @@ const WeatherAPI = {
         if (!resp.ok) throw new Error(`NWS Alerts API ${resp.status}`);
 
         const data = await resp.json();
-        const alerts = (data.features || []).map((feature, i) => {
+        const alerts = (data.features || []).map(feature => {
             const p = feature.properties || {};
             return {
-                id: feature.id || p.id || `${p.event || 'alert'}-${p.sent || ''}-${i}`,
+                id: feature.id || p.id || `${p.event || 'alert'}-${p.sent || ''}`,
                 event: p.event || 'Weather Alert',
                 headline: p.headline || p.event || 'Weather Alert',
                 description: p.description || '',
@@ -865,7 +865,6 @@ const WeatherAPI = {
                 return d.current?.uv_index ?? null;
             })().catch(() => null)
         ]);
-        if (!points.observationStations) throw new Error('NWS /points response missing observationStations');
         // Fetch observation station list
         const stResp = await fetch(points.observationStations, {
             headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
@@ -939,7 +938,6 @@ const WeatherAPI = {
             _getNWSPoints(lat, lng),
             _fetchOpenMeteoWindHourly(lat, lng, Math.ceil(hours / 24) + 1).catch(() => null)
         ]);
-        if (!points.forecastHourly) throw new Error('NWS /points response missing forecastHourly');
         const resp = await fetch(points.forecastHourly, {
             headers: { 'Accept': 'application/geo+json', 'User-Agent': 'EphrataWeather/1.0' }
         });
@@ -975,7 +973,6 @@ const WeatherAPI = {
     async getNWSDailyForecast(lat, lng, days = 10) {
         const points = await _getNWSPoints(lat, lng);
 
-        if (!points.forecast) throw new Error('NWS /points response missing forecast');
         // Fetch NWS forecast periods, sunrise/sunset, and Open-Meteo daily wind in parallel
         const [resp, sunTimes, omDailyRaw] = await Promise.all([
             fetch(points.forecast, {

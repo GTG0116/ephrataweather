@@ -85,9 +85,8 @@ async function initCurrentView(lat, lng) {
         const forecastDays = dailyResult.status === 'fulfilled' ? dailyResult.value?.forecastDays : [];
         renderHourlyForecast(hourlyResult.value, forecastDays);
     } else {
-        const _hHint = dataSource === 'google' ? 'Check your API key' : 'Check your internet connection';
         document.getElementById('hourly-strip').innerHTML =
-            `<div class="error-message">Unable to load hourly forecast<div class="error-hint">${_hHint}</div></div>`;
+            '<div class="error-message">Unable to load hourly forecast<div class="error-hint">Check your API key</div></div>';
         console.error('Hourly forecast error:', hourlyResult.reason);
     }
 
@@ -837,7 +836,6 @@ function _alertClass(alert) {
     if (event.includes('severe thunderstorm warning'))   return 'alert-svr-warning';
     if (event.includes('severe thunderstorm watch'))     return 'alert-svr-watch';
     if (event.includes('flash flood warning'))           return 'alert-flash-flood-warning';
-    if (event.includes('flash flood watch'))             return 'alert-flash-flood-watch';
     if (event.includes('winter storm watch'))            return 'alert-winter-storm-watch';
     if (event.includes('winter storm warning'))          return 'alert-winter-storm-warning';
     if (event.includes('blizzard warning'))              return 'alert-blizzard-warning';
@@ -995,9 +993,8 @@ function _getAlertBodyText(alert) {
 }
 
 async function loadAndRenderAlerts(lat, lng) {
-    // Fetch location timezone before rendering alert times so they show in the
-    // location's timezone rather than the viewer's browser timezone.
-    try { _locationTimeZone = await WeatherAPI.getLocationTimeZone(lat, lng); } catch (e) {}
+    // Fetch location timezone in the background — doesn't need to block alerts
+    WeatherAPI.getLocationTimeZone(lat, lng).then(tz => { _locationTimeZone = tz; }).catch(() => {});
 
     // Fetch NWS alerts and IEM storm-based warnings in parallel
     let currentAlerts = [];

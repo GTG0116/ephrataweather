@@ -62,11 +62,8 @@ async function initForecastView(lat, lng) {
         _loadSPCForecastData(lat, lng);
         _loadWPCFireForecastData(lat, lng);
     } catch (err) {
-        const _fHint = _src === 'google' || !_src
-            ? 'Check your Google Weather API key in js/config.js'
-            : 'Check your internet connection';
         document.getElementById('forecast-list').innerHTML =
-            `<div class="error-message" style="margin:24px;">Unable to load forecast data<div class="error-hint">${_fHint}</div></div>`;
+            '<div class="error-message" style="margin:24px;">Unable to load forecast data<div class="error-hint">Check your Google Weather API key in js/config.js</div></div>';
         console.error('Forecast error:', err);
     }
 

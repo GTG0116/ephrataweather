@@ -950,11 +950,6 @@ body {
 .alert-flash-flood-warning::before { background: #00BB40; }
 .alert-flash-flood-warning .alert-title { color: #33DD66; }
 
-/* Flash Flood Watch — yellow-green (NWS color) */
-.alert-flash-flood-watch { background: rgba(100,140,0,0.18); border: 1px solid rgba(120,160,0,0.40); }
-.alert-flash-flood-watch::before { background: #7DA800; }
-.alert-flash-flood-watch .alert-title { color: #A8D800; }
-
 /* Winter Storm Watch — blue */
 .alert-winter-storm-watch { background: rgba(50,120,240,0.16); border: 1px solid rgba(70,140,255,0.35); }
 .alert-winter-storm-watch::before { background: #4488EE; }
