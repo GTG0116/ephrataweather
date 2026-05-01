@@ -218,9 +218,6 @@ async function _fetchSunTimes(lat, lng, days) {
 
 // --- Google Weather API helper (GET with query params) ---
 async function _googleGet(endpoint, params) {
-    if (!CONFIG.GOOGLE_WEATHER_API_KEY) {
-        throw new Error('Google Weather API key not configured');
-    }
     const qp = new URLSearchParams(params);
     qp.set('key', CONFIG.GOOGLE_WEATHER_API_KEY);
     const url = `${CONFIG.GOOGLE_WEATHER_BASE}/${endpoint}?${qp}`;

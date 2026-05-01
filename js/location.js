@@ -6,7 +6,6 @@
 const LocationManager = {
     STORAGE_KEY: 'ephrata_weather_location',
     FAVORITES_KEY: 'ephrata_weather_favorites',
-    _favKey(lat, lng) { return `${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}`; },
  
     // Get current location from localStorage or default
     getCurrent() {
@@ -32,13 +31,7 @@ const LocationManager = {
     getFavorites() {
         try {
             const stored = localStorage.getItem(this.FAVORITES_KEY);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (!Array.isArray(parsed)) return [];
-                const migrated = parsed.map(f => ({ ...f, key: f.key || this._favKey(f.lat, f.lng) }));
-                localStorage.setItem(this.FAVORITES_KEY, JSON.stringify(migrated));
-                return migrated;
-            }
+            if (stored) return JSON.parse(stored);
         } catch (e) {}
         return [];
     },
@@ -46,25 +39,23 @@ const LocationManager = {
     // Add a favorite
     addFavorite(lat, lng, name) {
         const favs = this.getFavorites();
-        const key = this._favKey(lat, lng);
-        if (favs.some(f => (f.key || this._favKey(f.lat, f.lng)) === key)) return favs;
-        favs.unshift({ lat, lng, name, key });
+        if (favs.some(f => f.name === name)) return favs;
+        favs.unshift({ lat, lng, name });
         localStorage.setItem(this.FAVORITES_KEY, JSON.stringify(favs.slice(0, 20)));
         return favs;
     },
  
     // Remove a favorite
-    removeFavoriteByKey(key) {
+    removeFavorite(name) {
         let favs = this.getFavorites();
-        favs = favs.filter(f => (f.key || this._favKey(f.lat, f.lng)) !== key);
+        favs = favs.filter(f => f.name !== name);
         localStorage.setItem(this.FAVORITES_KEY, JSON.stringify(favs));
         return favs;
     },
  
     // Check if location is a favorite
-    isFavorite(lat, lng) {
-        const key = this._favKey(lat, lng);
-        return this.getFavorites().some(f => (f.key || this._favKey(f.lat, f.lng)) === key);
+    isFavorite(name) {
+        return this.getFavorites().some(f => f.name === name);
     },
  
     // Search for locations using Nominatim
@@ -167,9 +158,8 @@ const LocationManager = {
         // First visit: try geolocation
         const pos = await this.detectLocation();
         if (pos) {
-            const name = (await this.reverseGeocode(pos.lat, pos.lng))
-                      || `${pos.lat.toFixed(3)}°, ${pos.lng.toFixed(3)}°`;
-            return this.setCurrent(pos.lat, pos.lng, name);
+            const name = await this.reverseGeocode(pos.lat, pos.lng);
+            if (name) return this.setCurrent(pos.lat, pos.lng, name);
         }
         // Geolocation unavailable — use hardcoded default
         return this.getCurrent();
@@ -265,7 +255,7 @@ function initLocationSearch() {
         }
         const currentFavs = LocationManager.getFavorites();
         resultsEl.innerHTML = results.map(r => {
-            const isFav = LocationManager.isFavorite(r.lat, r.lng);
+            const isFav = currentFavs.some(f => f.name === r.name);
             return `
                 <div class="loc-result-item">
                     <div class="loc-result-name" data-lat="${r.lat}" data-lng="${r.lng}" data-name="${_esc(r.name)}">${_esc(r.name)}</div>
@@ -288,8 +278,8 @@ function initLocationSearch() {
                 const name = btn.dataset.name;
                 const lat = parseFloat(btn.dataset.lat);
                 const lng = parseFloat(btn.dataset.lng);
-                if (LocationManager.isFavorite(lat, lng)) {
-                    LocationManager.removeFavoriteByKey(LocationManager._favKey(lat, lng));
+                if (LocationManager.isFavorite(name)) {
+                    LocationManager.removeFavorite(name);
                 } else {
                     LocationManager.addFavorite(lat, lng, name);
                 }
@@ -317,11 +307,11 @@ function initLocationSearch() {
         searchTimeout = setTimeout(async () => {
             const results = await LocationManager.search(q);
             // Sort favorites to top of results
-            const favKeys = LocationManager.getFavorites().map(f => (f.key || LocationManager._favKey(f.lat, f.lng)));
-            const hasFavMatch = results.some(r => favKeys.includes(LocationManager._favKey(r.lat, r.lng)));
+            const favNames = LocationManager.getFavorites().map(f => f.name);
+            const hasFavMatch = results.some(r => favNames.includes(r.name));
             results.sort((a, b) => {
-                const aFav = favKeys.includes(LocationManager._favKey(a.lat, a.lng)) ? 0 : 1;
-                const bFav = favKeys.includes(LocationManager._favKey(b.lat, b.lng)) ? 0 : 1;
+                const aFav = favNames.includes(a.name) ? 0 : 1;
+                const bFav = favNames.includes(b.name) ? 0 : 1;
                 return aFav - bFav;
             });
             // If no favorites appear in results, restore the favorites section

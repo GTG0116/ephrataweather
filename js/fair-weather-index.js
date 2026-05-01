@@ -187,12 +187,7 @@ const FairWeatherIndex = (() => {
                 const d = new Date(dateStr);
                 if (!isNaN(d)) {
                     month   = d.getMonth();
-                    // Use local date components (not UTC ISO conversion) to avoid
-                    // day shifts around midnight/timezone boundaries.
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const dd = String(d.getDate()).padStart(2, '0');
-                    dateKey = `${y}-${m}-${dd}`;
+                    dateKey = d.toISOString().slice(0, 10);
                 }
             }
         }
