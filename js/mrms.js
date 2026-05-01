@@ -12,10 +12,6 @@ let rainviewerHost = '';
 
 // --- Initialize Map ---
 function initMap() {
-    const mapEl = document.getElementById('map');
-    if (!mapEl) return;
-    if (typeof mapboxgl === "undefined") { console.warn('Mapbox GL not available'); return; }
-    if (!CONFIG.MAPBOX_ACCESS_TOKEN) { console.warn('Mapbox access token not configured'); return; }
     const loc = LocationManager.getCurrent();
 
     const nameEl = document.getElementById('location-name');
@@ -169,8 +165,4 @@ function refreshRadar() {
 }
 
 // --- Initialize ---
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initMap, { once: true });
-} else {
-    initMap();
-}
+initMap();
