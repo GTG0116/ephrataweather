@@ -211,9 +211,6 @@
 
         .radar-controls { display: none; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.07); }
         .radar-controls.visible { display: flex; }
-        .owm-controls { display: none; align-items: center; gap: 12px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.07); font-size: 0.8rem; color: var(--text-secondary); }
-        .owm-controls.visible { display: flex; }
-        .owm-controls input[type="range"] { width: 100px; accent-color: var(--accent-blue); }
         .opacity-row { display: flex; align-items: center; gap: 10px; font-size: 0.78rem; color: var(--text-muted); }
         .opacity-row input[type="range"] { width: 110px; accent-color: var(--accent-blue); }
         .timeline-row { display: flex; align-items: center; gap: 10px; }
@@ -353,8 +350,6 @@
         .alert-nav-btn:disabled { opacity:0.3; cursor:default; }
         .alert-nav-count { font-size:0.76rem; color:var(--text-muted); flex:1; text-align:center; white-space:nowrap; }
 
-        .owm-key-warn { display: none; padding: 8px 14px; background: rgba(255,160,64,0.12); border: 1px solid rgba(255,160,64,0.3); border-radius: var(--radius-sm); font-size: 0.78rem; color: #FFA040; margin-top: 6px; }
-        .owm-key-warn.visible { display: block; }
         .layer-notice { font-size: 0.78rem; color: var(--text-muted); padding: 4px 0; }
 
         /* ---- Surface Analysis Front Legend ---- */
@@ -1233,7 +1228,6 @@
         .badge-nws    { background: rgba(64,180,255,0.2);  color: #40b4ff; border: 1px solid rgba(64,180,255,0.35); }
         .badge-google { background: rgba(255,180,64,0.2);  color: #ffb440; border: 1px solid rgba(255,180,64,0.35); }
         .badge-om     { background: rgba(100,220,130,0.2); color: #64dc82; border: 1px solid rgba(100,220,130,0.35); }
-        .badge-owm    { background: rgba(220,120,255,0.2); color: #dc78ff; border: 1px solid rgba(220,120,255,0.35); }
         .source-default-tag {
             font-size: 0.65rem;
             font-weight: 700;
@@ -1611,7 +1605,6 @@
                             <button class="source-btn" id="btn-src-nws" onclick="setWeatherDataSource('nws')">NWS</button>
                             <button class="source-btn" id="btn-src-google" onclick="setWeatherDataSource('google')">Google</button>
                             <button class="source-btn" id="btn-src-open-meteo" onclick="setWeatherDataSource('open-meteo')">Open-Meteo</button>
-                            <button class="source-btn" id="btn-src-owm" onclick="setWeatherDataSource('owm')">OWM</button>
                         </div>
                         <button class="source-info-btn" onclick="openSourceInfoModal()" title="About weather data sources" aria-label="Learn about weather data sources">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -2258,11 +2251,6 @@
                         <input type="range" min="0" max="100" value="85" oninput="setRadarOpacity(this.value)" id="radar-opacity">
                     </div>
                 </div>
-                <!-- OWM Sub-Controls -->
-                <div class="owm-controls" id="owm-controls">
-                    <span>Opacity:</span>
-                    <input type="range" min="0" max="100" value="70" oninput="setOWMOpacity(this.value)" id="owm-opacity">
-                </div>
                 <!-- Surface Analysis Sub-Controls -->
                 <div class="spc-controls" id="surface-analysis-controls">
                     <div class="ctrl-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
@@ -2284,9 +2272,6 @@
                         <div class="sf-legend-item"><span style="color:#1565c0;font-weight:700;font-size:1rem;line-height:1;">H</span>&nbsp;High Pressure</div>
                         <div class="sf-legend-item"><span style="color:#c62828;font-weight:700;font-size:1rem;line-height:1;">L</span>&nbsp;Low Pressure</div>
                     </div>
-                </div>
-                <div class="owm-key-warn" id="owm-key-warn">
-                    &#9888; OpenWeatherMap API key not set. Add your key to <code>js/config.js</code> as <code>OWM_API_KEY</code>.
                 </div>
                 <!-- Collapsible Map Options: basemap, my location, alerts, tropical cyclones -->
                 <div class="map-options-wrap" id="map-options-wrap">
@@ -2992,23 +2977,8 @@
                 </ul>
             </div>
 
-            <div class="source-card">
-                <div class="source-card-header">
-                    <span class="source-badge badge-owm">OWM</span>
-                </div>
-                <p><strong>OpenWeatherMap</strong> — a popular weather data provider with global coverage, using a blend of weather station data and numerical models.</p>
-                <ul>
-                    <li>Good global coverage with hyperlocal station blending</li>
-                    <li>Free tier provides current conditions + 5-day/3-hour forecast</li>
-                    <li>Daily forecast is derived by aggregating 3-hour intervals</li>
-                    <li>UV index not included in free tier (supplemented by Open-Meteo)</li>
-                    <li>Also powers the temperature, wind, and cloud map overlays</li>
-                    <li>Only uses a single model output, which is less accurate compared to NWS human forecasts</li>
-                </ul>
-            </div>
-
             <div class="source-comparison-note">
-                <strong>Tip:</strong> Differences between sources are normal — each uses different models, observation networks, and update schedules. NWS is generally the best choice for U.S. locations. Open-Meteo and OWM are useful for comparing forecasts or when NWS coverage isn't available.
+                <strong>Tip:</strong> Differences between sources are normal — each uses different models, observation networks, and update schedules. NWS is generally the best choice for U.S. locations. Open-Meteo is useful for comparing forecasts or when NWS coverage isn't available.
             </div>
         </div>
     </div>
@@ -3056,7 +3026,7 @@
     // ============================================================
     function setWeatherDataSource(src) {
         WeatherAPI.setDataSource(src);
-        ['nws', 'google', 'open-meteo', 'owm'].forEach(s => {
+        ['nws', 'google', 'open-meteo'].forEach(s => {
             const btn = document.getElementById('btn-src-' + s);
             if (btn) btn.classList.toggle('active', s === src);
         });
@@ -3125,7 +3095,7 @@
     // Initialise toggle state from saved preference (NWS is default)
     (function() {
         const saved = WeatherAPI.getDataSource();
-        ['nws', 'google', 'open-meteo', 'owm'].forEach(s => {
+        ['nws', 'google', 'open-meteo'].forEach(s => {
             const btn = document.getElementById('btn-src-' + s);
             if (btn) btn.classList.toggle('active', s === saved);
         });
@@ -5394,6 +5364,12 @@
     async function showView(viewId) {
         if (!VALID_VIEWS.includes(viewId)) viewId = 'home';
 
+        // Stop current-conditions auto-refresh when navigating away from that view
+        if (currentViewId === 'current' && viewId !== 'current' &&
+                typeof window.stopCurrentRefresh === 'function') {
+            window.stopCurrentRefresh();
+        }
+
         // Hide all views
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         // Show requested view
@@ -6239,7 +6215,6 @@
     function removeLayer(id) { if (map && map.getLayer(id))  map.removeLayer(id); }
     function removeSource(id){ if (map && map.getSource(id)) map.removeSource(id); }
     function clearSPCLayers() { removeLayer('spc-line-cig3-double'); removeLayer('spc-fill-cig1'); removeLayer('spc-fill-cig2'); removeLayer('spc-fill-cig3'); removeLayer('spc-fill'); removeLayer('spc-line'); removeSource('spc-data'); }
-    function clearOWMLayers() { removeLayer('owm-layer'); removeSource('owm-source'); }
     function clearWPCLayers() { removeLayer('wpc-fill'); removeLayer('wpc-line'); removeSource('wpc-data'); }
     function clearFireLayers() { removeLayer('fire-fill'); removeLayer('fire-line'); removeSource('fire-data'); }
     function clearDroughtLayers() { removeLayer('drought-fill'); removeLayer('drought-line'); removeSource('drought-data'); }
@@ -6673,75 +6648,6 @@
     }
 
 
-
-    let currentOWMOpacity = 0.7;
-    function loadOWMLayer(type) {
-        const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
-        const warn = document.getElementById('owm-key-warn');
-        if (!key || key === 'YOUR_OWM_API_KEY_HERE') { warn.classList.add('visible'); clearOWMLayers(); return; }
-        warn.classList.remove('visible');
-        clearSPCLayers(); clearOWMLayers(); hideSPCLegend();
-        const layerMap = { temperature: 'temp_new', wind: 'wind_new', clouds: 'clouds_new' };
-        const layerName = layerMap[type] || 'temp_new';
-        map.addSource('owm-source', { type: 'raster',
-            tiles: [`https://tile.openweathermap.org/map/${layerName}/{z}/{x}/{y}.png?appid=${key}`],
-            tileSize: 256, attribution: '&copy; <a href="https://openweathermap.org">OpenWeatherMap</a>'
-        });
-        map.addLayer({ id: 'owm-layer', type: 'raster', source: 'owm-source',
-            paint: { 'raster-opacity': currentOWMOpacity }
-        }, _overlayBefore());
-    }
-    function setOWMOpacity(val) {
-        currentOWMOpacity = val / 100;
-        if (map && map.getLayer('owm-layer')) map.setPaintProperty('owm-layer', 'raster-opacity', currentOWMOpacity);
-    }
-
-    async function handleOWMClick(e) {
-        if (currentLayer !== 'temperature' && currentLayer !== 'wind' && currentLayer !== 'clouds') return;
-        const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
-        if (!key || key === 'YOUR_OWM_API_KEY_HERE') return;
-
-        const seq = _startMapClick(e);
-        const { lat, lng } = e.lngLat;
-        try {
-            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${key}&units=imperial`;
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error('OWM API error ' + resp.status);
-            const data = await resp.json();
-            const cityName = data.name || 'This location';
-            const temp = data.main?.temp != null ? Math.round(data.main.temp) + '°F' : '--';
-            const feelsLike = data.main?.feels_like != null ? Math.round(data.main.feels_like) + '°F' : '--';
-            const windSpeed = data.wind?.speed != null ? Math.round(data.wind.speed) + ' mph' : '--';
-            const windGust  = data.wind?.gust  != null ? Math.round(data.wind.gust)  + ' mph' : null;
-            const windDir   = data.wind?.deg   != null ? degToCardinal(data.wind.deg) : '--';
-            const humidity  = data.main?.humidity != null ? data.main.humidity + '%' : '--';
-            let bodyHtml = `<div class="popup-title">${cityName}</div>`;
-            let label;
-            if (currentLayer === 'temperature') {
-                label = 'Temperature';
-                bodyHtml += `<div class="popup-stat"><span class="popup-key">Temperature</span><span class="popup-val">${temp}</span></div>
-                         <div class="popup-stat"><span class="popup-key">Feels Like</span><span class="popup-val">${feelsLike}</span></div>
-                         <div class="popup-stat"><span class="popup-key">Humidity</span><span class="popup-val">${humidity}</span></div>`;
-            } else if (currentLayer === 'clouds') {
-                label = 'Clouds';
-                const clouds = data.clouds?.all != null ? data.clouds.all + '%' : '--';
-                const cond = data.weather?.[0]?.description || '--';
-                bodyHtml += `<div class="popup-stat"><span class="popup-key">Cloud Cover</span><span class="popup-val">${clouds}</span></div>
-                         <div class="popup-stat"><span class="popup-key">Condition</span><span class="popup-val">${cond}</span></div>
-                         <div class="popup-stat"><span class="popup-key">Humidity</span><span class="popup-val">${humidity}</span></div>`;
-            } else {
-                label = 'Wind';
-                bodyHtml += `<div class="popup-stat"><span class="popup-key">Wind Speed</span><span class="popup-val">${windSpeed}</span></div>
-                         ${windGust ? `<div class="popup-stat"><span class="popup-key">Gusts</span><span class="popup-val">${windGust}</span></div>` : ''}
-                         <div class="popup-stat"><span class="popup-key">Direction</span><span class="popup-val">${windDir}</span></div>`;
-            }
-            _addMapPanel({ bodyHtml, type: 'owm', label }, seq);
-        } catch (err) { console.error('OWM click error:', err); }
-    }
-    function degToCardinal(deg) {
-        const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-        return dirs[Math.round(deg / 22.5) % 16];
-    }
 
     // ============================================================
     // SPC IMAGE GALLERY
@@ -7573,8 +7479,6 @@
             }
             firstBorderLayerId = _findFirstBorderLayer(styleLayers);
             addCIGPatterns();
-            map.off('click', handleOWMClick);
-            map.on('click', handleOWMClick);
             map.off('click', handleOutlookClick);
             map.on('click', handleOutlookClick);
             map.off('click', handleMrmsClick);
@@ -7586,7 +7490,6 @@
             map.off('click', handleTropicalOverlayClick);
             map.on('click', handleTropicalOverlayClick);
             if (currentLayer === 'spc' && currentDay > 0) loadSPCLayer(currentDay, currentType);
-            else if (currentLayer === 'temperature' || currentLayer === 'wind' || currentLayer === 'clouds') loadOWMLayer(currentLayer);
             else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
             else if (currentLayer === 'fire-wx') loadFireLayer(currentFireDay, currentFireType);
             else if (currentLayer === 'radar') { _radarLoaded = false; showRadarFrame(_radarFrameIdx); }
@@ -8621,9 +8524,7 @@
         document.getElementById('surface-analysis-controls').classList.toggle('visible', layer === 'surface-analysis');
         const spcInfoRow = document.getElementById('spc-info-row');
         if (spcInfoRow) spcInfoRow.style.display = layer === 'spc' ? '' : 'none';
-        const mapLayer = layer === 'temperature' || layer === 'wind' || layer === 'clouds';
-        document.getElementById('owm-controls').classList.toggle('visible', mapLayer);
-        const hasInteractiveMap = mapLayer || layer === 'spc' || layer === 'radar' ||
+        const hasInteractiveMap = layer === 'spc' || layer === 'radar' ||
             layer === 'satellite' || layer === 'wpc-rain' || layer === 'fire-wx' ||
             layer === 'drought' ||
             layer === 'rtma' || layer === 'surface-analysis';
@@ -8637,43 +8538,41 @@
         }
 
         if (layer === 'spc') {
-            clearOWMLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers();
+            clearWPCLayers(); clearFireLayers(); clearDroughtLayers();
             buildTypeButtons(currentDay);
         } else if (layer === 'satellite') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend();
             _showSatelliteView();
             _ensureMapReady().then(() => { _autoSelectSatSource(); loadSatLayer(); });
         } else if (layer === 'radar') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend();
             _showRadarView();
             _ensureMapReady().then(() => loadRadarLayer());
         } else if (layer === 'surface-analysis') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend();
             _showMapView();
             _ensureMapReady().then(() => loadSurfaceAnalysisLayer());
         } else if (layer === 'wpc-rain') {
-            clearSPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend();
             _showWPCRainView();
             renderWPCRainImages();
             _ensureMapReady().then(() => loadWPCLayer(currentWPCDay));
         } else if (layer === 'fire-wx') {
-            clearSPCLayers(); clearWPCLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearDroughtLayers(); hideSPCLegend();
             _showFireWxView();
             renderFireWxImages();
             _ensureMapReady().then(() => loadFireLayer(currentFireDay, currentFireType));
         } else if (layer === 'drought') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); hideSPCLegend();
             _showMapView();
             _ensureMapReady().then(() => loadDroughtLayer());
         } else if (layer === 'rtma') {
-            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend(); clearOWMLayers();
+            clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend();
             _showMapView();
             _ensureMapReady().then(() => loadRtmaLayer());
         } else {
             clearSPCLayers(); clearWPCLayers(); clearFireLayers(); clearDroughtLayers(); hideSPCLegend();
             _showMapView();
-            clearOWMLayers();
-            if (mapLayer) loadOWMLayer(layer);
             if (map) setTimeout(() => map.resize(), 50);
         }
     }
@@ -8852,7 +8751,6 @@
                 }
                 firstBorderLayerId = _findFirstBorderLayer(styleLayers);
                 addCIGPatterns();
-                map.on('click', handleOWMClick);
                 map.on('click', handleOutlookClick);
                 map.on('click', handleMrmsClick);
                 map.on('click', handleRtmaClick);
@@ -8951,11 +8849,9 @@
         const src = WeatherAPI.getDataSource();
         const cFn = src === 'nws'        ? WeatherAPI.getNWSCurrentConditions(loc.lat, loc.lng)
                   : src === 'open-meteo' ? WeatherAPI.getOpenMeteoCurrentConditions(loc.lat, loc.lng)
-                  : src === 'owm'        ? WeatherAPI.getOWMCurrentConditions(loc.lat, loc.lng)
                   :                        WeatherAPI.getCurrentConditions(loc.lat, loc.lng);
         const dFn = src === 'nws'        ? WeatherAPI.getNWSDailyForecast(loc.lat, loc.lng, 1)
                   : src === 'open-meteo' ? WeatherAPI.getOpenMeteoDailyForecast(loc.lat, loc.lng, 1)
-                  : src === 'owm'        ? WeatherAPI.getOWMDailyForecast(loc.lat, loc.lng, 1)
                   :                        WeatherAPI.getDailyForecast(loc.lat, loc.lng, 1);
         const [cr, dr] = await Promise.allSettled([cFn, dFn]);
         if (cr.status !== 'fulfilled') return;

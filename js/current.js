@@ -27,24 +27,20 @@ async function initCurrentView(lat, lng) {
     const dataSource = WeatherAPI.getDataSource();
     const isNWS = dataSource === 'nws';
     const isOpenMeteo = dataSource === 'open-meteo';
-    const isOWM = dataSource === 'owm';
 
     function _getCurrentFn() {
         if (isNWS) return WeatherAPI.getNWSCurrentConditions(lat, lng);
         if (isOpenMeteo) return WeatherAPI.getOpenMeteoCurrentConditions(lat, lng);
-        if (isOWM) return WeatherAPI.getOWMCurrentConditions(lat, lng);
         return WeatherAPI.getCurrentConditions(lat, lng); // google
     }
     function _getHourlyFn() {
         if (isNWS) return WeatherAPI.getNWSHourlyForecast(lat, lng, 24);
         if (isOpenMeteo) return WeatherAPI.getOpenMeteoHourlyForecast(lat, lng, 24);
-        if (isOWM) return WeatherAPI.getOWMHourlyForecast(lat, lng, 24);
         return WeatherAPI.getHourlyForecast(lat, lng, 24); // google
     }
     function _getDailyFn(days) {
         if (isNWS) return WeatherAPI.getNWSDailyForecast(lat, lng, days);
         if (isOpenMeteo) return WeatherAPI.getOpenMeteoDailyForecast(lat, lng, days);
-        if (isOWM) return WeatherAPI.getOWMDailyForecast(lat, lng, days);
         return WeatherAPI.getDailyForecast(lat, lng, days); // google
     }
 
@@ -127,7 +123,6 @@ async function _autoRefreshCurrent() {
     function _getAutoRefreshCurrentFn() {
         if (_src === 'nws') return WeatherAPI.getNWSCurrentConditions(loc.lat, loc.lng);
         if (_src === 'open-meteo') return WeatherAPI.getOpenMeteoCurrentConditions(loc.lat, loc.lng);
-        if (_src === 'owm') return WeatherAPI.getOWMCurrentConditions(loc.lat, loc.lng);
         return WeatherAPI.getCurrentConditions(loc.lat, loc.lng);
     }
 
@@ -2716,3 +2711,8 @@ async function _fetchAndOpenAlertById(alertId) {
         console.warn('Failed to fetch shared alert:', e);
     }
 }
+
+// Stops the auto-refresh timer. Called by the SPA when navigating away from the current view.
+window.stopCurrentRefresh = function () {
+    if (_autoRefreshTimer) { clearInterval(_autoRefreshTimer); _autoRefreshTimer = null; }
+};
