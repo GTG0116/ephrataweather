@@ -149,26 +149,6 @@
             display: flex;
         }
 
-        /* OWM sub-controls */
-        .owm-controls {
-            display: none;
-            align-items: center;
-            gap: 12px;
-            padding-top: 6px;
-            border-top: 1px solid rgba(255, 255, 255, 0.07);
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-
-        .owm-controls.visible {
-            display: flex;
-        }
-
-        .owm-controls input[type="range"] {
-            width: 100px;
-            accent-color: var(--accent-blue);
-        }
-
         /* Opacity row in radar */
         .opacity-row {
             display: flex;
@@ -369,22 +349,6 @@
             font-size: 0.85rem;
         }
 
-        /* OWM key warning */
-        .owm-key-warn {
-            display: none;
-            padding: 8px 14px;
-            background: rgba(255, 160, 64, 0.12);
-            border: 1px solid rgba(255, 160, 64, 0.3);
-            border-radius: var(--radius-sm);
-            font-size: 0.78rem;
-            color: #FFA040;
-            margin-top: 6px;
-        }
-
-        .owm-key-warn.visible {
-            display: block;
-        }
-
         /* SPC error notice */
         .layer-notice {
             font-size: 0.78rem;
@@ -480,20 +444,6 @@
                 </div>
             </div>
 
-            <!-- OWM Sub-Controls -->
-            <div class="owm-controls" id="owm-controls">
-                <span style="font-size:0.8rem;color:var(--text-secondary);">
-                    <svg style="vertical-align:middle;margin-right:4px;" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    Click the map to see exact values
-                </span>
-                <span>Opacity:</span>
-                <input type="range" min="0" max="100" value="70" oninput="setOWMOpacity(this.value)" id="owm-opacity">
-            </div>
-
-            <!-- OWM Key Warning -->
-            <div class="owm-key-warn" id="owm-key-warn">
-                &#9888; OpenWeatherMap API key not set. Add your key to <code>js/config.js</code> as <code>OWM_API_KEY</code>.
-            </div>
         </div>
 
         <!-- Map -->
@@ -519,7 +469,7 @@
     <script src="js/location.js"></script>
     <script>
     // ============================================================
-    // MAPS PAGE - SPC Outlook, Radar, OWM Temperature & Wind
+    // MAPS PAGE - SPC Outlook, Radar
     // ============================================================
 
     // ---- State ----
@@ -741,10 +691,7 @@
         removeLayer('radar-layer');
         removeSource('radar-source');
     }
-    function clearOWMLayers() {
-        removeLayer('owm-layer');
-        removeSource('owm-source');
-    }
+
 
     function normalizeSPCData(data) {
         if (!data?.features) return data;
@@ -953,100 +900,6 @@
         loadRadarData();
     }
 
-    // ---- OWM Overlays ----
-    let currentOWMOpacity = 0.7;
-
-    function loadOWMLayer(type) {
-        const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
-        const warn = document.getElementById('owm-key-warn');
-
-        if (!key || key === 'YOUR_OWM_API_KEY_HERE') {
-            warn.classList.add('visible');
-            clearOWMLayers();
-            return;
-        }
-        warn.classList.remove('visible');
-
-        clearSPCLayers();
-        clearRadarLayers();
-        clearOWMLayers();
-        hideSPCLegend();
-
-        const layerName = type === 'temperature' ? 'temp_new' : 'wind_new';
-
-        map.addSource('owm-source', {
-            type: 'raster',
-            tiles: [`https://tile.openweathermap.org/map/${layerName}/{z}/{x}/{y}.png?appid=${key}`],
-            tileSize: 256,
-            attribution: '&copy; <a href="https://openweathermap.org">OpenWeatherMap</a>'
-        });
-
-        // Insert before symbol layers so town labels remain on top
-        map.addLayer({
-            id: 'owm-layer',
-            type: 'raster',
-            source: 'owm-source',
-            paint: { 'raster-opacity': currentOWMOpacity }
-        }, firstSymbolLayerId);
-    }
-
-    function setOWMOpacity(val) {
-        currentOWMOpacity = val / 100;
-        if (map.getLayer('owm-layer')) {
-            map.setPaintProperty('owm-layer', 'raster-opacity', currentOWMOpacity);
-        }
-    }
-
-    // Click on map → OWM exact value popup
-    async function handleOWMClick(e) {
-        if (currentLayer !== 'temperature' && currentLayer !== 'wind') return;
-
-        const key = (typeof CONFIG !== 'undefined') ? CONFIG.OWM_API_KEY : '';
-        if (!key || key === 'YOUR_OWM_API_KEY_HERE') return;
-
-        const { lat, lng } = e.lngLat;
-        try {
-            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${key}&units=imperial`;
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error('OWM API error ' + resp.status);
-            const data = await resp.json();
-
-            const cityName = data.name || 'This location';
-            const temp = data.main?.temp != null ? Math.round(data.main.temp) + '°F' : '--';
-            const feelsLike = data.main?.feels_like != null ? Math.round(data.main.feels_like) + '°F' : '--';
-            const windSpeed = data.wind?.speed != null ? Math.round(data.wind.speed) + ' mph' : '--';
-            const windGust  = data.wind?.gust  != null ? Math.round(data.wind.gust)  + ' mph' : null;
-            const windDir   = data.wind?.deg   != null ? degToCardinal(data.wind.deg) : '--';
-            const humidity  = data.main?.humidity != null ? data.main.humidity + '%' : '--';
-
-            let html = `<div class="popup-title">${cityName}</div>`;
-
-            if (currentLayer === 'temperature') {
-                html += `
-                    <div class="popup-stat"><span class="popup-key">Temperature</span><span class="popup-val">${temp}</span></div>
-                    <div class="popup-stat"><span class="popup-key">Feels Like</span><span class="popup-val">${feelsLike}</span></div>
-                    <div class="popup-stat"><span class="popup-key">Humidity</span><span class="popup-val">${humidity}</span></div>`;
-            } else {
-                html += `
-                    <div class="popup-stat"><span class="popup-key">Wind Speed</span><span class="popup-val">${windSpeed}</span></div>
-                    ${windGust ? `<div class="popup-stat"><span class="popup-key">Gusts</span><span class="popup-val">${windGust}</span></div>` : ''}
-                    <div class="popup-stat"><span class="popup-key">Direction</span><span class="popup-val">${windDir}</span></div>`;
-            }
-
-            new mapboxgl.Popup({ closeButton: true, maxWidth: '220px' })
-                .setLngLat(e.lngLat)
-                .setHTML(html)
-                .addTo(map);
-        } catch (err) {
-            console.error('OWM click error:', err);
-        }
-    }
-
-    function degToCardinal(deg) {
-        const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-        return dirs[Math.round(deg / 22.5) % 16];
-    }
-
     // ---- Layer Switcher ----
     function switchLayer(layer) {
         currentLayer = layer;
@@ -1059,12 +912,10 @@
         // Toggle sub-control panels
         document.getElementById('spc-controls').classList.toggle('visible', layer === 'spc');
         document.getElementById('radar-controls').classList.toggle('visible', layer === 'radar');
-        document.getElementById('owm-controls').classList.toggle('visible', layer === 'temperature' || layer === 'wind');
 
         // Clear all layers
         clearSPCLayers();
         clearRadarLayers();
-        clearOWMLayers();
         hideSPCLegend();
         if (radarPlaying) toggleRadarPlay();
 
@@ -1072,8 +923,6 @@
             loadSPCLayer(currentDay, currentType);
         } else if (layer === 'radar') {
             loadRadarData();
-        } else if (layer === 'temperature' || layer === 'wind') {
-            loadOWMLayer(layer);
         }
     }
 
@@ -1161,8 +1010,6 @@
 
             // Default: load SPC Day 1 categorical
             buildTypeButtons(1);
-            // Map click for OWM exact values
-            map.on('click', handleOWMClick);
         });
     }
 

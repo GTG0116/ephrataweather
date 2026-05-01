@@ -53,7 +53,6 @@ async function initForecastView(lat, lng) {
         let data;
         if (_src === 'nws') data = await WeatherAPI.getNWSDailyForecast(lat, lng, 10);
         else if (_src === 'open-meteo') data = await WeatherAPI.getOpenMeteoDailyForecast(lat, lng, 10);
-        else if (_src === 'owm') data = await WeatherAPI.getOWMDailyForecast(lat, lng, 7);
         else data = await WeatherAPI.getDailyForecast(lat, lng, 10);
         // Ensure normals are ready before rendering so FWI targets are accurate
         await _normalsTask;
@@ -62,9 +61,9 @@ async function initForecastView(lat, lng) {
         _loadSPCForecastData(lat, lng);
         _loadWPCFireForecastData(lat, lng);
     } catch (err) {
-        const _fHint = _src === 'google' || !_src
-            ? 'Check your Google Weather API key in js/config.js'
-            : 'Check your internet connection';
+        const _fHint = _src === 'nws' || _src === 'open-meteo'
+            ? 'Check your internet connection'
+            : 'Check your Google Weather API key in js/config.js';
         document.getElementById('forecast-list').innerHTML =
             `<div class="error-message" style="margin:24px;">Unable to load forecast data<div class="error-hint">${_fHint}</div></div>`;
         console.error('Forecast error:', err);
