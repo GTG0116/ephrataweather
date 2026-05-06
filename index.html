@@ -1963,7 +1963,7 @@
                     <div class="aqi-marker" id="aqi-marker" style="left:0%"></div>
                 </div>
                 <div class="aqi-labels">
-                    <span>Good</span><span>Moderate</span><span>Unhealthy</span><span>Very Unhealthy</span><span>Hazardous</span>
+                    <span>Good</span><span>Moderate</span><span>USG</span><span>Unhealthy</span><span>Very Unhealthy+</span>
                 </div>
                 <div class="card-detail" id="aqi-detail" style="margin-top:12px;"></div>
             </div>
@@ -2432,6 +2432,35 @@
                             <input type="checkbox" id="tropical-radius-chk" onchange="toggleTropicalRadiusCircles()" style="accent-color:var(--accent-blue);">
                             Radius Circles
                         </label>
+                    </div>
+                    <!-- Local Storm Reports -->
+                    <div class="ctrl-row" style="gap:10px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
+                        <span class="ctrl-label">Storm Reports</span>
+                        <label class="alert-master-toggle" title="Show Local Storm Reports (past 24 hrs) from NWS spotters">
+                            <input type="checkbox" id="lsr-overlay-toggle-chk" onchange="toggleLSROverlay()">
+                            <span class="amt-track"><span class="amt-knob"></span></span>
+                        </label>
+                        <span class="ctrl-label" id="lsr-overlay-status" style="font-size:0.7rem;opacity:0.55;transition:opacity 0.2s;">OFF</span>
+                        <select id="lsr-hours-select" class="ctrl-select" onchange="setLSRHours(parseInt(this.value))" style="max-width:110px;display:none;">
+                            <option value="6">Past 6 hrs</option>
+                            <option value="12">Past 12 hrs</option>
+                            <option value="24" selected>Past 24 hrs</option>
+                            <option value="48">Past 48 hrs</option>
+                        </select>
+                        <button class="icon-action-btn" id="lsr-refresh-btn" onclick="refreshLSROverlay()" title="Refresh storm reports" style="display:none;">&#8635;</button>
+                    </div>
+                    <!-- LSR Icon Legend (visible when LSR is ON) -->
+                    <div id="lsr-legend-row" style="display:none;flex-wrap:wrap;gap:6px 10px;margin-top:6px;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;">
+                        <span style="font-size:0.68rem;color:var(--text-muted);width:100%;margin-bottom:2px;font-weight:600;letter-spacing:0.04em;">REPORT TYPES</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#FF3333;border-color:#FF3333;"></span>Tornado</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#FF7744;border-color:#FF7744;"></span>Funnel</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#00CCEE;border-color:#00CCEE;"></span>Hail</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#FF8C00;border-color:#FF8C00;"></span>Tstm Wind</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#FFDD44;border-color:#FFDD44;"></span>Non-Tstm Wind</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#00CC55;border-color:#00CC55;"></span>Flash Flood</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#4499FF;border-color:#4499FF;"></span>Rain/Flood</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#AACCFF;border-color:#AACCFF;"></span>Snow/Ice</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#AAAAAA;border-color:#AAAAAA;"></span>Other</span>
                     </div>
                         </div><!-- end alert-overlay-controls -->
                     </div><!-- end map-options-body -->
@@ -3932,14 +3961,15 @@
         if (btn) btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     }
 
-    // Reflect active state (alerts on / tropical on / my-location on) as a small dot badge
+    // Reflect active state (alerts / tropical / LSR / my-location) as a small dot badge
     function _syncMapOptionsBadge() {
         const badge = document.getElementById('map-options-badge');
         if (!badge) return;
-        const alerts = !!(typeof _alertOverlayEnabled !== 'undefined' && _alertOverlayEnabled);
+        const alerts   = !!(typeof _alertOverlayEnabled  !== 'undefined' && _alertOverlayEnabled);
         const tropical = !!(typeof _tropicalOverlayEnabled !== 'undefined' && _tropicalOverlayEnabled);
-        const myLoc = !!(typeof _myLocationEnabled !== 'undefined' && _myLocationEnabled);
-        badge.classList.toggle('active', alerts || tropical || myLoc);
+        const lsr      = !!(typeof _lsrOverlayEnabled    !== 'undefined' && _lsrOverlayEnabled);
+        const myLoc    = !!(typeof _myLocationEnabled    !== 'undefined' && _myLocationEnabled);
+        badge.classList.toggle('active', alerts || tropical || lsr || myLoc);
     }
 
     // --- Resolve zone geometries for alerts that have geometry: null ---
@@ -4947,6 +4977,297 @@
     }
 
     // ============================================================
+    // LOCAL STORM REPORTS (LSR) OVERLAY
+    // Data: IEM (Iowa Environmental Mesonet) GeoJSON endpoint
+    // Shows NWS spotter reports: tornadoes, hail, wind, flood, snow, etc.
+    // ============================================================
+
+    // Event type → { color, abbr, label }
+    // Each group gets a distinct color palette that matches the dark UI.
+    const LSR_TYPES = {
+        'TORNADO':              { color: '#FF3333', abbr: 'TOR',  label: 'Tornado'            },
+        'FUNNEL CLOUD':         { color: '#FF7744', abbr: 'FUN',  label: 'Funnel Cloud'        },
+        'WATERSPOUT':           { color: '#FF88BB', abbr: 'WTS',  label: 'Waterspout'          },
+        'HAIL':                 { color: '#00CCEE', abbr: 'HAIL', label: 'Hail'                },
+        'TSTM WND GST':         { color: '#FF8C00', abbr: 'WND',  label: 'Tstm Wind Gust'      },
+        'TSTM WND DMG':         { color: '#FF6600', abbr: 'DMG',  label: 'Tstm Wind Damage'    },
+        'NON TSTM WND GST':     { color: '#FFDD44', abbr: 'WND',  label: 'Wind Gust'           },
+        'NON TSTM WND DMG':     { color: '#FFCC00', abbr: 'DMG',  label: 'Wind Damage'         },
+        'FLASH FLOOD':          { color: '#00CC55', abbr: 'FF',   label: 'Flash Flood'         },
+        'FLOOD':                { color: '#00AA33', abbr: 'FLD',  label: 'Flood'               },
+        'HEAVY RAIN':           { color: '#4499FF', abbr: 'RAIN', label: 'Heavy Rain'          },
+        'RAIN':                 { color: '#6699FF', abbr: 'RAIN', label: 'Rain'                },
+        'HEAVY SNOW':           { color: '#99BBFF', abbr: 'SNOW', label: 'Heavy Snow'          },
+        'SNOW':                 { color: '#AACCFF', abbr: 'SNOW', label: 'Snow'                },
+        'BLIZZARD':             { color: '#CCDDFF', abbr: 'BLIZ', label: 'Blizzard'            },
+        'ICE STORM':            { color: '#7799FF', abbr: 'ICE',  label: 'Ice Storm'           },
+        'FREEZING RAIN':        { color: '#88AAFF', abbr: 'FZRA', label: 'Freezing Rain'       },
+        'SLEET':                { color: '#9988FF', abbr: 'SLT',  label: 'Sleet'               },
+        'HIGH WIND':            { color: '#FFEE55', abbr: 'HWN',  label: 'High Wind'           },
+        'DUST STORM':           { color: '#CC9944', abbr: 'DUST', label: 'Dust Storm'          },
+        'HIGH SURF':            { color: '#00BBCC', abbr: 'SURF', label: 'High Surf'           },
+        'DEBRIS FLOW':          { color: '#BB8833', abbr: 'DBR',  label: 'Debris Flow'         },
+        'LIGHTNING':            { color: '#FFD700', abbr: 'LTNG', label: 'Lightning'           },
+        'LANDSLIDE':            { color: '#997744', abbr: 'LNDS', label: 'Landslide'           },
+        'AVALANCHE':            { color: '#BBBBFF', abbr: 'AVA',  label: 'Avalanche'           },
+        'DENSE FOG':            { color: '#AABBCC', abbr: 'FOG',  label: 'Dense Fog'           },
+        'WILDFIRE':             { color: '#FF5500', abbr: 'FIRE', label: 'Wildfire'            },
+    };
+    const LSR_DEFAULT = { color: '#AAAAAA', abbr: 'LSR', label: 'Storm Report' };
+
+    let _lsrOverlayEnabled  = false;
+    let _lsrHours           = 24;
+    let _lsrRefreshTimer    = null;
+
+    // ── Persistence ───────────────────────────────────────────────────────────
+    function _loadLSRPrefs() {
+        try {
+            const s = JSON.parse(localStorage.getItem('ephrata_lsr_prefs') || '{}');
+            _lsrOverlayEnabled = s.enabled === true;
+            _lsrHours = [6, 12, 24, 48].includes(s.hours) ? s.hours : 24;
+        } catch (_) { _lsrOverlayEnabled = false; _lsrHours = 24; }
+    }
+    function _saveLSRPrefs() {
+        localStorage.setItem('ephrata_lsr_prefs', JSON.stringify({ enabled: _lsrOverlayEnabled, hours: _lsrHours }));
+    }
+
+    // ── Canvas icon factory ───────────────────────────────────────────────────
+    // Returns an {data, width, height} object for map.addImage().
+    // Each icon is a circular badge: semi-transparent fill + colored ring + bold abbreviation.
+    function _makeLSRIcon(def) {
+        const SIZE = 28;
+        const dpr  = Math.min(window.devicePixelRatio || 1, 2);
+        const W    = SIZE * dpr;
+        const c    = document.createElement('canvas');
+        c.width = c.height = W;
+        const ctx  = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        const cx = SIZE / 2, cy = SIZE / 2, r = SIZE / 2 - 1.5;
+
+        // Dark backing circle — matches the site's dark glass aesthetic
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(10,16,32,0.82)';
+        ctx.fill();
+
+        // Coloured ring
+        ctx.lineWidth = 2.2;
+        ctx.strokeStyle = def.color;
+        ctx.stroke();
+
+        // Subtle inner fill with the event colour
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 3, 0, Math.PI * 2);
+        const hex = def.color;
+        const rv  = parseInt(hex.slice(1,3),16);
+        const gv  = parseInt(hex.slice(3,5),16);
+        const bv  = parseInt(hex.slice(5,7),16);
+        ctx.fillStyle = `rgba(${rv},${gv},${bv},0.22)`;
+        ctx.fill();
+
+        // Abbreviated label — use a smaller font for 4-char abbrs
+        const abbr  = def.abbr;
+        const fsize = abbr.length <= 2 ? 9 : abbr.length === 3 ? 8 : 6.5;
+        ctx.font        = `700 ${fsize}px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle    = '#FFFFFF';
+        ctx.fillText(abbr, cx, cy + 0.5);
+
+        return { data: ctx.getImageData(0, 0, W, W), width: W, height: W };
+    }
+
+    // Register all icons with the current map instance; skip ones already loaded.
+    function _registerLSRIcons() {
+        if (!map) return;
+        const allDefs = { ...LSR_TYPES, __default: LSR_DEFAULT };
+        for (const [key, def] of Object.entries(allDefs)) {
+            const imgName = `lsr-icon-${key}`;
+            if (!map.hasImage(imgName)) {
+                try { map.addImage(imgName, _makeLSRIcon(def), { pixelRatio: Math.min(window.devicePixelRatio || 1, 2) }); }
+                catch (_) {}
+            }
+        }
+    }
+
+    // ── Toggle / load / clear ─────────────────────────────────────────────────
+    function toggleLSROverlay() {
+        _lsrOverlayEnabled = !_lsrOverlayEnabled;
+        _saveLSRPrefs();
+        _syncLSROverlayUI();
+        if (_lsrOverlayEnabled) {
+            _ensureMapReady().then(() => { _registerLSRIcons(); _loadLSROverlay(); });
+            if (!_lsrRefreshTimer) {
+                _lsrRefreshTimer = setInterval(() => {
+                    if (_lsrOverlayEnabled && map) _loadLSROverlay();
+                }, 300000); // refresh every 5 min
+            }
+        } else {
+            _clearLSROverlay();
+            clearInterval(_lsrRefreshTimer);
+            _lsrRefreshTimer = null;
+        }
+    }
+
+    function setLSRHours(hours) {
+        _lsrHours = hours;
+        _saveLSRPrefs();
+        if (_lsrOverlayEnabled) _loadLSROverlay();
+    }
+
+    function refreshLSROverlay() {
+        if (_lsrOverlayEnabled) _loadLSROverlay();
+    }
+
+    async function _loadLSROverlay() {
+        if (!map || !_lsrOverlayEnabled) return;
+        try {
+            const url = `https://mesonet.agron.iastate.edu/geojson/lsr.geojson?hours=${_lsrHours}`;
+            const r   = await fetch(url, { cache: 'no-store' });
+            if (!r.ok) return;
+            const data = await r.json();
+            // Attach a resolved icon key to each feature for the symbol layer
+            const features = (data.features || []).map(f => {
+                const t = String(f.properties?.typetext || '').toUpperCase().trim();
+                const def = LSR_TYPES[t];
+                return {
+                    ...f,
+                    properties: {
+                        ...(f.properties || {}),
+                        _lsr_icon: def ? `lsr-icon-${t}` : 'lsr-icon-__default',
+                        _lsr_color: def ? def.color : LSR_DEFAULT.color,
+                        _lsr_label: def ? def.label : LSR_DEFAULT.label,
+                        _lsr_abbr:  def ? def.abbr  : LSR_DEFAULT.abbr,
+                    }
+                };
+            });
+            _renderLSROverlay({ type: 'FeatureCollection', features });
+        } catch (e) {
+            console.warn('LSR overlay load error:', e);
+        }
+    }
+
+    function _renderLSROverlay(geojson) {
+        if (!map) return;
+        if (map.getSource('lsr-overlay-src')) {
+            map.getSource('lsr-overlay-src').setData(geojson);
+            return;
+        }
+        map.addSource('lsr-overlay-src', { type: 'geojson', data: geojson });
+
+        // Outer halo — subtle glow that makes icons pop against radar imagery
+        map.addLayer({
+            id: 'lsr-halo', type: 'circle', source: 'lsr-overlay-src',
+            paint: {
+                'circle-radius': 16,
+                'circle-color': ['coalesce', ['get', '_lsr_color'], '#AAAAAA'],
+                'circle-opacity': 0.08,
+                'circle-blur': 1,
+            }
+        });
+
+        // Custom icon per event type
+        map.addLayer({
+            id: 'lsr-icons', type: 'symbol', source: 'lsr-overlay-src',
+            layout: {
+                'icon-image': ['coalesce', ['get', '_lsr_icon'], 'lsr-icon-__default'],
+                'icon-size': 1,
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'text-field': ['step', ['zoom'], '', 8,
+                    ['coalesce', ['get', 'city'], '']
+                ],
+                'text-size': 10,
+                'text-offset': [0, 1.5],
+                'text-anchor': 'top',
+                'text-optional': true,
+            },
+            paint: {
+                'text-color': '#E0EEFF',
+                'text-halo-color': 'rgba(5,10,25,0.85)',
+                'text-halo-width': 1.2,
+            }
+        });
+    }
+
+    function _clearLSROverlay() {
+        if (!map) return;
+        ['lsr-icons', 'lsr-halo'].forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+        if (map.getSource('lsr-overlay-src')) map.removeSource('lsr-overlay-src');
+    }
+
+    function _reloadLSROverlayAfterStyleChange() {
+        if (!_lsrOverlayEnabled) return;
+        _registerLSRIcons();
+        _loadLSROverlay();
+    }
+
+    // ── UI sync ───────────────────────────────────────────────────────────────
+    function _syncLSROverlayUI() {
+        const chk = document.getElementById('lsr-overlay-toggle-chk');
+        if (chk) chk.checked = _lsrOverlayEnabled;
+        const status = document.getElementById('lsr-overlay-status');
+        if (status) {
+            status.textContent = _lsrOverlayEnabled ? 'ON' : 'OFF';
+            status.style.opacity = _lsrOverlayEnabled ? '1' : '0.55';
+        }
+        const hoursEl = document.getElementById('lsr-hours-select');
+        if (hoursEl) {
+            hoursEl.style.display = _lsrOverlayEnabled ? '' : 'none';
+            hoursEl.value = String(_lsrHours);
+        }
+        const refreshBtn = document.getElementById('lsr-refresh-btn');
+        if (refreshBtn) refreshBtn.style.display = _lsrOverlayEnabled ? '' : 'none';
+        const legendRow = document.getElementById('lsr-legend-row');
+        if (legendRow) legendRow.style.display = _lsrOverlayEnabled ? 'flex' : 'none';
+        _syncMapOptionsBadge();
+    }
+
+    // ── Click handler ─────────────────────────────────────────────────────────
+    function handleLSRClick(e) {
+        if (!_lsrOverlayEnabled || !map || !map.getLayer('lsr-icons')) return;
+        const features = map.queryRenderedFeatures(e.point, { layers: ['lsr-icons', 'lsr-halo'] });
+        if (!features.length) return;
+
+        const seq = _startMapClick(e);
+        const escHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+        for (const f of features.slice(0, 5)) {
+            const p = f.properties || {};
+            const color    = p._lsr_color || '#AAAAAA';
+            const label    = p._lsr_label || p.typetext || 'Storm Report';
+            const city     = p.city     || '—';
+            const county   = p.county   || '';
+            const state    = p.state    || '';
+            const source   = p.source   || '—';
+            const remark   = p.remark   || '';
+            const mag      = p.magnitude_f || (p.magnitude ? String(p.magnitude) : '');
+            const location = [city, county, state].filter(Boolean).join(', ');
+
+            let validStr = '—';
+            if (p.valid) {
+                try {
+                    const d = new Date(p.valid);
+                    validStr = d.toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', timeZoneName:'short' });
+                } catch (_) {}
+            }
+
+            const magRow = mag ? `<div class="popup-stat"><span class="popup-key">Magnitude</span><span class="popup-val">${escHtml(mag)}</span></div>` : '';
+            const remarkRow = remark ? `<div class="popup-stat" style="flex-direction:column;align-items:flex-start;gap:2px;"><span class="popup-key">Remark</span><span style="font-size:0.77rem;color:var(--text-secondary);line-height:1.45;max-height:4em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;">${escHtml(remark)}</span></div>` : '';
+
+            const bodyHtml = `
+                <div class="alert-popup-title" style="color:${color};border-left:3px solid ${color};padding-left:8px;font-weight:700;font-size:0.92rem;margin-bottom:6px;">${escHtml(label)}</div>
+                <div class="popup-stat"><span class="popup-key">Location</span><span class="popup-val">${escHtml(location)}</span></div>
+                <div class="popup-stat"><span class="popup-key">Time</span><span class="popup-val" style="font-size:0.78rem;">${escHtml(validStr)}</span></div>
+                <div class="popup-stat"><span class="popup-key">Source</span><span class="popup-val">${escHtml(source)}</span></div>
+                ${magRow}${remarkRow}`;
+
+            _addMapPanel({ bodyHtml, type: 'lsr', label: 'Storm Report' }, seq);
+        }
+    }
+
+    // ============================================================
     // UNIFIED MAP POPUP — single popup, multiple panels, arrow nav
     // All click handlers contribute panels; one popup shows them all.
     // ============================================================
@@ -5340,6 +5661,7 @@
 
     // Initialize prefs on load
     _loadAlertPrefs();
+    _loadLSRPrefs();
 
     // ============================================================
     // SPA ROUTER
@@ -7498,6 +7820,8 @@
             map.on('click', handleAlertOverlayClick);
             map.off('click', handleTropicalOverlayClick);
             map.on('click', handleTropicalOverlayClick);
+            map.off('click', handleLSRClick);
+            map.on('click', handleLSRClick);
             if (currentLayer === 'spc' && currentDay > 0) loadSPCLayer(currentDay, currentType);
             else if (currentLayer === 'wpc-rain') loadWPCLayer(currentWPCDay);
             else if (currentLayer === 'fire-wx') loadFireLayer(currentFireDay, currentFireType);
@@ -7505,9 +7829,10 @@
             else if (currentLayer === 'satellite') { _satLoaded = false; showSatFrame(_satFrameIdx); }
             else if (currentLayer === 'rtma') { _rtmaLoaded = false; loadRtmaLayer(); }
             else if (currentLayer === 'surface-analysis') { _surfaceAnalysisLoaded = false; loadSurfaceAnalysisLayer(); }
-            // Re-apply alert overlay after style change clears all layers
+            // Re-apply overlays after style change clears all layers
             _reloadAlertOverlayAfterStyleChange();
             _reloadTropicalOverlayAfterStyleChange();
+            _reloadLSROverlayAfterStyleChange();
             // Re-apply my-location marker if enabled
             if (_myLocationEnabled) _addMyLocationLayer();
         });
@@ -8698,6 +9023,7 @@
         // Show alert overlay controls and sync toggle state from saved prefs
         _showAlertOverlayControls(true);
         _syncAlertOverlayUI();
+        _syncLSROverlayUI();
 
         // Pre-build SPC type buttons so they are ready if the user switches to SPC.
         buildTypeButtons(currentDay);
@@ -8765,6 +9091,7 @@
                 map.on('click', handleRtmaClick);
                 map.on('click', handleAlertOverlayClick);
                 map.on('click', handleTropicalOverlayClick);
+                map.on('click', handleLSRClick);
                 // switchLayer() called before map existed, so the initial layer load
                 // was a no-op. Force it now that the map is ready.
                 if (currentLayer === 'radar') {
@@ -8772,9 +9099,10 @@
                 } else if (currentLayer === 'spc' && currentDay > 0) {
                     loadSPCLayer(currentDay, currentType);
                 }
-                // Restore alert overlay if it was enabled
+                // Restore overlays that were enabled
                 if (_alertOverlayEnabled) _loadAlertOverlay();
                 if (_tropicalOverlayEnabled) _loadTropicalOverlay();
+                if (_lsrOverlayEnabled) { _registerLSRIcons(); _loadLSROverlay(); }
                 // Restore my-location marker if it was enabled
                 if (_myLocationEnabled) _addMyLocationLayer();
             });
