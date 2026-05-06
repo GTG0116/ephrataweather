@@ -2403,11 +2403,20 @@ function renderAirQuality(data) {
     badge.textContent = category.label;
     badge.className = `badge ${category.class}`;
 
-    // Position marker on the bar using same category thresholds
-    // Bar segments: Good(0-50)=10%, Moderate(51-100)=10%, USG(101-150)=10%, Unhealthy(151-200)=10%, Very Unhealthy(201-300)=20%, Hazardous(301-500)=40%
-    // Simplified: linear 0-500 scale mapped to percentage
-    const pct = Math.min(100, (aqi / 500) * 100);
-    document.getElementById('aqi-marker').style.left = pct + '%';
+    // Position marker on the bar using piecewise mapping so the dot lands
+    // inside the correct colour band.  The CSS bar has 5 equal 20% segments:
+    //   0–20% = Good (AQI 0–50)
+    //  20–40% = Moderate (51–100)
+    //  40–60% = Unhealthy for Sensitive (101–150)
+    //  60–80% = Unhealthy (151–200)
+    //  80–100% = Very Unhealthy / Hazardous (201–500)
+    let pct;
+    if      (aqi <= 50)  pct =                 (aqi        / 50)  * 20;
+    else if (aqi <= 100) pct = 20  + ((aqi -  50) / 50)  * 20;
+    else if (aqi <= 150) pct = 40  + ((aqi - 100) / 50)  * 20;
+    else if (aqi <= 200) pct = 60  + ((aqi - 150) / 50)  * 20;
+    else                 pct = Math.min(100, 80 + ((aqi - 200) / 300) * 20);
+    document.getElementById('aqi-marker').style.left = pct.toFixed(1) + '%';
 
     // Dominant pollutant
     const detail = document.getElementById('aqi-detail');

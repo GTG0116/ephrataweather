@@ -127,34 +127,38 @@ const FairWeatherIndex = (() => {
     }
 
     // Precipitation probability + condition severity (max 25 pts)
+    // Deliberately harsh on rain: even a moderate chance of rain noticeably
+    // lowers the score, and confirmed rainy conditions are heavily penalized.
     function _scorePrecipitation(precipChance, conditionType, precipAmountMm) {
         if (precipChance == null) return { pts: null, max: 25, available: false };
 
-        // Base score from probability
+        // Base score from probability — steeper drop-off than before
         let pts;
         if      (precipChance <=  0) pts = 25;
-        else if (precipChance <= 15) pts = 22;
-        else if (precipChance <= 30) pts = 16;
-        else if (precipChance <= 50) pts = 10;
-        else if (precipChance <= 70) pts =  5;
+        else if (precipChance <= 10) pts = 20;
+        else if (precipChance <= 20) pts = 14;
+        else if (precipChance <= 35) pts =  8;
+        else if (precipChance <= 55) pts =  3;
         else                         pts =  0;
 
-        // Cap score based on condition severity
+        // Hard cap based on confirmed condition type — rain caps are much lower
         const type = (conditionType || '').toUpperCase();
-        if      (type.includes('HEAVY_THUNDERSTORM') || type === 'HAIL') pts = Math.min(pts, 1);
-        else if (type.includes('THUNDER'))                                pts = Math.min(pts, 4);
-        else if (type === 'HEAVY_RAIN' || type === 'SLEET')              pts = Math.min(pts, 6);
-        else if (type === 'RAIN' || type === 'FREEZING_RAIN')            pts = Math.min(pts, 10);
-        else if (type === 'SNOW' || type === 'HEAVY_SNOW')               pts = Math.min(pts, 8);
+        if      (type.includes('HEAVY_THUNDERSTORM') || type === 'HAIL') pts = Math.min(pts, 0);
+        else if (type.includes('THUNDER'))                                pts = Math.min(pts, 2);
+        else if (type === 'HEAVY_RAIN' || type === 'SLEET')              pts = Math.min(pts, 2);
+        else if (type === 'RAIN' || type === 'FREEZING_RAIN')            pts = Math.min(pts, 5);
         else if (type === 'LIGHT_RAIN' || type === 'DRIZZLE'
-              || type === 'LIGHT_SNOW' || type === 'FLURRIES'
-              || type === 'FREEZING_DRIZZLE')                            pts = Math.min(pts, 14);
+              || type === 'FREEZING_DRIZZLE')                            pts = Math.min(pts, 9);
+        else if (type === 'HEAVY_SNOW')                                  pts = Math.min(pts, 4);
+        else if (type === 'SNOW')                                        pts = Math.min(pts, 8);
+        else if (type === 'LIGHT_SNOW' || type === 'FLURRIES')          pts = Math.min(pts, 13);
 
-        // Additional penalty for meaningful accumulation
+        // Additional penalty for accumulated liquid — harsher than before
         if (precipAmountMm != null) {
             const inches = precipAmountMm / 25.4;
-            if      (inches > 1.0) pts = Math.max(0, pts - 5);
-            else if (inches > 0.5) pts = Math.max(0, pts - 3);
+            if      (inches > 1.0) pts = Math.max(0, pts - 8);
+            else if (inches > 0.5) pts = Math.max(0, pts - 5);
+            else if (inches > 0.25) pts = Math.max(0, pts - 3);
             else if (inches > 0.1) pts = Math.max(0, pts - 1);
         }
 

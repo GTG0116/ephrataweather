@@ -2680,6 +2680,26 @@ body {
     }
 }
 
+/* --- LSR legend chips --- */
+.lsr-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.lsr-legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid;
+    opacity: 0.85;
+    flex-shrink: 0;
+    background-clip: padding-box;
+}
+
 /* ============================================
    SMOOTH ANIMATION SYSTEM
    ============================================ */
