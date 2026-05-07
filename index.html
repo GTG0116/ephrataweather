@@ -2452,15 +2452,15 @@
                     <!-- LSR Icon Legend (visible when LSR is ON) -->
                     <div id="lsr-legend-row" style="display:none;flex-wrap:wrap;gap:6px 10px;margin-top:6px;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;">
                         <span style="font-size:0.68rem;color:var(--text-muted);width:100%;margin-bottom:2px;font-weight:600;letter-spacing:0.04em;">REPORT TYPES</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#FF3333;border-color:#FF3333;"></span>Tornado</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#FF7744;border-color:#FF7744;"></span>Funnel</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#00CCEE;border-color:#00CCEE;"></span>Hail</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#FF8C00;border-color:#FF8C00;"></span>Tstm Wind</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#FFDD44;border-color:#FFDD44;"></span>Non-Tstm Wind</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#00CC55;border-color:#00CC55;"></span>Flash Flood</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#4499FF;border-color:#4499FF;"></span>Rain/Flood</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#AACCFF;border-color:#AACCFF;"></span>Snow/Ice</span>
-                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="background:#AAAAAA;border-color:#AAAAAA;"></span>Other</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#FF3333;"></span>Tornado</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#FF7744;"></span>Funnel</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#00CCEE;"></span>Hail</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#FF8C00;"></span>Tstm Wind</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#FFDD44;"></span>Non-Tstm Wind</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#00CC55;"></span>Flash Flood</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#4499FF;"></span>Rain/Flood</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#AACCFF;"></span>Snow/Ice</span>
+                        <span class="lsr-legend-item"><span class="lsr-legend-dot" style="border-color:#AAAAAA;"></span>Other</span>
                     </div>
                         </div><!-- end alert-overlay-controls -->
                     </div><!-- end map-options-body -->
@@ -5032,10 +5032,253 @@
     }
 
     // ── Canvas icon factory ───────────────────────────────────────────────────
+    // Draws a type-specific weather symbol into a canvas context centered at (0,0).
+    // r is the usable radius for the symbol (slightly smaller than the circle).
+    function _lsrDrawSymbol(ctx, key, r) {
+        ctx.save();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.fillStyle   = '#FFFFFF';
+        ctx.lineCap     = 'round';
+        ctx.lineJoin    = 'round';
+        switch (key) {
+            case 'TORNADO': {
+                // Archimedean spiral - tightest at center
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                for (let t = 0; t <= 3.6 * Math.PI; t += 0.05) {
+                    const sr = r * 0.65 * (1 - t / (4 * Math.PI));
+                    const x  = Math.cos(t) * sr, y = Math.sin(t) * sr;
+                    if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                break;
+            }
+            case 'FUNNEL CLOUD': {
+                // Inverted triangle funnel
+                ctx.lineWidth = 1.6;
+                ctx.beginPath();
+                ctx.moveTo(-r*0.58, -r*0.55);
+                ctx.lineTo( r*0.58, -r*0.55);
+                ctx.lineTo( r*0.18,  r*0.2);
+                ctx.lineTo( 0,       r*0.62);
+                ctx.lineTo(-r*0.18,  r*0.2);
+                ctx.closePath();
+                ctx.stroke();
+                break;
+            }
+            case 'WATERSPOUT': {
+                // Funnel above a water wave
+                ctx.lineWidth = 1.6;
+                ctx.beginPath();
+                ctx.moveTo(-r*0.45, -r*0.55);
+                ctx.lineTo( r*0.45, -r*0.55);
+                ctx.lineTo( r*0.1,   r*0.05);
+                ctx.lineTo(-r*0.1,   r*0.05);
+                ctx.closePath();
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(-r*0.65,  r*0.4);
+                ctx.quadraticCurveTo(-r*0.3, r*0.1,  0,       r*0.4);
+                ctx.quadraticCurveTo( r*0.3, r*0.7,  r*0.65,  r*0.4);
+                ctx.stroke();
+                break;
+            }
+            case 'HAIL': {
+                // Circle (hailstone outline) with cross spokes inside
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, r*0.48, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.lineWidth = 1.2;
+                for (let i = 0; i < 4; i++) {
+                    const a = (i * Math.PI) / 4;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(a)*-r*0.33, Math.sin(a)*-r*0.33);
+                    ctx.lineTo(Math.cos(a)* r*0.33, Math.sin(a)* r*0.33);
+                    ctx.stroke();
+                }
+                break;
+            }
+            case 'TSTM WND GST':
+            case 'TSTM WND DMG':
+            case 'NON TSTM WND GST':
+            case 'NON TSTM WND DMG':
+            case 'HIGH WIND': {
+                // Three horizontal wavy wind lines
+                ctx.lineWidth = 1.6;
+                [{ y: -r*0.3, w: r*0.6 }, { y: 0, w: r*0.7 }, { y: r*0.3, w: r*0.5 }].forEach(({y, w}) => {
+                    ctx.beginPath();
+                    ctx.moveTo(-w/2, y);
+                    ctx.bezierCurveTo(-w/6, y - r*0.2, w/6, y + r*0.2, w/2, y);
+                    ctx.stroke();
+                });
+                break;
+            }
+            case 'FLASH FLOOD':
+            case 'FLOOD': {
+                // Two water waves
+                ctx.lineWidth = 1.6;
+                [{ y: -r*0.2 }, { y: r*0.3 }].forEach(({y}) => {
+                    ctx.beginPath();
+                    ctx.moveTo(-r*0.65, y);
+                    ctx.quadraticCurveTo(-r*0.33, y - r*0.3, 0,      y);
+                    ctx.quadraticCurveTo( r*0.33, y + r*0.3, r*0.65, y);
+                    ctx.stroke();
+                });
+                break;
+            }
+            case 'HEAVY RAIN':
+            case 'RAIN': {
+                // Three angled rain-streak lines
+                ctx.lineWidth = 1.5;
+                [[-r*0.3, -r*0.45, -r*0.52, r*0.12],
+                 [ r*0.0, -r*0.52, -r*0.22, r*0.05],
+                 [ r*0.3, -r*0.45,  r*0.08, r*0.12]].forEach(([x1,y1,x2,y2]) => {
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                });
+                break;
+            }
+            case 'HEAVY SNOW':
+            case 'SNOW':
+            case 'BLIZZARD': {
+                // Six-armed snowflake with branches
+                ctx.lineWidth = 1.6;
+                for (let i = 0; i < 6; i++) {
+                    const a = (i * Math.PI) / 3;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(a)*r*0.62, Math.sin(a)*r*0.62);
+                    ctx.stroke();
+                    const bx = Math.cos(a)*r*0.38, by = Math.sin(a)*r*0.38;
+                    const pa = a + Math.PI / 2;
+                    ctx.beginPath();
+                    ctx.moveTo(bx + Math.cos(pa)*r*0.2, by + Math.sin(pa)*r*0.2);
+                    ctx.lineTo(bx - Math.cos(pa)*r*0.2, by - Math.sin(pa)*r*0.2);
+                    ctx.stroke();
+                }
+                break;
+            }
+            case 'ICE STORM':
+            case 'FREEZING RAIN':
+            case 'SLEET': {
+                // Eight-pointed ice star (4 crossing lines)
+                ctx.lineWidth = 1.5;
+                for (let i = 0; i < 4; i++) {
+                    const a = (i * Math.PI) / 4;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(a)*-r*0.62, Math.sin(a)*-r*0.62);
+                    ctx.lineTo(Math.cos(a)* r*0.62, Math.sin(a)* r*0.62);
+                    ctx.stroke();
+                }
+                break;
+            }
+            case 'LIGHTNING': {
+                // Filled lightning bolt
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo( r*0.12, -r*0.65);
+                ctx.lineTo(-r*0.22,  r*0.08);
+                ctx.lineTo( r*0.04,  r*0.08);
+                ctx.lineTo(-r*0.12,  r*0.65);
+                ctx.lineTo( r*0.38, -r*0.18);
+                ctx.lineTo( r*0.06, -r*0.18);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'WILDFIRE': {
+                // Flame silhouette
+                ctx.lineWidth = 1.3;
+                ctx.beginPath();
+                ctx.moveTo(0, r*0.65);
+                ctx.bezierCurveTo(-r*0.45,  r*0.2,  -r*0.55, -r*0.2,  0,      -r*0.65);
+                ctx.bezierCurveTo( r*0.2,  -r*0.1,   r*0.45,  r*0.1,  r*0.45,  r*0.38);
+                ctx.bezierCurveTo( r*0.55,  r*0.0,   r*0.4,  -r*0.3,  r*0.15, -r*0.55);
+                ctx.bezierCurveTo( r*0.55, -r*0.1,   r*0.55,  r*0.4,  r*0.5,   r*0.65);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'DENSE FOG': {
+                // Three horizontal fog bars of varying length
+                ctx.lineWidth = 1.7;
+                [{ y: -r*0.3, w: r*0.6 }, { y: 0, w: r*0.7 }, { y: r*0.3, w: r*0.5 }].forEach(({y, w}) => {
+                    ctx.beginPath();
+                    ctx.moveTo(-w/2, y); ctx.lineTo(w/2, y);
+                    ctx.stroke();
+                });
+                break;
+            }
+            case 'DUST STORM': {
+                // Two nested open arcs (swirl suggestion)
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, r*0.52, 0, Math.PI * 1.65);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(r*0.18, r*0.18, r*0.3, Math.PI * 0.5, Math.PI * 2.2);
+                ctx.stroke();
+                break;
+            }
+            case 'HIGH SURF': {
+                // Breaking wave crest
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                ctx.moveTo(-r*0.7,  r*0.15);
+                ctx.bezierCurveTo(-r*0.35, -r*0.55,  r*0.05, -r*0.45,  r*0.15,  r*0.0);
+                ctx.bezierCurveTo( r*0.25,  r*0.4,   r*0.55,  r*0.38,  r*0.7,   r*0.15);
+                ctx.stroke();
+                break;
+            }
+            case 'LANDSLIDE':
+            case 'DEBRIS FLOW': {
+                // Diagonal slope with downward arrowhead
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(-r*0.55, -r*0.45);
+                ctx.lineTo( r*0.45,  r*0.35);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(r*0.45,  r*0.35);
+                ctx.lineTo(r*0.1,   r*0.35);
+                ctx.lineTo(r*0.45,  r*0.65);
+                ctx.closePath();
+                ctx.fill();
+                break;
+            }
+            case 'AVALANCHE': {
+                // Mountain triangle outline
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(-r*0.6, r*0.5);
+                ctx.lineTo( 0,    -r*0.55);
+                ctx.lineTo( r*0.6, r*0.5);
+                ctx.stroke();
+                break;
+            }
+            default: {
+                // Generic alert: exclamation mark
+                ctx.lineWidth = 1.8;
+                ctx.beginPath();
+                ctx.moveTo(0, -r*0.62);
+                ctx.lineTo(0,  r*0.15);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(0, r*0.48, r*0.13, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+        }
+        ctx.restore();
+    }
+
     // Returns an {data, width, height} object for map.addImage().
-    // Each icon is a circular badge: semi-transparent fill + colored ring + bold abbreviation.
-    function _makeLSRIcon(def) {
-        const SIZE = 28;
+    // Each icon: dark semi-transparent circle + thick colored ring + custom path symbol.
+    function _makeLSRIcon(def, key) {
+        const SIZE = 36;
         const dpr  = Math.min(window.devicePixelRatio || 1, 2);
         const W    = SIZE * dpr;
         const c    = document.createElement('canvas');
@@ -5043,35 +5286,27 @@
         const ctx  = c.getContext('2d');
         ctx.scale(dpr, dpr);
 
-        const cx = SIZE / 2, cy = SIZE / 2, r = SIZE / 2 - 1.5;
+        const cx = SIZE / 2, cy = SIZE / 2, r = SIZE / 2 - 2.5;
 
-        const hex = def.color;
-        const rv  = parseInt(hex.slice(1,3),16);
-        const gv  = parseInt(hex.slice(3,5),16);
-        const bv  = parseInt(hex.slice(5,7),16);
-
-        // Solid filled circle using the event colour at high opacity
+        // Dark semi-transparent background
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${rv},${gv},${bv},0.88)`;
+        ctx.fillStyle = 'rgba(8,10,20,0.80)';
         ctx.fill();
 
-        // Thin dark outline so the icon pops against both bright and dark backgrounds
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+        // Thick colored ring with a subtle glow
+        ctx.lineWidth   = 2.8;
+        ctx.strokeStyle = def.color;
+        ctx.shadowColor = def.color;
+        ctx.shadowBlur  = 5;
         ctx.stroke();
+        ctx.shadowBlur  = 0;
 
-        // Abbreviated label
-        const abbr  = def.abbr;
-        const fsize = abbr.length <= 2 ? 9.5 : abbr.length === 3 ? 8 : 6.5;
-        ctx.font        = `800 ${fsize}px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif`;
-        ctx.textAlign    = 'center';
-        ctx.textBaseline = 'middle';
-        // Dark text shadow for contrast against the coloured fill
-        ctx.shadowColor  = 'rgba(0,0,0,0.55)';
-        ctx.shadowBlur   = 2;
-        ctx.fillStyle    = '#FFFFFF';
-        ctx.fillText(abbr, cx, cy + 0.5);
+        // Custom symbol centered in the circle
+        ctx.save();
+        ctx.translate(cx, cy);
+        _lsrDrawSymbol(ctx, key || '__default', r * 0.62);
+        ctx.restore();
 
         return { data: ctx.getImageData(0, 0, W, W), width: W, height: W };
     }
@@ -5084,7 +5319,7 @@
             const imgName = `lsr-icon-${key}`;
             // Remove stale version if present so the updated canvas always wins
             if (map.hasImage(imgName)) map.removeImage(imgName);
-            try { map.addImage(imgName, _makeLSRIcon(def), { pixelRatio: Math.min(window.devicePixelRatio || 1, 2) }); }
+            try { map.addImage(imgName, _makeLSRIcon(def, key), { pixelRatio: Math.min(window.devicePixelRatio || 1, 2) }); }
             catch (_) {}
         }
     }
@@ -5154,14 +5389,14 @@
         }
         map.addSource('lsr-overlay-src', { type: 'geojson', data: geojson });
 
-        // Outer glow so icons are easy to spot against busy radar imagery
+        // Subtle outer ambient glow behind each icon
         map.addLayer({
             id: 'lsr-halo', type: 'circle', source: 'lsr-overlay-src',
             paint: {
-                'circle-radius': 18,
+                'circle-radius': 22,
                 'circle-color': ['coalesce', ['get', '_lsr_color'], '#AAAAAA'],
-                'circle-opacity': 0.22,
-                'circle-blur': 0.8,
+                'circle-opacity': 0.14,
+                'circle-blur': 1.0,
             }
         });
 
