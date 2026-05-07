@@ -2691,11 +2691,12 @@ body {
 }
 .lsr-legend-dot {
     display: inline-block;
-    width: 10px;
-    height: 10px;
+    width: 11px;
+    height: 11px;
     border-radius: 50%;
-    border: 1.5px solid;
-    opacity: 0.85;
+    border: 2px solid;
+    background: rgba(8,10,20,0.75);
+    opacity: 0.9;
     flex-shrink: 0;
     background-clip: padding-box;
 }
