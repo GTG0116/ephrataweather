@@ -5308,7 +5308,8 @@
         _lsrDrawSymbol(ctx, key || '__default', r * 0.62);
         ctx.restore();
 
-        return { data: ctx.getImageData(0, 0, W, W), width: W, height: W };
+        const imgData = ctx.getImageData(0, 0, W, W);
+        return { width: W, height: W, data: new Uint8Array(imgData.data.buffer) };
     }
 
     // Register all icons with the current map instance.
@@ -5320,7 +5321,7 @@
             // Remove stale version if present so the updated canvas always wins
             if (map.hasImage(imgName)) map.removeImage(imgName);
             try { map.addImage(imgName, _makeLSRIcon(def, key), { pixelRatio: Math.min(window.devicePixelRatio || 1, 2) }); }
-            catch (_) {}
+            catch (e) { console.warn('LSR icon registration failed:', imgName, e); }
         }
     }
 
